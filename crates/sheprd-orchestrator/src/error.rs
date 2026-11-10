@@ -77,6 +77,8 @@ pub enum Error {
     #[error("{0}")]
     Github(#[source] Box<sheprd_github::Error>),
     #[error(transparent)]
+    Gitea(#[from] super::gitea::Error),
+    #[error(transparent)]
     Gitlab(#[from] super::gitlab::Error),
     #[error("Cancelled")]
     Cancelled,

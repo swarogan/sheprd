@@ -31,6 +31,7 @@ fn closing_the_view_does_not_cancel_an_accepted_action() {
 mod azure_replaced;
 mod current_beads;
 mod extras;
+mod gitea_mapping;
 mod glab_mapping;
 mod refresh;
 mod stores;
@@ -66,6 +67,7 @@ pub(super) fn opened(dir: &std::path::Path) -> (Service, Worker, Host) {
         token: None,
         data_root: Some(dir.join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),

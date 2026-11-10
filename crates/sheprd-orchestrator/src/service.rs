@@ -7,7 +7,7 @@ use super::{
     Access, CheckState, Error, HerdrSession, Item, PrStatus, Provider, Result, Run, SourceKey,
     Store,
     actions::{Action, Site},
-    azure, beads, database_path, github, gitlab,
+    azure, beads, database_path, gitea, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
@@ -16,6 +16,7 @@ use super::{
 };
 use crate::cache::{Cache, Kind};
 use chrono::{DateTime, Utc};
+pub use schedule::retry_wait;
 use sheprd_client::ConnectTarget;
 use sheprd_github::Tokens;
 use sheprd_remote::teleport::{AgentKind, Host};
@@ -32,6 +33,7 @@ use std::{
 };
 
 mod azure_source;
+mod gitea_source;
 mod github_source;
 mod gitlab_source;
 pub mod remote;
@@ -61,31 +63,8 @@ impl Default for Timing {
         }
     }
 }
-/// After a failure, a source waits this long before trying again.
-const BACKOFF: Duration = Duration::from_secs(300);
-/// A repository GitHub would not show this sign-in waits for the user to
-/// install the App or change token; Refresh asks sooner.
-const HIDDEN_BACKOFF: Duration = Duration::from_secs(1800);
 const COMMANDS: usize = 8;
 
-/// How long a failed source waits. A rate limit or refused token pauses as
-/// long as the provider asked; a repository the sign-in cannot see waits for
-/// a user action. The `cooldown` applies only to a provider's own failures,
-/// so a Beads failure never inherits a pause a GitHub request left behind.
-pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
-    let floor = match error {
-        Error::Github(source) => match **source {
-            sheprd_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
-            _ => BACKOFF,
-        },
-        Error::Azure(source) if source.needs_user() => HIDDEN_BACKOFF,
-        Error::Azure(_) => BACKOFF,
-        Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
-        Error::Gitlab(_) => BACKOFF,
-        _ => return BACKOFF,
-    };
-    cooldown.map_or(floor, |wait| wait.max(floor))
-}
 /// Actions running at once; more wait for the user to try again.
 const MAX_ACTIONS: usize = 4;
 /// Outcomes kept for the view between its polls.
@@ -95,6 +74,7 @@ const MAX_NOTICES: usize = 8;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Stores {
     pub azure: sheprd_credentials::Store,
+    pub gitea: sheprd_credentials::Store,
     pub gitlab: sheprd_credentials::Store,
 }
 
@@ -112,6 +92,8 @@ pub struct Request {
     pub token: Option<Tokens>,
     /// Where Azure DevOps tokens pasted in the account menu are saved.
     pub azure_store: sheprd_credentials::Store,
+    /// Where Gitea addresses and tokens pasted in the account menu are saved.
+    pub gitea_store: sheprd_credentials::Store,
     /// Where GitLab tokens pasted in the account menu are saved.
     pub gitlab_store: sheprd_credentials::Store,
     /// The folder holding the databases, and agent-launcher's to carry
@@ -143,6 +125,7 @@ impl Request {
     pub fn stores(&self) -> Stores {
         Stores {
             azure: self.azure_store,
+            gitea: self.gitea_store,
             gitlab: self.gitlab_store,
         }
     }
@@ -150,6 +133,7 @@ impl Request {
     /// Reads pasted tokens from `stores` from now on.
     pub fn set_stores(&mut self, stores: Stores) {
         self.azure_store = stores.azure;
+        self.gitea_store = stores.gitea;
         self.gitlab_store = stores.gitlab;
     }
 }
@@ -280,6 +264,7 @@ impl Service {
             uncached: HashMap::new(),
             resume: HashMap::new(),
             azure_token: None,
+            gitea_saved: None,
             gitlab_token: None,
             cooldown: None,
             visible: visible.clone(),
@@ -390,6 +375,9 @@ struct Worker {
     /// for; Refresh and a refusal look again, so a new `az login` or a token
     /// saved in the account menu is picked up without reopening the view.
     azure_token: Option<(String, Option<azure::token::Found>)>,
+    /// The saved Gitea instances, once read; Refresh and new stores read
+    /// them again, so an address saved in the account menu is picked up.
+    gitea_saved: Option<Arc<gitea::saved::Saved>>,
     cooldown: Option<Duration>,
     /// Whether the view is on screen, as the UI last said.
     visible: Arc<AtomicBool>,
@@ -478,6 +466,7 @@ impl Worker {
         self.request.token = token;
         self.gitlab_token = None;
         self.azure_token = None;
+        self.gitea_saved = None;
         self.retry.clear();
         self.checks.clear();
     }
@@ -642,7 +631,7 @@ impl Worker {
                 return Err(error);
             }
         };
-        recognize(&mut info, gitlab::cli_hosts::read);
+        recognize(&mut info, || self.gitea_record(), gitlab::cli_hosts::read);
         if std::mem::take(&mut self.unreached) {
             self.snapshot.error = None;
         }
@@ -862,6 +851,7 @@ impl Worker {
                     match &error {
                         // Waits as a failure does, but offers the sign-in.
                         Error::Azure(source) if source.needs_sign_in() => SyncState::SignIn,
+                        Error::Gitea(source) if source.needs_sign_in() => SyncState::SignIn,
                         Error::Gitlab(source) if source.needs_sign_in() => SyncState::SignIn,
                         _ => SyncState::Failed(Arc::new(error)),
                     }
@@ -903,6 +893,7 @@ impl Worker {
                 None => Ok(SyncState::SignIn),
             },
             Provider::Azure => self.sync_azure(key, writable),
+            Provider::Gitea => self.sync_gitea(key, writable),
             Provider::Gitlab => {
                 let previous = store.checkpoint(key)?;
                 let listing = self.gitlab_listing(key, previous.as_ref())?;
@@ -937,7 +928,7 @@ impl Worker {
         let Some(mut info) = self.snapshot.repo.clone() else {
             return;
         };
-        if recognize(&mut info, cli) {
+        if recognize(&mut info, || self.gitea_record(), cli) {
             self.snapshot.sources = statuses(&info);
             self.snapshot.repo = Some(info);
         }

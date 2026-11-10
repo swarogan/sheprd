@@ -3,7 +3,7 @@
 
 use super::{
     Access, Item, Provider, RepoInfo, Result, SourceKey, SourceStatus, SyncState, Worker, azure,
-    gitlab,
+    gitea, gitlab,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -53,15 +53,18 @@ impl Worker {
     }
 }
 
-/// Makes `info`'s remote a GitLab source when glab knows its host; returns
-/// whether it changed. `cli` reads glab's config, only when needed.
-pub(super) fn recognize(
+/// Makes `info`'s remote a Gitea source when an address is saved for its
+/// host, else a GitLab one when glab knows it; returns whether it changed.
+/// `gitea` reads the saved addresses and `cli` glab's config, each only when
+/// needed.
+pub(super) fn recognize<S: std::borrow::Borrow<gitea::saved::Saved>>(
     info: &mut RepoInfo,
+    gitea: impl FnOnce() -> S,
     cli: impl FnOnce() -> Vec<gitlab::cli_hosts::CliHost>,
 ) -> bool {
-    info.remote
-        .as_mut()
-        .is_some_and(|remote| gitlab::recognize(&mut remote.source, cli))
+    info.remote.as_mut().is_some_and(|remote| {
+        gitea::recognize(&mut remote.source, gitea) || gitlab::recognize(&mut remote.source, cli)
+    })
 }
 
 /// Drops beads of any source but `info`'s. A database this build cannot
@@ -98,6 +101,7 @@ pub fn sources(info: &RepoInfo) -> Vec<(SourceKey, bool)> {
     let remote = info.remote.as_ref().map(|remote| {
         let supported = match remote.source.provider {
             Provider::Azure => true,
+            Provider::Gitea => true,
             Provider::Github => remote.source.host == "github.com",
             Provider::Gitlab => true,
             Provider::Beads => false,

@@ -12,6 +12,7 @@ fn refresh_forgets_when_checks_were_last_read() {
         token: None,
         data_root: None,
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     });

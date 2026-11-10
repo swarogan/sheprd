@@ -154,8 +154,12 @@ impl SheprdWindow {
     pub(crate) fn repo_specs(&self) -> Vec<RepoSpec> {
         let mut specs: Vec<RepoSpec> = Vec::new();
         // A headless window never reads the user's saved tokens.
-        let (azure_store, gitlab_store) = if self.reads_credentials() {
-            (self.config.azure_devops.store(), self.config.gitlab.store())
+        let (azure_store, gitea_store, gitlab_store) = if self.reads_credentials() {
+            (
+                self.config.azure_devops.store(),
+                self.config.gitea.store(),
+                self.config.gitlab.store(),
+            )
         } else {
             Default::default()
         };
@@ -199,6 +203,7 @@ impl SheprdWindow {
                         token: token.clone(),
                         data_root: None,
                         azure_store,
+                        gitea_store,
                         gitlab_store,
                         timing: Timing::default(),
                     },

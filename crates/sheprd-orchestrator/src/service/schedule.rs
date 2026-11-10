@@ -3,7 +3,7 @@
 //! per repository add up past it, so reads are spaced by what the user sees
 //! and by what can have changed.
 
-use super::{CheckState, Item, PrStatus};
+use super::{CheckState, Error, Item, PrStatus};
 use chrono::{DateTime, Utc};
 use sheprd_github::pull_request::MergeState;
 use std::{
@@ -20,6 +20,33 @@ pub(super) const HIDDEN_SYNC: Duration = Duration::from_secs(600);
 /// none has a check running: a review or a re-run check can change without
 /// either.
 pub(super) const CHECKS_EVERY: Duration = Duration::from_secs(300);
+
+/// After a failure, a source waits this long before trying again.
+const BACKOFF: Duration = Duration::from_secs(300);
+/// A repository GitHub would not show this sign-in waits for the user to
+/// install the App or change token; Refresh asks sooner.
+const HIDDEN_BACKOFF: Duration = Duration::from_secs(1800);
+
+/// How long a failed source waits. A rate limit or refused token pauses as
+/// long as the provider asked; a repository the sign-in cannot see waits for
+/// a user action. The `cooldown` applies only to a provider's own failures,
+/// so a Beads failure never inherits a pause a GitHub request left behind.
+pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
+    let floor = match error {
+        Error::Github(source) => match **source {
+            sheprd_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
+            _ => BACKOFF,
+        },
+        Error::Azure(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Azure(_) => BACKOFF,
+        Error::Gitea(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Gitea(_) => BACKOFF,
+        Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Gitlab(_) => BACKOFF,
+        _ => return BACKOFF,
+    };
+    cooldown.map_or(floor, |wait| wait.max(floor))
+}
 
 /// The longest repeated failures wait, unless the provider asked for longer.
 const MAX_BACKOFF: Duration = Duration::from_secs(1800);

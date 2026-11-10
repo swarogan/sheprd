@@ -118,6 +118,7 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };
@@ -237,6 +238,7 @@ fn mine_on_azure_devops_matches_the_reader_by_identity(cx: &mut TestAppContext) 
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };
@@ -286,6 +288,7 @@ fn azure_mine_keeps_the_readers_own_and_not_a_namesakes(cx: &mut TestAppContext)
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };
@@ -363,6 +366,7 @@ fn organizations_kept_for_the_session_count_toward_the_cap(cx: &mut TestAppConte
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

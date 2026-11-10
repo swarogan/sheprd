@@ -20,7 +20,12 @@ mod combined_changes;
 mod full_listing;
 mod gateway_timeout;
 mod git;
+mod gitea;
+mod gitea_account;
 mod github;
+// The private credential file these save to is Unix-only.
+#[cfg(unix)]
+mod gitea_saved;
 mod gitlab;
 mod gitlab_envrc;
 mod gitlab_hosts;

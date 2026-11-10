@@ -69,6 +69,8 @@ impl Localize for Error {
             Self::BeadId(id) => fl!("error-orchestrator-bead-id", id = format!("{id:?}")),
             Self::Azure(error) => error.localize(),
             Self::Claim(error) => error.localize(),
+            // Placeholder until the Gitea messages get a catalog of their own.
+            Self::Gitea(error) => error.to_string(),
             Self::Github(error) => error.localize(),
             Self::Gitlab(error) => error.localize(),
             Self::Cancelled => fl!("error-orchestrator-cancelled"),

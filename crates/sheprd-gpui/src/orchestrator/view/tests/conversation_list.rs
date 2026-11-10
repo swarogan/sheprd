@@ -20,6 +20,7 @@ fn a_long_conversation_draws_only_the_rows_in_view(cx: &mut TestAppContext) {
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

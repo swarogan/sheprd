@@ -12,6 +12,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Provider {
     Azure,
+    Gitea,
     Github,
     Gitlab,
     Beads,
@@ -21,6 +22,7 @@ impl Provider {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Azure => "azure",
+            Self::Gitea => "gitea",
             Self::Github => "github",
             Self::Gitlab => "gitlab",
             Self::Beads => "beads",
@@ -34,6 +36,7 @@ impl FromStr for Provider {
     fn from_str(value: &str) -> Result<Self> {
         match value {
             "azure" => Ok(Self::Azure),
+            "gitea" => Ok(Self::Gitea),
             "github" => Ok(Self::Github),
             "gitlab" => Ok(Self::Gitlab),
             "beads" => Ok(Self::Beads),

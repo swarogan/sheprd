@@ -16,6 +16,7 @@ fn destination_inventory_reconciles_selection_and_ignores_other_hosts(cx: &mut T
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

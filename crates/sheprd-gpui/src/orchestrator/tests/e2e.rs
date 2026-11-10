@@ -113,6 +113,7 @@ fn pull_requests_and_issues_list_a_local_checkout(cx: &mut TestAppContext) {
         token: Some(crate::github::Tokens::new(&main, std::iter::empty())),
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),

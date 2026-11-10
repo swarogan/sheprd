@@ -90,6 +90,7 @@ impl Repo {
                 workspace_id: String::new(),
                 token: None,
                 azure_store: stores.azure,
+                gitea_store: stores.gitea,
                 gitlab_store: stores.gitlab,
                 data_root: None,
                 timing: Timing::default(),

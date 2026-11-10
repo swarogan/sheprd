@@ -23,6 +23,7 @@ fn a_page_reads_the_copy_of_the_checkout_its_row_shows(cx: &mut gpui::TestAppCon
                 token: None,
                 data_root: Some(dir.path().join("other-data")),
                 azure_store: Default::default(),
+                gitea_store: Default::default(),
                 gitlab_store: Default::default(),
                 timing: Timing::default(),
             };

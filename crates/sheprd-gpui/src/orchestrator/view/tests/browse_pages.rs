@@ -18,6 +18,7 @@ fn show_more_reaches_the_repositories_past_a_page(cx: &mut TestAppContext) {
         token: None,
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
+        gitea_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };
