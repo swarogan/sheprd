@@ -17,8 +17,9 @@ mod tests;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Action {
-    /// The account menu's GitLab and Azure DevOps tabs.
+    /// The account menu's GitLab, Gitea, and Azure DevOps tabs.
     GitLab,
+    Gitea,
     AzureDevOps,
     Copy,
     Open,
@@ -40,6 +41,7 @@ impl Action {
     fn id(self) -> &'static str {
         match self {
             Self::GitLab => "accounts-tab-gitlab",
+            Self::Gitea => "accounts-tab-gitea",
             Self::AzureDevOps => "accounts-tab-azure",
             Self::Copy => "github-copy",
             Self::Open => "github-open",
@@ -263,7 +265,7 @@ impl SheprdWindow {
             return vec![Action::SubmitToken, Action::CancelToken, Action::Close];
         }
         // The header's other tabs come first, as on their own pages.
-        let mut actions = vec![Action::GitLab, Action::AzureDevOps];
+        let mut actions = vec![Action::GitLab, Action::Gitea, Action::AzureDevOps];
         if auth.code().is_some() {
             actions.extend([Action::Copy, Action::Open]);
         } else if !auth.busy() && !auth.loading_profile() && !auth.connected() {
@@ -301,6 +303,10 @@ impl SheprdWindow {
             Action::GitLab => {
                 self.menu.github_selected = None;
                 self.open_gitlab_page(window, cx);
+            }
+            Action::Gitea => {
+                self.menu.github_selected = None;
+                self.open_gitea_page(window, cx);
             }
             Action::AzureDevOps => {
                 self.menu.github_selected = None;
@@ -437,6 +443,7 @@ impl SheprdWindow {
             Action::Open | Action::GitHubCli | Action::SubmitToken | Action::Approve => true,
             Action::Start => !self.github_actions().contains(&Action::GitHubCli),
             Action::GitLab
+            | Action::Gitea
             | Action::AzureDevOps
             | Action::Copy
             | Action::Token
@@ -720,7 +727,7 @@ impl SheprdWindow {
         for action in self.github_actions().into_iter().filter(|action| {
             !matches!(
                 action,
-                Action::GitLab | Action::AzureDevOps | Action::Copy | Action::Close
+                Action::GitLab | Action::Gitea | Action::AzureDevOps | Action::Copy | Action::Close
             )
         }) {
             has_footer = true;
@@ -758,6 +765,7 @@ impl SheprdWindow {
                 }
                 Action::SignOut => fl!("github-menu-sign-out"),
                 Action::GitLab
+                | Action::Gitea
                 | Action::AzureDevOps
                 | Action::Copy
                 | Action::Approve

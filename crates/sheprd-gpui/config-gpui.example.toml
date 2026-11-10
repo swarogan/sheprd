@@ -628,6 +628,15 @@ size = 12
 # uses Sheprd's own application unless one is set here.
 # applications = { "gitlab.example.com" = "<application id>" }
 
+# Gitea (and Forgejo) instances the Orchestrator reads issues and pull requests
+# from: the address and access token pasted in the title bar's account menu
+# (kept in the credential store). A remote on an instance saved there is read
+# as Gitea. Tokens are never read from this file.
+# [gitea]
+# Same meaning as [github] allow_plaintext_credentials, for the saved tokens,
+# which are kept in their own 0600 gitea-credentials file. Default is false.
+# allow_plaintext_credentials = false
+
 # A Coder deployment whose workspaces can be created and added as devices from
 # the device picker's "Add Coder Workspace…". Settings > Cloud devices edits
 # these keys and saves the client secret to the credential store, so editing

@@ -28,6 +28,7 @@ fn tab_walks_the_controls_and_enter_uses_one(cx: &mut TestAppContext) {
         actions,
         [
             Action::GitHub,
+            Action::Gitea,
             Action::AzureDevOps,
             Action::Remove("gitlab.com".into()),
             Action::Paste,
@@ -35,17 +36,17 @@ fn tab_walks_the_controls_and_enter_uses_one(cx: &mut TestAppContext) {
             Action::Close,
         ]
     );
-    cx.simulate_keystrokes("tab tab tab");
+    cx.simulate_keystrokes("tab tab tab tab");
     assert_eq!(
         selected(&view, cx),
         Some(Action::Remove("gitlab.com".into()))
     );
-    cx.simulate_keystrokes("shift-tab shift-tab shift-tab");
+    cx.simulate_keystrokes("shift-tab shift-tab shift-tab shift-tab");
     assert_eq!(selected(&view, cx), Some(Action::Close));
     cx.simulate_keystrokes("tab");
     assert_eq!(selected(&view, cx), Some(Action::GitHub));
     // Enter opens the token form from its link.
-    cx.simulate_keystrokes("tab tab tab enter");
+    cx.simulate_keystrokes("tab tab tab tab enter");
     draw(cx);
     view.read_with(cx, |view, _| assert!(view.menu.gitlab.form));
     // The form keeps its own keys: Escape goes back to the instances.
@@ -54,9 +55,9 @@ fn tab_walks_the_controls_and_enter_uses_one(cx: &mut TestAppContext) {
         assert!(!view.menu.gitlab.form);
         assert_eq!(view.menu.page, Some(Page::GitLab));
     });
-    // The link stays selected; back past Forget and the Azure DevOps tab
-    // to the GitHub tab, which switches pages.
-    cx.simulate_keystrokes("shift-tab shift-tab shift-tab");
+    // The link stays selected; back past Forget and the Azure DevOps and
+    // Gitea tabs to the GitHub tab, which switches pages.
+    cx.simulate_keystrokes("shift-tab shift-tab shift-tab shift-tab");
     assert_eq!(selected(&view, cx), Some(Action::GitHub));
     cx.simulate_keystrokes("enter");
     view.read_with(cx, |view, _| assert_eq!(view.menu.page, Some(Page::GitHub)));
@@ -75,13 +76,14 @@ fn the_welcome_page_reaches_connect_from_the_keyboard(cx: &mut TestAppContext) {
         actions,
         [
             Action::GitHub,
+            Action::Gitea,
             Action::AzureDevOps,
             Action::Connect("gitlab.com".into()),
             Action::Paste,
             Action::Close,
         ]
     );
-    cx.simulate_keystrokes("tab tab tab");
+    cx.simulate_keystrokes("tab tab tab tab");
     assert_eq!(
         selected(&view, cx),
         Some(Action::Connect("gitlab.com".into()))

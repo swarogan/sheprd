@@ -117,6 +117,7 @@ fn a_listing_keeps_issues_open_pull_requests_and_recently_settled_ones_apart() {
     );
     assert_eq!(first.labels, ["bug"]);
     assert_eq!(first.author.as_deref(), Some("alice"));
+    assert_eq!(first.assignee.as_deref(), Some("bob"));
     assert_eq!(
         first.url.as_deref(),
         Some("http://gitea.arpa/ops/infra/issues/7")
@@ -178,6 +179,33 @@ fn a_listing_keeps_issues_open_pull_requests_and_recently_settled_ones_apart() {
         "http://gitea.arpa/api/v1/repos/ops/infra/pulls?state=closed&sort=recentupdate&page=1&limit=50"
     );
     assert_eq!(asked[3], "http://gitea.arpa/api/v1/user");
+}
+
+#[test]
+fn an_issue_is_assigned_to_its_first_assignee() {
+    let node = |extra: Value| {
+        let mut issue = issue(5);
+        issue
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        let node: gitea::issue::IssueNode = serde_json::from_value(issue).unwrap();
+        node.into_item(&source(), "http://gitea.arpa/ops/infra")
+            .assignee
+    };
+    let carol = user("carol");
+    let dave = user("dave");
+    // `assignee` wins; with only `assignees`, the first; with neither, no one.
+    assert_eq!(
+        node(json!({ "assignee": carol, "assignees": [dave] })).as_deref(),
+        Some("carol")
+    );
+    assert_eq!(
+        node(json!({ "assignee": null, "assignees": [dave] })).as_deref(),
+        Some("dave")
+    );
+    assert_eq!(node(json!({ "assignee": null, "assignees": [] })), None);
+    assert_eq!(node(json!({ "assignee": null, "assignees": null })), None);
 }
 
 #[test]

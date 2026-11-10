@@ -32,6 +32,7 @@ menu-page-commit = Commit
 menu-page-github-account = GitHub account
 menu-page-gitlab-tokens = GitLab tokens
 menu-page-azure-devops-tokens = Azure DevOps tokens
+menu-page-gitea-tokens = Gitea tokens
 menu-page-tab-actions = Tab actions
 menu-page-device = Device
 menu-page-install = Install

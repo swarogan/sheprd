@@ -578,6 +578,7 @@ impl SheprdWindow {
                     match provider {
                         super::Provider::Gitlab => self.open_gitlab_page(window, cx),
                         super::Provider::Azure => self.open_azure_page(window, cx),
+                        super::Provider::Gitea => self.open_gitea_page(window, cx),
                         _ => self.menu.page = Some(crate::menu::Page::GitHub),
                     }
                 }

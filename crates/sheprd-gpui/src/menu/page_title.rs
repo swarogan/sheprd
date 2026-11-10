@@ -69,6 +69,7 @@ impl Page {
             Self::GitCommit => fl!("menu-page-commit"),
             Self::GitHub => fl!("menu-page-github-account"),
             Self::GitLab => fl!("menu-page-gitlab-tokens"),
+            Self::Gitea => fl!("menu-page-gitea-tokens"),
             Self::Group => fl!("menu-page-tab-actions"),
             Self::Host => fl!("menu-page-device"),
             Self::Install => fl!("menu-page-install"),

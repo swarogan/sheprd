@@ -178,7 +178,7 @@ fn connected_panel_is_content_sized_with_only_header_close(cx: &mut TestAppConte
             window.draw(cx).clear(cx);
         });
         let panel = cx.debug_bounds("menu-panel").unwrap();
-        assert!(panel.size.width <= gpui::px(400.));
+        assert!(panel.size.width <= gpui::px(560.));
         assert!(panel.size.height <= gpui::px(230.));
         assert!(cx.debug_bounds("github-status").is_none());
         assert!(cx.debug_bounds("github-close").is_none());
@@ -189,8 +189,8 @@ fn connected_panel_is_content_sized_with_only_header_close(cx: &mut TestAppConte
         let avatar = cx.debug_bounds("github-avatar").unwrap();
         assert_eq!(mark.size, gpui::size(gpui::px(20.), gpui::px(20.)));
         assert_eq!(avatar.size, gpui::size(gpui::px(40.), gpui::px(40.)));
-        // The GitLab and Azure DevOps tabs, Sign out, Add account, then Close.
-        cx.simulate_keystrokes("tab tab tab tab tab enter");
+        // The GitLab, Gitea, and Azure DevOps tabs, Sign out, Add account, then Close.
+        cx.simulate_keystrokes("tab tab tab tab tab tab enter");
         cx.update(|window, cx| {
             assert!(view.read(cx).menu.page.is_none());
             assert!(view.read(cx).menu.github.connected());
@@ -217,8 +217,8 @@ fn actions_follow_state_and_focus_cannot_become_signout(cx: &mut TestAppContext)
     cx.update(|window, cx| {
         view.update(cx, |view, cx| view.github_fixture(true, window, cx));
     });
-    // Past the GitLab and Azure DevOps tabs and Copy.
-    cx.simulate_keystrokes("tab tab tab tab");
+    // Past the GitLab, Gitea, and Azure DevOps tabs and Copy.
+    cx.simulate_keystrokes("tab tab tab tab tab");
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             assert!(view.menu.github_selected == Some(Action::Open));

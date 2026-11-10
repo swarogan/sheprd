@@ -124,17 +124,16 @@ impl Repo {
 
     /// The login GitHub is read as for this repository: the account that
     /// reads its owner, or the host's own before the remote is known. For
-    /// Azure DevOps, the reader's display name, which offers Mine; Mine
-    /// itself matches Azure DevOps by identity (`reads_azure`).
+    /// Azure DevOps, the reader's display name, and for Gitea, its sign-in
+    /// name, which offer Mine; Mine itself matches those two by identity
+    /// (`reads_by_identity`).
     pub(super) fn reading_login(&self) -> Option<&str> {
         let remote = self
             .snapshot
             .repo
             .as_ref()
             .and_then(|info| info.remote.as_ref());
-        if remote
-            .is_some_and(|remote| remote.source.provider == crate::orchestrator::Provider::Azure)
-        {
+        if self.reads_by_identity() {
             return self.snapshot.viewer.as_deref();
         }
         if remote
@@ -154,19 +153,31 @@ impl Repo {
         }
     }
 
-    /// Whether its pull requests come from Azure DevOps, whose Mine matches
-    /// the reader by identity (`Snapshot::authored`).
+    /// Whether its pull requests come from Azure DevOps.
     pub(super) fn reads_azure(&self) -> bool {
+        self.remote_provider() == Some(crate::orchestrator::Provider::Azure)
+    }
+
+    /// Whether its pull requests come from Azure DevOps or Gitea, whose Mine
+    /// matches the reader by identity (`Snapshot::authored`).
+    pub(super) fn reads_by_identity(&self) -> bool {
+        matches!(
+            self.remote_provider(),
+            Some(crate::orchestrator::Provider::Azure | crate::orchestrator::Provider::Gitea)
+        )
+    }
+
+    fn remote_provider(&self) -> Option<crate::orchestrator::Provider> {
         self.snapshot
             .repo
             .as_ref()
             .and_then(|info| info.remote.as_ref())
-            .is_some_and(|remote| remote.source.provider == crate::orchestrator::Provider::Azure)
+            .map(|remote| remote.source.provider)
     }
 
     /// Whether the reader opened `item`, where that is known by identity.
     pub(super) fn opened_by_identity(&self, item: &Item) -> Option<bool> {
-        self.reads_azure()
+        self.reads_by_identity()
             .then(|| self.snapshot.authored.contains(&item.key.canonical()))
     }
 

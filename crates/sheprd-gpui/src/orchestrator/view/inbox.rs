@@ -728,18 +728,26 @@ impl OrchestratorView {
                 banners.push((banner(look, RED, "icons/x.svg", of(error.localize())), None));
             }
             for status in &snapshot.sources {
-                // Azure DevOps has no sign-in of its own in the title bar
-                // for most users, so its missing token says where to add one.
-                if status.key.provider == Provider::Azure
+                // Azure DevOps and Gitea have no sign-in of their own in the
+                // title bar, so a missing token says where to add one.
+                if matches!(status.key.provider, Provider::Azure | Provider::Gitea)
                     && matches!(status.state, SyncState::SignIn)
                 {
-                    let text = fl!(
-                        "azure-devops-menu-connect-banner",
-                        repository = status.key.repository.as_str()
-                    );
+                    let repository = status.key.repository.as_str();
+                    let (icon, text) = if status.key.provider == Provider::Azure {
+                        (
+                            "icons/azure-devops.svg",
+                            fl!("azure-devops-menu-connect-banner", repository = repository),
+                        )
+                    } else {
+                        (
+                            "icons/gitea.svg",
+                            fl!("gitea-menu-connect-banner", repository = repository),
+                        )
+                    };
                     banners.push((
-                        banner(look, YELLOW, "icons/azure-devops.svg", of(text)),
-                        Some(Provider::Azure),
+                        banner(look, YELLOW, icon, of(text)),
+                        Some(status.key.provider),
                     ));
                     continue;
                 }

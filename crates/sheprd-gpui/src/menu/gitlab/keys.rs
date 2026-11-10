@@ -55,8 +55,9 @@ impl GitLabKey {
 /// A control on the GitLab page, as the keyboard selects it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
-    /// The account menu's GitHub and Azure DevOps tabs.
+    /// The account menu's GitHub, Gitea, and Azure DevOps tabs.
     GitHub,
+    Gitea,
     AzureDevOps,
     /// Connect, or Connect again, for an instance.
     Connect(String),
@@ -135,7 +136,7 @@ impl GitLabMenu {
 
     /// The page's controls in the order they show, which Tab follows.
     pub(crate) fn actions(&self) -> Vec<Action> {
-        let mut actions = vec![Action::GitHub, Action::AzureDevOps];
+        let mut actions = vec![Action::GitHub, Action::Gitea, Action::AzureDevOps];
         // Open, Copy, and Cancel show under the instance being connected,
         // once GitLab gave a code.
         let approving = |host: &str, actions: &mut Vec<Action>| {
@@ -189,6 +190,7 @@ impl SheprdWindow {
     fn gitlab_action(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
             Action::GitHub => self.menu.page = Some(Page::GitHub),
+            Action::Gitea => self.open_gitea_page(window, cx),
             Action::AzureDevOps => self.open_azure_page(window, cx),
             Action::Connect(host) if self.menu.gitlab.ready_for(&host) => {
                 self.connect_gitlab(host, cx);

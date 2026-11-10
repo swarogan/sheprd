@@ -16,6 +16,7 @@ mod dialog;
 mod empty;
 mod en_xa;
 mod failure_text;
+mod gitea_mine;
 mod gitlab_merge_request;
 mod groups;
 mod list_switch;

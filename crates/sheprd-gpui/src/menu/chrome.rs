@@ -16,6 +16,9 @@ use gpui::{prelude::*, *};
 #[cfg(any(windows, test, feature = "integration-test"))]
 const COVER_MARGIN: f32 = 8.;
 
+/// The account pages' width: their header holds four provider tabs and Close.
+const ACCOUNT_WIDTH: f32 = 560.;
+
 impl SheprdWindow {
     pub(crate) fn show_install_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.open_menu(window, cx) {
@@ -502,6 +505,7 @@ impl SheprdWindow {
                         | Page::AppUpdate
                         | Page::GitHub
                         | Page::GitLab
+                        | Page::Gitea
                         | Page::AzureDevOps
                         | Page::AddDevice
                         | Page::AddWsl
@@ -554,10 +558,15 @@ impl SheprdWindow {
                     .shadow_lg()
             })
             .when(
-                matches!(page, Page::GitHub | Page::GitLab | Page::AzureDevOps),
+                matches!(
+                    page,
+                    Page::GitHub | Page::GitLab | Page::Gitea | Page::AzureDevOps
+                ),
                 |panel| {
                     panel
-                        .w((viewport.width - px(32.)).max(px(0.)).min(px(400.)))
+                        .w((viewport.width - px(32.))
+                            .max(px(0.))
+                            .min(px(ACCOUNT_WIDTH)))
                         .flex()
                         .flex_col()
                         .overflow_hidden()
@@ -682,6 +691,8 @@ impl SheprdWindow {
             panel = panel.child(self.render_github_auth(cx));
         } else if page == Page::GitLab {
             panel = panel.child(self.render_gitlab_page(cx));
+        } else if page == Page::Gitea {
+            panel = panel.child(self.render_gitea_page(cx));
         } else if page == Page::AzureDevOps {
             panel = panel.child(self.render_azure_page(cx));
         } else if page == Page::RemoteDevices {

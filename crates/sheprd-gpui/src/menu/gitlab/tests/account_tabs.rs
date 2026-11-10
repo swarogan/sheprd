@@ -15,8 +15,8 @@ fn show_github(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) {
 #[gpui::test]
 fn the_github_and_gitlab_pages_reach_the_other_tabs_by_keyboard(cx: &mut TestAppContext) {
     let (view, cx) = page(cx);
-    // GitLab: its GitHub tab, then Azure DevOps.
-    cx.simulate_keystrokes("tab tab");
+    // GitLab: its GitHub tab, Gitea, then Azure DevOps.
+    cx.simulate_keystrokes("tab tab tab");
     view.read_with(cx, |view, _| {
         assert!(
             view.menu
@@ -30,7 +30,7 @@ fn the_github_and_gitlab_pages_reach_the_other_tabs_by_keyboard(cx: &mut TestApp
         assert_eq!(view.menu.page, Some(Page::AzureDevOps));
     });
 
-    // GitHub: its GitLab tab, then Azure DevOps.
+    // GitHub: its GitLab tab, Gitea, then Azure DevOps.
     show_github(&view, cx);
     draw(cx);
     cx.simulate_keystrokes("tab");
@@ -40,7 +40,7 @@ fn the_github_and_gitlab_pages_reach_the_other_tabs_by_keyboard(cx: &mut TestApp
             Some(crate::menu::github::Action::GitLab)
         );
     });
-    cx.simulate_keystrokes("tab enter");
+    cx.simulate_keystrokes("tab tab enter");
     draw(cx);
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::AzureDevOps));

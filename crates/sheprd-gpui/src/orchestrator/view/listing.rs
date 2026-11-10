@@ -216,8 +216,9 @@ impl OrchestratorView {
                 &self.collapsed,
             );
             // Azure DevOps names two people alike as easily as not: its
-            // Mine matches by the identity id the worker read, not by name.
-            let by_identity = repo.reads_azure();
+            // Mine matches by the identity id the worker read, not by name,
+            // and Gitea's by the sign-in name it read.
+            let by_identity = repo.reads_by_identity();
             let mut pulls = rows::pull_request_rows(
                 items,
                 &runs,

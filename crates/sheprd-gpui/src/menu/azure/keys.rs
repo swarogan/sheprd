@@ -48,6 +48,8 @@ pub(crate) enum Action {
     GitHub,
     /// The account menu's GitLab tab.
     GitLab,
+    /// The account menu's Gitea tab.
+    Gitea,
     /// Forget the token saved for an organization.
     Forget(String),
     /// The organization field, which takes focus rather than being used.
@@ -63,7 +65,7 @@ pub(crate) enum Action {
 impl AzureMenu {
     /// The page's stops in the order they show, which Tab follows.
     pub(crate) fn actions(&self) -> Vec<Action> {
-        let mut actions = vec![Action::GitHub, Action::GitLab];
+        let mut actions = vec![Action::GitHub, Action::GitLab, Action::Gitea];
         actions.extend(
             self.organizations
                 .iter()
@@ -95,7 +97,7 @@ impl AzureMenu {
             Action::Organization => Some(form),
             Action::Token => Some(form + 1),
             Action::CreateToken => Some(form + 2),
-            Action::GitHub | Action::GitLab | Action::Save | Action::Close => None,
+            Action::GitHub | Action::GitLab | Action::Gitea | Action::Save | Action::Close => None,
         }
     }
 
@@ -112,6 +114,7 @@ impl SheprdWindow {
         match action {
             Action::GitHub => self.menu.page = Some(Page::GitHub),
             Action::GitLab => self.open_gitlab_page(window, cx),
+            Action::Gitea => self.open_gitea_page(window, cx),
             Action::Forget(organization) if !self.menu.azure.working => {
                 self.forget_azure(organization, cx);
             }

@@ -239,6 +239,10 @@ impl SheprdWindow {
             self.gitlab_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::Gitea) {
+            self.gitea_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::AzureDevOps) {
             self.azure_key(event, window, cx);
             return;

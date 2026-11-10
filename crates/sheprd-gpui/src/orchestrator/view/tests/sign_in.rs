@@ -162,6 +162,7 @@ fn the_gitlab_sign_in_opens_the_account_menus_gitlab_page(cx: &mut TestAppContex
     };
     assert!(sign_in(Provider::Gitlab) == Some(crate::menu::Page::GitLab));
     assert!(sign_in(Provider::Azure) == Some(crate::menu::Page::AzureDevOps));
+    assert!(sign_in(Provider::Gitea) == Some(crate::menu::Page::Gitea));
     assert!(sign_in(Provider::Github) == Some(crate::menu::Page::GitHub));
 }
 
@@ -208,4 +209,80 @@ fn an_azure_source_waiting_for_a_token_offers_to_connect_azure_devops(cx: &mut T
     // Tokens are saved by the organization's lowercase name.
     assert_eq!(organizations, ["contoso"]);
     assert!(waiting);
+}
+
+#[gpui::test]
+fn a_gitea_source_waiting_for_a_token_offers_to_connect_gitea(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let request = request(dir.path());
+    let look = look();
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));
+    cx.simulate_resize(gpui::size(gpui::px(1100.), gpui::px(600.)));
+    let asked = Rc::new(RefCell::new(Vec::new()));
+    let seen = asked.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, event: &Event, _| {
+            if let Event::SignIn(provider) = event {
+                seen.borrow_mut().push(*provider);
+            }
+        })
+        .detach();
+        view.update(cx, |view, cx| {
+            view.repo_mut().snapshot.sources = vec![SourceStatus {
+                key: SourceKey {
+                    provider: Provider::Gitea,
+                    host: "gitea.arpa".into(),
+                    repository: "ops/infra".into(),
+                },
+                state: SyncState::SignIn,
+            }];
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    // The banner, not the failure banner, so its click opens the page.
+    let banner = cx.debug_bounds("orchestrator-banner-sign-in").unwrap();
+    cx.simulate_click(banner.center(), Modifiers::none());
+    cx.run_until_parked();
+    assert_eq!(*asked.borrow(), [Provider::Gitea]);
+}
+
+#[gpui::test]
+fn a_saved_or_forgotten_gitea_instance_has_every_windows_orchestrator_read_again(
+    cx: &mut TestAppContext,
+) {
+    let notified = Rc::new(RefCell::new(0));
+    let mut windows = Vec::new();
+    for _ in 0..2 {
+        let (window, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let seen = notified.clone();
+        cx.update(|_, cx| {
+            let view = window.update(cx, |window, cx| {
+                let id = window.sections_view(cx);
+                window.orchestrators[&id].view.clone()
+            });
+            cx.observe(&view, move |_, _| *seen.borrow_mut() += 1)
+                .detach();
+        });
+        cx.run_until_parked();
+        windows.push(window);
+    }
+    // A refused save changes nothing, so nothing is read again.
+    *notified.borrow_mut() = 0;
+    cx.update(|cx| {
+        windows[0].update(cx, |window, cx| {
+            window.run_gitea(cx, None, || {
+                Err(sheprd_orchestrator::gitea::Error::Authentication)
+            });
+        });
+    });
+    cx.run_until_parked();
+    assert_eq!(*notified.borrow(), 0);
+    cx.update(|cx| {
+        windows[0].update(cx, |window, cx| {
+            window.run_gitea(cx, None, || Ok("Forgot.".to_owned()));
+        });
+    });
+    cx.run_until_parked();
+    assert_eq!(*notified.borrow(), 2);
 }

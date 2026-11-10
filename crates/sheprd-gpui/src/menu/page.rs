@@ -59,6 +59,8 @@ pub(crate) enum Page {
     /// Titlebar Git actions for the focused checkout, and its commit dialog.
     Git,
     GitCommit,
+    /// The account menu's Gitea instances and tokens, beside GitLab's.
+    Gitea,
     GitHub,
     /// The account menu's GitLab tokens, beside GitHub's sign-in.
     GitLab,

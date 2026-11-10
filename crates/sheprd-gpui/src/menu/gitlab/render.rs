@@ -4,6 +4,7 @@
 use super::{HostStatus, Token, connect::Connecting, keys::Action, status_line};
 use crate::i18n::fl;
 use crate::menu::azure::keys::Action as AzureAction;
+use crate::menu::gitea::keys::Action as GiteaAction;
 use crate::{SheprdWindow, fonts::StyledFont, menu::Page, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use sheprd_orchestrator::gitlab::account::Source;
@@ -24,6 +25,7 @@ impl SheprdWindow {
         let font = &self.config.ui;
         let azure_selected =
             |action| page == Page::AzureDevOps && self.menu.azure.is_selected(&action);
+        let gitea_selected = |action| page == Page::Gitea && self.menu.gitea.is_selected(&action);
         let tab = |id: &'static str, label: &'static str, mark: Svg, shown: bool| {
             div()
                 .id(id)
@@ -81,7 +83,8 @@ impl SheprdWindow {
                 )
                 .when(
                     (page == Page::GitLab && self.menu.gitlab.is_selected(&Action::GitHub))
-                        || azure_selected(AzureAction::GitHub),
+                        || azure_selected(AzureAction::GitHub)
+                        || gitea_selected(GiteaAction::GitHub),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -100,13 +103,39 @@ impl SheprdWindow {
                 .when(
                     (page == Page::GitHub
                         && self.menu.github_selected == Some(crate::menu::github::Action::GitLab))
-                        || azure_selected(AzureAction::GitLab),
+                        || azure_selected(AzureAction::GitLab)
+                        || gitea_selected(GiteaAction::GitLab),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
                     if this.menu.page != Some(Page::GitLab) {
                         this.open_gitlab_page(window, cx);
+                    }
+                })),
+            )
+            .child(
+                tab(
+                    "accounts-tab-gitea",
+                    "Gitea", // i18n: data
+                    crate::menu::gitea::render::gitea_mark(if page == Page::Gitea {
+                        theme.foreground
+                    } else {
+                        theme.muted
+                    }),
+                    page == Page::Gitea,
+                )
+                .when(
+                    (page == Page::GitHub
+                        && self.menu.github_selected == Some(crate::menu::github::Action::Gitea))
+                        || (page == Page::GitLab && self.menu.gitlab.is_selected(&Action::Gitea))
+                        || azure_selected(AzureAction::Gitea),
+                    |tab| tab.bg(rgb(theme.active)),
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    if this.menu.page != Some(Page::Gitea) {
+                        this.open_gitea_page(window, cx);
                     }
                 })),
             )
@@ -126,7 +155,8 @@ impl SheprdWindow {
                         && self.menu.github_selected
                             == Some(crate::menu::github::Action::AzureDevOps))
                         || (page == Page::GitLab
-                            && self.menu.gitlab.is_selected(&Action::AzureDevOps)),
+                            && self.menu.gitlab.is_selected(&Action::AzureDevOps))
+                        || gitea_selected(GiteaAction::AzureDevOps),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -153,7 +183,8 @@ impl SheprdWindow {
                                 == Some(crate::menu::github::Action::Close))
                             || (page == Page::GitLab
                                 && self.menu.gitlab.is_selected(&Action::Close))
-                            || azure_selected(AzureAction::Close),
+                            || azure_selected(AzureAction::Close)
+                            || gitea_selected(GiteaAction::Close),
                         |style| style.bg(rgb(theme.active)),
                     )
                     .hover(|style| style.bg(rgb(theme.active)))

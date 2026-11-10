@@ -34,6 +34,8 @@ pub struct IssueNode {
     title: String,
     body: Option<String>,
     user: Option<User>,
+    assignee: Option<User>,
+    assignees: Option<Vec<User>>,
     labels: Option<Vec<Label>>,
     comments: Option<u64>,
     created_at: DateTime<Utc>,
@@ -53,6 +55,13 @@ impl IssueNode {
 
     /// `web` is the repository's address, which the issue's page hangs from.
     pub fn into_item(self, source: &SourceKey, web: &str) -> Item {
+        // `assignee` is the first of `assignees`; either may be all an older Gitea sends.
+        let assignee = self
+            .assignee
+            .iter()
+            .chain(self.assignees.iter().flatten())
+            .find_map(User::login)
+            .map(str::to_owned);
         Item {
             key: ItemKey {
                 source: source.clone(),
@@ -73,7 +82,7 @@ impl IssueNode {
                 .collect(),
             parent_id: None,
             blocked_by: Vec::new(),
-            assignee: None,
+            assignee,
             acceptance: None,
             priority: None,
             created_at: Some(self.created_at),
