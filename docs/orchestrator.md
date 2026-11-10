@@ -325,3 +325,49 @@ Review column beside GitHub's and never stored.
 
 A section narrows to some projects through the projects menu in its search
 row ("All projects" while none is picked); backends keep their pills.
+
+## Gitea
+
+`gitea.rs` reads a repository on a Gitea or Forgejo instance through
+`/api/v1`: its open issues, its open pull requests, and the latest 50 closed
+or merged ones, a page of 50 at a time up to 2,000. Nothing in a remote says
+it is Gitea, so an instance is one whose address and token the account
+menu's **Gitea** tab saved: a remote on that hostname, whatever its port or
+protocol, becomes a Gitea source (`gitea::recognize`, before the GitLab
+CLI's say), and never `github.com`. **Check and save** asks the instance's
+`/api/v1/user` first and saves only when it answers; the login it names
+makes Mine work. An address typed without a scheme is `https`; `http` is
+accepted for an instance on a private network, with a note that the token
+then travels unencrypted. Requests follow no redirect.
+
+Addresses and tokens are kept together in one record, at most 32 instances:
+the desktop keyring (`dev.herdr.gpui.gitea`), or with `[gitea]
+allow_plaintext_credentials = true` the private `0600` `gitea-credentials`
+file beside the GUI config. Saving or forgetting an instance makes every
+window's worker read the record again.
+
+## Jira
+
+`jira.rs` lists the issues assigned to you that are not done on a Jira Cloud
+site (`POST /rest/api/3/search/jql` with `assignee = currentUser() AND
+statusCategory != Done ORDER BY updated DESC`), a page of 100 at a time up
+to 1,000. Nothing in a repository names a Jira project and none is asked
+for: every repository lists one source per saved site, keyed by the site's
+hostname and the repository `assigned`, so an issue shows the same in each
+checkout and names its site where the others name their project. Nothing is
+written to Jira.
+
+The account menu's **Jira** tab saves a site: its address, your Atlassian
+account email, and an API token from
+`https://id.atlassian.com/manage-profile/security/api-tokens`, sent as Basic
+authentication over HTTPS only. **Check and save** asks the site's
+`/rest/api/3/myself` first. An issue's key (`PROJ-123`) is its identifier
+and names its branch; its status category reads as open, in progress, or
+closed, with the status name, issue type, and project as its first labels;
+its description is converted from Atlassian Document Format to Markdown
+(`jira/adf.rs`), images left as placeholders. Scoped API tokens and Jira
+Server or Data Center are not read.
+
+Sites are kept in one record, at most 32: the desktop keyring
+(`dev.herdr.gpui.jira`), or with `[jira] allow_plaintext_credentials = true`
+the private `0600` `jira-credentials` file beside the GUI config.
