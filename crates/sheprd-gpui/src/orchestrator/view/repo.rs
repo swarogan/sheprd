@@ -92,6 +92,7 @@ impl Repo {
                 azure_store: stores.azure,
                 gitea_store: stores.gitea,
                 gitlab_store: stores.gitlab,
+                jira_store: stores.jira,
                 data_root: None,
                 timing: Timing::default(),
             },

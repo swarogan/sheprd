@@ -109,6 +109,7 @@ use serde::Deserialize;
 pub use sheprd_orchestrator::azure::Config as AzureDevOpsConfig;
 pub use sheprd_orchestrator::gitea::Config as GiteaConfig;
 pub use sheprd_orchestrator::gitlab::Config as GitLabConfig;
+pub use sheprd_orchestrator::jira::Config as JiraConfig;
 pub use sheprd_remote::config::AzureConfig;
 #[cfg(feature = "azure")]
 pub(crate) use sheprd_remote::config::AzureFields;
@@ -235,6 +236,8 @@ pub struct Config {
     /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
     /// Never set when the config names the terminal's `fallback` itself.
     pub(crate) icon_font_missing: bool,
+    /// Where Jira sites and API tokens pasted in the account menu are saved.
+    pub jira: JiraConfig,
     /// Whether a terminal selection stays highlighted, and readable by
     /// selection tools, after it is copied.
     pub keep_selection_after_copy: bool,
@@ -413,6 +416,7 @@ impl Default for Config {
             gitlab: GitLabConfig::default(),
             herdr_2_terminals: false,
             icon_font_missing: false,
+            jira: JiraConfig::default(),
             keep_selection_after_copy: true,
             keybinding_overrides: BTreeMap::new(),
             keybindings: Keymap::default(),
@@ -507,6 +511,7 @@ struct Settings {
     github: GitHubConfig,
     gitlab: GitLabConfig,
     herdr_2_terminals: Option<bool>,
+    jira: JiraConfig,
     keep_selection_after_copy: Option<bool>,
     keybindings: BTreeMap<String, Binding>,
     language: Option<sheprd_i18n::Language>,
@@ -823,6 +828,7 @@ impl Config {
         config.azure_devops = settings.azure_devops;
         config.gitea = settings.gitea;
         config.gitlab = settings.gitlab;
+        config.jira = settings.jira;
         #[cfg(feature = "azure")]
         settings.azure.check()?;
         config.azure = settings.azure;

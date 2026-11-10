@@ -669,7 +669,7 @@ pub(crate) fn status_of<'a>(
     // one, so it never borrows GitHub's.
     let number = match item.key.source.provider {
         Provider::Github | Provider::Azure => item.pull_request.as_ref()?.number,
-        Provider::Gitea | Provider::Gitlab | Provider::Beads => return None,
+        Provider::Gitea | Provider::Gitlab | Provider::Jira | Provider::Beads => return None,
     };
     statuses.get(&(item.key.source.repository.clone(), number))
 }

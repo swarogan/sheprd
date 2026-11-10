@@ -15,6 +15,7 @@ pub enum Provider {
     Gitea,
     Github,
     Gitlab,
+    Jira,
     Beads,
 }
 
@@ -25,6 +26,7 @@ impl Provider {
             Self::Gitea => "gitea",
             Self::Github => "github",
             Self::Gitlab => "gitlab",
+            Self::Jira => "jira",
             Self::Beads => "beads",
         }
     }
@@ -39,6 +41,7 @@ impl FromStr for Provider {
             "gitea" => Ok(Self::Gitea),
             "github" => Ok(Self::Github),
             "gitlab" => Ok(Self::Gitlab),
+            "jira" => Ok(Self::Jira),
             "beads" => Ok(Self::Beads),
             other => Err(Error::Provider(other.to_owned())),
         }
@@ -132,7 +135,8 @@ impl Item {
     pub fn stand_in(key: ItemKey) -> Self {
         let number = key.native_id.strip_prefix("pr/").unwrap_or(&key.native_id);
         let identifier = match key.source.provider {
-            Provider::Beads => key.native_id.clone(),
+            // A key such as `PROJ-123` is already what Jira writes.
+            Provider::Beads | Provider::Jira => key.native_id.clone(),
             // GitLab and Azure DevOps write a pull request `!id`; issues stay `#id`.
             Provider::Azure | Provider::Gitlab if key.native_id.starts_with("pr/") => {
                 format!("!{number}")

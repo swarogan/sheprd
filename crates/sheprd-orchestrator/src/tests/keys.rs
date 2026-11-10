@@ -48,13 +48,20 @@ fn canonical_keys_escape_the_escape_marker() {
 
 #[test]
 fn providers_and_owners_round_trip_and_reject_unknown_words() {
-    for provider in [Provider::Github, Provider::Gitlab, Provider::Beads] {
+    for provider in [
+        Provider::Github,
+        Provider::Gitlab,
+        Provider::Jira,
+        Provider::Beads,
+    ] {
         assert_eq!(provider.as_str().parse::<Provider>().unwrap(), provider);
     }
     for owner in [Owner::AgentLauncher, Owner::Sheprd] {
         assert_eq!(owner.as_str().parse::<Owner>().unwrap(), owner);
     }
-    assert!(matches!("jira".parse::<Provider>(), Err(Error::Provider(word)) if word == "jira"));
+    assert!(
+        matches!("bitbucket".parse::<Provider>(), Err(Error::Provider(word)) if word == "bitbucket")
+    );
     assert!(matches!("tmux".parse::<Owner>(), Err(Error::Owner(word)) if word == "tmux"));
 }
 

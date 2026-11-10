@@ -33,6 +33,7 @@ mod current_beads;
 mod extras;
 mod gitea_mapping;
 mod glab_mapping;
+mod jira_sources;
 mod refresh;
 mod stores;
 mod syncing_count;
@@ -68,6 +69,7 @@ pub(super) fn opened(dir: &std::path::Path) -> (Service, Worker, Host) {
         data_root: Some(dir.join("data")),
         azure_store: Default::default(),
         gitea_store: Default::default(),
+        jira_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),

@@ -49,6 +49,7 @@ fn one_issue_from_two_hosts_is_one_row_of_the_checkout_it_shows(cx: &mut gpui::T
                 data_root: Some(dir.path().join("other-data")),
                 azure_store: Default::default(),
                 gitea_store: Default::default(),
+                jira_store: Default::default(),
                 gitlab_store: Default::default(),
                 timing: Timing::default(),
             };

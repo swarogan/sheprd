@@ -2,11 +2,43 @@
 //! looked up again when GitLab refuses it: a connected account's token is
 //! renewed by the lookup, by this worker or by the account menu.
 
-use super::{Error, Result, SourceKey, Worker, gitlab};
+use super::{Error, Result, SourceKey, SyncState, Worker, gitlab};
 use crate::Checkpoint;
+use chrono::Utc;
 use std::sync::atomic::Ordering;
 
 impl Worker {
+    /// Syncs GitLab source `key`, storing a complete listing when the
+    /// database is `writable` and showing any other without storing it.
+    pub(super) fn sync_gitlab(&mut self, key: &SourceKey, writable: bool) -> Result<SyncState> {
+        let Some(store) = self.store.as_mut() else {
+            return Ok(SyncState::Unsupported);
+        };
+        let previous = store.checkpoint(key)?;
+        let listing = self.gitlab_listing(key, previous.as_ref())?;
+        let Some(store) = self.store.as_mut() else {
+            return Ok(SyncState::Unsupported);
+        };
+        let count = listing.items.len();
+        if !listing.complete || !writable {
+            self.uncached.insert(key.clone(), listing.items);
+            return Ok(if listing.complete {
+                SyncState::Synced {
+                    at: Utc::now(),
+                    count,
+                }
+            } else {
+                SyncState::Capped { count }
+            });
+        }
+        store.replace_items(key, &listing.items, &listing.checkpoint)?;
+        self.uncached.remove(key);
+        Ok(SyncState::Synced {
+            at: Utc::now(),
+            count,
+        })
+    }
+
     /// Lists GitLab source `key`, continuing from `previous`.
     pub(super) fn gitlab_listing(
         &mut self,

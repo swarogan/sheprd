@@ -18,6 +18,7 @@ fn start_agent_stays_on_a_row_beside_an_open_page(cx: &mut TestAppContext) {
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
         gitea_store: Default::default(),
+        jira_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

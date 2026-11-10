@@ -7,7 +7,7 @@ use super::{
     Access, CheckState, Error, HerdrSession, Item, PrStatus, Provider, Result, Run, SourceKey,
     Store,
     actions::{Action, Site},
-    azure, beads, database_path, gitea, github, gitlab,
+    azure, beads, database_path, gitea, github, gitlab, jira,
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
@@ -36,6 +36,7 @@ mod azure_source;
 mod gitea_source;
 mod github_source;
 mod gitlab_source;
+mod jira_source;
 pub mod remote;
 mod schedule;
 mod sources;
@@ -76,6 +77,7 @@ pub struct Stores {
     pub azure: sheprd_credentials::Store,
     pub gitea: sheprd_credentials::Store,
     pub gitlab: sheprd_credentials::Store,
+    pub jira: sheprd_credentials::Store,
 }
 
 /// Where the view's repository is and whom to read GitHub as.
@@ -96,6 +98,8 @@ pub struct Request {
     pub gitea_store: sheprd_credentials::Store,
     /// Where GitLab tokens pasted in the account menu are saved.
     pub gitlab_store: sheprd_credentials::Store,
+    /// Where Jira sites and API tokens pasted in the account menu are saved.
+    pub jira_store: sheprd_credentials::Store,
     /// The folder holding the databases, and agent-launcher's to carry
     /// over, in place of the platform's; tests set it.
     pub data_root: Option<PathBuf>,
@@ -127,6 +131,7 @@ impl Request {
             azure: self.azure_store,
             gitea: self.gitea_store,
             gitlab: self.gitlab_store,
+            jira: self.jira_store,
         }
     }
 
@@ -135,6 +140,7 @@ impl Request {
         self.azure_store = stores.azure;
         self.gitea_store = stores.gitea;
         self.gitlab_store = stores.gitlab;
+        self.jira_store = stores.jira;
     }
 }
 
@@ -265,6 +271,7 @@ impl Service {
             resume: HashMap::new(),
             azure_token: None,
             gitea_saved: None,
+            jira_saved: None,
             gitlab_token: None,
             cooldown: None,
             visible: visible.clone(),
@@ -378,6 +385,8 @@ struct Worker {
     /// The saved Gitea instances, once read; Refresh and new stores read
     /// them again, so an address saved in the account menu is picked up.
     gitea_saved: Option<Arc<gitea::saved::Saved>>,
+    /// The saved Jira sites, once read, as `gitea_saved` is.
+    jira_saved: Option<Arc<jira::saved::Saved>>,
     cooldown: Option<Duration>,
     /// Whether the view is on screen, as the UI last said.
     visible: Arc<AtomicBool>,
@@ -467,6 +476,7 @@ impl Worker {
         self.gitlab_token = None;
         self.azure_token = None;
         self.gitea_saved = None;
+        self.jira_saved = None;
         self.retry.clear();
         self.checks.clear();
     }
@@ -713,7 +723,8 @@ impl Worker {
         }
         let store = Store::open(&path)?;
         self.snapshot.access = Some(store.access());
-        self.snapshot.sources = statuses(&info);
+        let sources = self.sources_of(&info);
+        self.snapshot.sources = statuses(sources);
         self.site = Some(Site {
             host: host.clone(),
             target: self.request.target.clone(),
@@ -744,6 +755,7 @@ impl Worker {
         self.data_version = Some(store.data_version()?);
         let mut items = store.items()?;
         sources::keep_current_beads(&mut items, self.snapshot.repo.as_ref());
+        sources::keep_saved_jira(&mut items, self.jira_saved.as_deref());
         if !self.uncached.is_empty() {
             let replaced = replaced_by(&self.uncached);
             items.retain(|item| !replaced.contains(&item.key.source));
@@ -803,7 +815,7 @@ impl Worker {
                 Err(error) => tracing::debug!(%error, "Cannot read the branches"),
             }
         }
-        for (key, supported) in sources(&info) {
+        for (key, supported) in self.sources_of(&info) {
             if self.cancelled() {
                 return;
             }
@@ -853,6 +865,7 @@ impl Worker {
                         Error::Azure(source) if source.needs_sign_in() => SyncState::SignIn,
                         Error::Gitea(source) if source.needs_sign_in() => SyncState::SignIn,
                         Error::Gitlab(source) if source.needs_sign_in() => SyncState::SignIn,
+                        Error::Jira(source) if source.needs_sign_in() => SyncState::SignIn,
                         _ => SyncState::Failed(Arc::new(error)),
                     }
                 }
@@ -894,31 +907,8 @@ impl Worker {
             },
             Provider::Azure => self.sync_azure(key, writable),
             Provider::Gitea => self.sync_gitea(key, writable),
-            Provider::Gitlab => {
-                let previous = store.checkpoint(key)?;
-                let listing = self.gitlab_listing(key, previous.as_ref())?;
-                let Some(store) = self.store.as_mut() else {
-                    return Ok(SyncState::Unsupported);
-                };
-                let count = listing.items.len();
-                if !listing.complete || !writable {
-                    self.uncached.insert(key.clone(), listing.items);
-                    return Ok(if listing.complete {
-                        SyncState::Synced {
-                            at: Utc::now(),
-                            count,
-                        }
-                    } else {
-                        SyncState::Capped { count }
-                    });
-                }
-                store.replace_items(key, &listing.items, &listing.checkpoint)?;
-                self.uncached.remove(key);
-                Ok(SyncState::Synced {
-                    at: Utc::now(),
-                    count,
-                })
-            }
+            Provider::Gitlab => self.sync_gitlab(key, writable),
+            Provider::Jira => self.sync_jira(key, writable),
         }
     }
 
@@ -928,8 +918,22 @@ impl Worker {
         let Some(mut info) = self.snapshot.repo.clone() else {
             return;
         };
-        if recognize(&mut info, || self.gitea_record(), cli) {
-            self.snapshot.sources = statuses(&info);
+        let changed = recognize(&mut info, || self.gitea_record(), cli);
+        let sources = self.sources_of(&info);
+        let listed = self.snapshot.sources.iter().map(|status| &status.key);
+        if changed || !sources.iter().map(|(key, _)| key).eq(listed) {
+            // A saved or forgotten Jira site leaves the other sources as they were.
+            let old = std::mem::take(&mut self.snapshot.sources);
+            self.snapshot.sources = statuses(sources)
+                .into_iter()
+                .map(|mut status| {
+                    let same = old.iter().find(|old| old.key == status.key);
+                    if let Some(old) = same.filter(|_| !changed) {
+                        status.state = old.state.clone();
+                    }
+                    status
+                })
+                .collect();
             self.snapshot.repo = Some(info);
         }
     }

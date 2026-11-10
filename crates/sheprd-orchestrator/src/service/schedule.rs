@@ -43,6 +43,8 @@ pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
         Error::Gitea(_) => BACKOFF,
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
         Error::Gitlab(_) => BACKOFF,
+        Error::Jira(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Jira(_) => BACKOFF,
         _ => return BACKOFF,
     };
     cooldown.map_or(floor, |wait| wait.max(floor))

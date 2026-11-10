@@ -73,6 +73,8 @@ impl Localize for Error {
             Self::Gitea(error) => error.to_string(),
             Self::Github(error) => error.localize(),
             Self::Gitlab(error) => error.localize(),
+            // Placeholder until the Jira messages get a catalog of their own.
+            Self::Jira(error) => error.to_string(),
             Self::Cancelled => fl!("error-orchestrator-cancelled"),
             Self::Worker(error) => fl!("error-orchestrator-worker", error = error.to_string()),
             Self::Busy => fl!("error-orchestrator-busy"),

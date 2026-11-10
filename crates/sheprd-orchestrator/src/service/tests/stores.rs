@@ -12,6 +12,7 @@ fn request() -> Request {
         data_root: None,
         azure_store: Store::Keyring,
         gitea_store: Store::Keyring,
+        jira_store: Store::Keyring,
         gitlab_store: Store::Keyring,
         timing: Timing::default(),
     }
@@ -20,6 +21,7 @@ fn request() -> Request {
 const FILES: Stores = Stores {
     azure: Store::File,
     gitea: Store::File,
+    jira: Store::File,
     gitlab: Store::File,
 };
 

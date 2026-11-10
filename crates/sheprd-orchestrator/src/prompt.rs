@@ -101,10 +101,17 @@ pub fn built_in(item: &Item) -> String {
     }
     let nonce = nonce();
     let description = bounded(item.description.as_deref().unwrap_or(""), MAX_DESCRIPTION);
+    // A Jira source is every issue assigned to the user; the site is what names it.
+    let source = &item.key.source;
+    let repository = if source.provider == Provider::Jira {
+        &source.host
+    } else {
+        &source.repository
+    };
     format!(
         "Implement this issue.\n\nProvider: {}\nRepository: {}\nIdentifier: {}\nTitle: {}\nDescription: {}\nURL: {}",
-        provider(item.key.source.provider),
-        item.key.source.repository,
+        provider(source.provider),
+        repository,
         item.identifier,
         fence(&item.title, &nonce),
         fence(description, &nonce),

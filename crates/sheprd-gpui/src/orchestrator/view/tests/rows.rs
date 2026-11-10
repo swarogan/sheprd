@@ -282,4 +282,8 @@ fn unlisted_items_are_named_by_their_key() {
         "hg-a3f2.1"
     );
     assert_eq!(key_label("beads:local:/r:a%3Ab"), "a:b");
+    assert_eq!(
+        key_label("jira:acme.atlassian.net:assigned:PROJ-123"),
+        "PROJ-123"
+    );
 }

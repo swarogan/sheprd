@@ -18,6 +18,7 @@ fn request(dir: &std::path::Path) -> Request {
         data_root: Some(dir.join("data")),
         azure_store: Default::default(),
         gitea_store: Default::default(),
+        jira_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     }

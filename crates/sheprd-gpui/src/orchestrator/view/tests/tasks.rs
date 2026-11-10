@@ -189,6 +189,7 @@ fn two_projects(
         data_root: Some(dir.join("other-data")),
         azure_store: Default::default(),
         gitea_store: Default::default(),
+        jira_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

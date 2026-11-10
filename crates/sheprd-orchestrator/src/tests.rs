@@ -38,6 +38,13 @@ mod gitlab_renewal;
 mod gitlab_saved_turns;
 mod gitlab_sign_in;
 mod incremental;
+mod jira;
+mod jira_account;
+mod jira_adf;
+mod jira_dispatch;
+// The private credential file these save to is Unix-only.
+#[cfg(unix)]
+mod jira_saved;
 mod keys;
 mod line_endings;
 mod location;

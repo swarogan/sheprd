@@ -320,6 +320,7 @@ embedded_icons! {
     "gitlab.svg",
     "globe.svg",
     "issue.svg",
+    "jira.svg",
     "keyboard.svg",
     "lock.svg",
     "more.svg",

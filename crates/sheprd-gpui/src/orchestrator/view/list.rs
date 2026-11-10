@@ -837,6 +837,7 @@ pub(super) fn source_icon(provider: Provider) -> &'static str {
         Provider::Github => "icons/github.svg",
         Provider::Beads => "icons/beads.svg",
         Provider::Gitlab => "icons/gitlab.svg",
+        Provider::Jira => "icons/jira.svg",
     }
 }
 

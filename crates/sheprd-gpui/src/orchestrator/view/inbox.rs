@@ -877,6 +877,7 @@ pub(super) fn provider_name(provider: Provider) -> &'static str {
         Provider::Github => "GitHub",      // i18n: data
         Provider::Beads => "Beads",        // i18n: data
         Provider::Gitlab => "GitLab",      // i18n: data
+        Provider::Jira => "Jira",          // i18n: data
     }
 }
 
@@ -913,6 +914,9 @@ pub(super) fn provider_mark(look: &Look, provider: Provider) -> AnyElement {
             .into_any_element(),
         Provider::Gitlab => look
             .icon("icons/gitlab.svg", 12., look.theme.subtext())
+            .into_any_element(),
+        Provider::Jira => look
+            .icon("icons/jira.svg", 12., look.theme.subtext())
             .into_any_element(),
         Provider::Beads => look.badge("bd", MAGENTA).into_any_element(),
     }

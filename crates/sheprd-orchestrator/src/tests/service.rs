@@ -39,6 +39,7 @@ pub(super) fn start(dir: &std::path::Path, checkout: String) -> Service {
         data_root: Some(dir.join("data")),
         azure_store: Default::default(),
         gitea_store: Default::default(),
+        jira_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),

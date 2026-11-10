@@ -25,6 +25,7 @@ fn refresh_spins_until_the_sync_it_asked_for_ends(cx: &mut TestAppContext) {
         data_root: Some(dir.path().join("data")),
         azure_store: Default::default(),
         gitea_store: Default::default(),
+        jira_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

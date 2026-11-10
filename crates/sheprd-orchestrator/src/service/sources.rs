@@ -3,7 +3,7 @@
 
 use super::{
     Access, Item, Provider, RepoInfo, Result, SourceKey, SourceStatus, SyncState, Worker, azure,
-    gitea, gitlab,
+    gitea, gitlab, jira,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -81,9 +81,34 @@ pub(super) fn keep_current_beads(items: &mut Vec<Item>, info: Option<&RepoInfo>)
     });
 }
 
-/// Each source of `info`, syncing when this build can read it.
-pub(super) fn statuses(info: &RepoInfo) -> Vec<SourceStatus> {
-    sources(info)
+/// Drops Jira issues of a site no longer saved, which the database still
+/// holds after the site is forgotten. Until the saved sites are read, what
+/// was last listed stays.
+pub(super) fn keep_saved_jira(items: &mut Vec<Item>, saved: Option<&jira::saved::Saved>) {
+    let Some(saved) = saved else {
+        return;
+    };
+    items.retain(|item| {
+        item.key.source.provider != Provider::Jira || saved.get(&item.key.source.host).is_some()
+    });
+}
+
+impl Worker {
+    /// The sources `info` has: its own, and one per saved Jira site, which
+    /// is no property of the repository and so cannot come from `info`.
+    /// Blocks on the credential store the first time, so only the worker
+    /// calls it.
+    pub(super) fn sources_of(&mut self, info: &RepoInfo) -> Vec<(SourceKey, bool)> {
+        let mut all = sources(info);
+        let saved = self.jira_record();
+        all.extend(jira::source_keys(&saved).into_iter().map(|key| (key, true)));
+        all
+    }
+}
+
+/// Each of `sources`, syncing when this build can read it.
+pub(super) fn statuses(sources: Vec<(SourceKey, bool)>) -> Vec<SourceStatus> {
+    sources
         .into_iter()
         .map(|(key, supported)| SourceStatus {
             key,
@@ -96,7 +121,8 @@ pub(super) fn statuses(info: &RepoInfo) -> Vec<SourceStatus> {
         .collect()
 }
 
-/// The sources a repository has, and whether this build can read each.
+/// The sources a repository's own files give it, and whether this build can
+/// read each; [`Worker::sources_of`] adds the saved Jira sites.
 pub fn sources(info: &RepoInfo) -> Vec<(SourceKey, bool)> {
     let remote = info.remote.as_ref().map(|remote| {
         let supported = match remote.source.provider {
@@ -104,7 +130,8 @@ pub fn sources(info: &RepoInfo) -> Vec<(SourceKey, bool)> {
             Provider::Gitea => true,
             Provider::Github => remote.source.host == "github.com",
             Provider::Gitlab => true,
-            Provider::Beads => false,
+            // Jira sources come from the saved sites, not the remote.
+            Provider::Jira | Provider::Beads => false,
         };
         (remote.source.clone(), supported)
     });

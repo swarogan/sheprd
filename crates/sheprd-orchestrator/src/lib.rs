@@ -20,6 +20,7 @@ pub mod git;
 pub mod gitea;
 pub mod github;
 pub mod gitlab;
+pub mod jira;
 pub mod location;
 pub mod model;
 pub mod naming;

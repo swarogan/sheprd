@@ -80,6 +80,8 @@ pub enum Error {
     Gitea(#[from] super::gitea::Error),
     #[error(transparent)]
     Gitlab(#[from] super::gitlab::Error),
+    #[error(transparent)]
+    Jira(#[from] super::jira::Error),
     #[error("Cancelled")]
     Cancelled,
     #[error("Could not start the orchestrator's worker: {0}")]
