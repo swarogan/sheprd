@@ -163,6 +163,7 @@ fn the_gitlab_sign_in_opens_the_account_menus_gitlab_page(cx: &mut TestAppContex
     assert!(sign_in(Provider::Gitlab) == Some(crate::menu::Page::GitLab));
     assert!(sign_in(Provider::Azure) == Some(crate::menu::Page::AzureDevOps));
     assert!(sign_in(Provider::Gitea) == Some(crate::menu::Page::Gitea));
+    assert!(sign_in(Provider::Jira) == Some(crate::menu::Page::Jira));
     assert!(sign_in(Provider::Github) == Some(crate::menu::Page::GitHub));
 }
 

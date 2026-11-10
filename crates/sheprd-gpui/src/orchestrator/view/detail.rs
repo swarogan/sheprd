@@ -103,6 +103,7 @@ impl OrchestratorView {
             None => (fl!("orchestrator-issues"), "icons/note.svg", Tab::Issues),
         };
         let repo = super::tasks::task_project(item)
+            .or_else(|| super::tasks::jira_site(item).map(str::to_owned))
             .or_else(|| {
                 let info = self.snapshot().repo.as_ref()?;
                 let remote = info.remote.as_ref()?;

@@ -31,6 +31,7 @@ fn reported() -> Vec<String> {
         "GitHub",
         "GitLab",
         "Azure DevOps",
+        "Jira",
         "gitlab.com",
         "gitlab.example.com",
         "@akanoa",

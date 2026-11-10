@@ -16,8 +16,8 @@ use gpui::{prelude::*, *};
 #[cfg(any(windows, test, feature = "integration-test"))]
 const COVER_MARGIN: f32 = 8.;
 
-/// The account pages' width: their header holds four provider tabs and Close.
-const ACCOUNT_WIDTH: f32 = 560.;
+/// The account pages' width: their header holds five provider tabs and Close.
+pub(in crate::menu) const ACCOUNT_WIDTH: f32 = 660.;
 
 impl SheprdWindow {
     pub(crate) fn show_install_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -506,6 +506,7 @@ impl SheprdWindow {
                         | Page::GitHub
                         | Page::GitLab
                         | Page::Gitea
+                        | Page::Jira
                         | Page::AzureDevOps
                         | Page::AddDevice
                         | Page::AddWsl
@@ -560,7 +561,7 @@ impl SheprdWindow {
             .when(
                 matches!(
                     page,
-                    Page::GitHub | Page::GitLab | Page::Gitea | Page::AzureDevOps
+                    Page::GitHub | Page::GitLab | Page::Gitea | Page::Jira | Page::AzureDevOps
                 ),
                 |panel| {
                     panel
@@ -693,6 +694,8 @@ impl SheprdWindow {
             panel = panel.child(self.render_gitlab_page(cx));
         } else if page == Page::Gitea {
             panel = panel.child(self.render_gitea_page(cx));
+        } else if page == Page::Jira {
+            panel = panel.child(self.render_jira_page(cx));
         } else if page == Page::AzureDevOps {
             panel = panel.child(self.render_azure_page(cx));
         } else if page == Page::RemoteDevices {

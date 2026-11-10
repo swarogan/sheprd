@@ -95,6 +95,7 @@ fn the_page_switches_to_an_additional_account_and_back(cx: &mut TestAppContext) 
                     Action::GitLab,
                     Action::Gitea,
                     Action::AzureDevOps,
+                    Action::Jira,
                     Action::Start,
                     Action::Token,
                     Action::SignOut,

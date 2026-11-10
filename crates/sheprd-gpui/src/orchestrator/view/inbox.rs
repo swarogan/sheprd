@@ -728,22 +728,28 @@ impl OrchestratorView {
                 banners.push((banner(look, RED, "icons/x.svg", of(error.localize())), None));
             }
             for status in &snapshot.sources {
-                // Azure DevOps and Gitea have no sign-in of their own in the
-                // title bar, so a missing token says where to add one.
-                if matches!(status.key.provider, Provider::Azure | Provider::Gitea)
-                    && matches!(status.state, SyncState::SignIn)
+                // Azure DevOps, Gitea, and Jira have no sign-in of their own in
+                // the title bar, so a missing token says where to add one.
+                if matches!(
+                    status.key.provider,
+                    Provider::Azure | Provider::Gitea | Provider::Jira
+                ) && matches!(status.state, SyncState::SignIn)
                 {
                     let repository = status.key.repository.as_str();
-                    let (icon, text) = if status.key.provider == Provider::Azure {
-                        (
+                    let (icon, text) = match status.key.provider {
+                        Provider::Azure => (
                             "icons/azure-devops.svg",
                             fl!("azure-devops-menu-connect-banner", repository = repository),
-                        )
-                    } else {
-                        (
+                        ),
+                        // A Jira source's repository is always `assigned`: the site names it.
+                        Provider::Jira => (
+                            "icons/jira.svg",
+                            fl!("jira-menu-connect-banner", site = status.key.host.as_str()),
+                        ),
+                        _ => (
                             "icons/gitea.svg",
                             fl!("gitea-menu-connect-banner", repository = repository),
-                        )
+                        ),
                     };
                     banners.push((
                         banner(look, YELLOW, icon, of(text)),

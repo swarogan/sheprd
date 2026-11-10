@@ -637,6 +637,14 @@ size = 12
 # which are kept in their own 0600 gitea-credentials file. Default is false.
 # allow_plaintext_credentials = false
 
+# Jira Cloud sites the Orchestrator lists your open assigned issues from: the
+# address, Atlassian email, and API token typed in the title bar's account menu
+# (kept in the credential store). Tokens are never read from this file.
+# [jira]
+# Same meaning as [github] allow_plaintext_credentials, for the saved API tokens,
+# which are kept in their own 0600 jira-credentials file. Default is false.
+# allow_plaintext_credentials = false
+
 # A Coder deployment whose workspaces can be created and added as devices from
 # the device picker's "Add Coder Workspace…". Settings > Cloud devices edits
 # these keys and saves the client secret to the credential store, so editing

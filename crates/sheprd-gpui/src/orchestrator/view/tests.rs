@@ -19,6 +19,7 @@ mod failure_text;
 mod gitea_mine;
 mod gitlab_merge_request;
 mod groups;
+mod jira_source;
 mod list_switch;
 mod markdown;
 mod non_projects;

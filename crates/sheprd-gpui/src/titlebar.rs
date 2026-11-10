@@ -44,7 +44,7 @@ impl SheprdWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
         let shown = matches!(
             self.menu.page,
-            Some(Page::GitHub | Page::GitLab | Page::Gitea | Page::AzureDevOps)
+            Some(Page::GitHub | Page::GitLab | Page::Gitea | Page::AzureDevOps | Page::Jira)
         );
         if !shown && !self.open_menu(window, cx) {
             return;

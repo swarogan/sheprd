@@ -36,6 +36,7 @@ fn tab_walks_every_control_from_the_token_field(cx: &mut TestAppContext) {
             Action::GitHub,
             Action::GitLab,
             Action::AzureDevOps,
+            Action::Jira,
             Action::Forget("gitea.arpa".into()),
             Action::Forget("forge.example.com".into()),
             Action::Address,
@@ -95,7 +96,7 @@ fn enter_uses_the_selected_control(cx: &mut TestAppContext) {
     );
     cx.simulate_keystrokes("shift-tab enter");
     draw(cx);
-    assert!(view.read_with(cx, |view, _| view.menu.page) == Some(Page::AzureDevOps));
+    assert!(view.read_with(cx, |view, _| view.menu.page) == Some(Page::Jira));
 }
 
 #[gpui::test]

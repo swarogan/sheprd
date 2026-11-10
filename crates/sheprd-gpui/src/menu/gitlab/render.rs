@@ -5,6 +5,7 @@ use super::{HostStatus, Token, connect::Connecting, keys::Action, status_line};
 use crate::i18n::fl;
 use crate::menu::azure::keys::Action as AzureAction;
 use crate::menu::gitea::keys::Action as GiteaAction;
+use crate::menu::jira::keys::Action as JiraAction;
 use crate::{SheprdWindow, fonts::StyledFont, menu::Page, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use sheprd_orchestrator::gitlab::account::Source;
@@ -26,6 +27,7 @@ impl SheprdWindow {
         let azure_selected =
             |action| page == Page::AzureDevOps && self.menu.azure.is_selected(&action);
         let gitea_selected = |action| page == Page::Gitea && self.menu.gitea.is_selected(&action);
+        let jira_selected = |action| page == Page::Jira && self.menu.jira.is_selected(&action);
         let tab = |id: &'static str, label: &'static str, mark: Svg, shown: bool| {
             div()
                 .id(id)
@@ -84,7 +86,8 @@ impl SheprdWindow {
                 .when(
                     (page == Page::GitLab && self.menu.gitlab.is_selected(&Action::GitHub))
                         || azure_selected(AzureAction::GitHub)
-                        || gitea_selected(GiteaAction::GitHub),
+                        || gitea_selected(GiteaAction::GitHub)
+                        || jira_selected(JiraAction::GitHub),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -104,7 +107,8 @@ impl SheprdWindow {
                     (page == Page::GitHub
                         && self.menu.github_selected == Some(crate::menu::github::Action::GitLab))
                         || azure_selected(AzureAction::GitLab)
-                        || gitea_selected(GiteaAction::GitLab),
+                        || gitea_selected(GiteaAction::GitLab)
+                        || jira_selected(JiraAction::GitLab),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -129,7 +133,8 @@ impl SheprdWindow {
                     (page == Page::GitHub
                         && self.menu.github_selected == Some(crate::menu::github::Action::Gitea))
                         || (page == Page::GitLab && self.menu.gitlab.is_selected(&Action::Gitea))
-                        || azure_selected(AzureAction::Gitea),
+                        || azure_selected(AzureAction::Gitea)
+                        || jira_selected(JiraAction::Gitea),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -156,13 +161,40 @@ impl SheprdWindow {
                             == Some(crate::menu::github::Action::AzureDevOps))
                         || (page == Page::GitLab
                             && self.menu.gitlab.is_selected(&Action::AzureDevOps))
-                        || gitea_selected(GiteaAction::AzureDevOps),
+                        || gitea_selected(GiteaAction::AzureDevOps)
+                        || jira_selected(JiraAction::AzureDevOps),
                     |tab| tab.bg(rgb(theme.active)),
                 )
                 .on_click(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
                     if this.menu.page != Some(Page::AzureDevOps) {
                         this.open_azure_page(window, cx);
+                    }
+                })),
+            )
+            .child(
+                tab(
+                    "accounts-tab-jira",
+                    "Jira", // i18n: data
+                    crate::menu::jira::render::jira_mark(if page == Page::Jira {
+                        theme.foreground
+                    } else {
+                        theme.muted
+                    }),
+                    page == Page::Jira,
+                )
+                .when(
+                    (page == Page::GitHub
+                        && self.menu.github_selected == Some(crate::menu::github::Action::Jira))
+                        || (page == Page::GitLab && self.menu.gitlab.is_selected(&Action::Jira))
+                        || azure_selected(AzureAction::Jira)
+                        || gitea_selected(GiteaAction::Jira),
+                    |tab| tab.bg(rgb(theme.active)),
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    if this.menu.page != Some(Page::Jira) {
+                        this.open_jira_page(window, cx);
                     }
                 })),
             )
@@ -184,7 +216,8 @@ impl SheprdWindow {
                             || (page == Page::GitLab
                                 && self.menu.gitlab.is_selected(&Action::Close))
                             || azure_selected(AzureAction::Close)
-                            || gitea_selected(GiteaAction::Close),
+                            || gitea_selected(GiteaAction::Close)
+                            || jira_selected(JiraAction::Close),
                         |style| style.bg(rgb(theme.active)),
                     )
                     .hover(|style| style.bg(rgb(theme.active)))

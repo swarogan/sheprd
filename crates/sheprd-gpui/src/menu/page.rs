@@ -70,6 +70,8 @@ pub(crate) enum Page {
     /// A saved SSH device's context menu, from its sidebar host header.
     Host,
     Install,
+    /// The account menu's Jira Cloud sites and API tokens, beside GitLab's.
+    Jira,
     Keybinds,
     /// Confirming the processes chosen there should end.
     KillProcesses,

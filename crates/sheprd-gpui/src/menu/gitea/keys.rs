@@ -50,6 +50,8 @@ pub(crate) enum Action {
     GitLab,
     /// The account menu's Azure DevOps tab.
     AzureDevOps,
+    /// The account menu's Jira tab.
+    Jira,
     /// Forget the token saved for an instance, by its hostname.
     Forget(String),
     /// The address field, which takes focus rather than being used.
@@ -63,7 +65,12 @@ pub(crate) enum Action {
 impl GiteaMenu {
     /// The page's stops in the order they show, which Tab follows.
     pub(crate) fn actions(&self) -> Vec<Action> {
-        let mut actions = vec![Action::GitHub, Action::GitLab, Action::AzureDevOps];
+        let mut actions = vec![
+            Action::GitHub,
+            Action::GitLab,
+            Action::AzureDevOps,
+            Action::Jira,
+        ];
         actions.extend(
             self.instances
                 .iter()
@@ -90,6 +97,7 @@ impl GiteaMenu {
             Action::GitHub
             | Action::GitLab
             | Action::AzureDevOps
+            | Action::Jira
             | Action::Save
             | Action::Close => None,
         }
@@ -109,6 +117,7 @@ impl SheprdWindow {
             Action::GitHub => self.menu.page = Some(Page::GitHub),
             Action::GitLab => self.open_gitlab_page(window, cx),
             Action::AzureDevOps => self.open_azure_page(window, cx),
+            Action::Jira => self.open_jira_page(window, cx),
             Action::Forget(host) if !self.menu.gitea.working => self.forget_gitea(host, cx),
             Action::Forget(_) | Action::Address | Action::Token => {}
             Action::Save => self.save_gitea(cx),

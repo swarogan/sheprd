@@ -47,6 +47,7 @@ fn every_account_pages_header_opens_the_gitea_page(cx: &mut TestAppContext) {
         ("accounts-tab-gitlab", Page::GitLab),
         ("accounts-tab-gitea", Page::Gitea),
         ("accounts-tab-azure", Page::AzureDevOps),
+        ("accounts-tab-jira", Page::Jira),
         ("accounts-tab-gitea", Page::Gitea),
         ("accounts-tab-github", Page::GitHub),
     ];
@@ -72,6 +73,7 @@ fn every_tab_fits_in_the_header(cx: &mut TestAppContext) {
         "accounts-tab-gitlab",
         "accounts-tab-gitea",
         "accounts-tab-azure",
+        "accounts-tab-jira",
     ] {
         let bounds = cx.debug_bounds(tab).unwrap();
         assert!(

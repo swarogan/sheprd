@@ -43,6 +43,7 @@ mod notification_mutes;
 mod orchestrator;
 mod orchestrator_azure;
 mod orchestrator_gitea;
+mod orchestrator_jira;
 mod overview;
 mod palette;
 mod pane_carry;

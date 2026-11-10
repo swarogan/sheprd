@@ -194,6 +194,8 @@ pub(crate) struct MenuState {
     pub(crate) azure: super::azure::AzureMenu,
     /// The Gitea page's instances, fields, and work under way.
     pub(crate) gitea: super::gitea::GiteaMenu,
+    /// The Jira page's sites, fields, and work under way.
+    pub(crate) jira: super::jira::JiraMenu,
     /// Saved devices whose removal is running, by endpoint ID. Kept after
     /// success until the catalog drops the device, so its header pulses
     /// until it disappears; the confirmation closes as soon as it starts.
@@ -437,6 +439,7 @@ impl MenuState {
             gitlab: Default::default(),
             azure: Default::default(),
             gitea: Default::default(),
+            jira: Default::default(),
             removing_devices: Default::default(),
             github_selected: None,
             github_scroll: ScrollHandle::new(),
@@ -506,6 +509,7 @@ impl MenuState {
         self.gitlab.stop_lookups();
         self.azure.stop_lookups();
         self.gitea.stop_lookups();
+        self.jira.stop_lookups();
         self.page = None;
         if let Some(palette) = self.palette.take() {
             self.palette_resume = Some(palette.resume());

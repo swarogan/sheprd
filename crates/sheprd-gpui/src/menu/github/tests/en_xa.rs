@@ -22,6 +22,7 @@ fn reported(view: &crate::SheprdWindow) -> Vec<String> {
         "GitLab",
         "Gitea",
         "Azure DevOps",
+        "Jira",
         "github.com/login/device",
         "ABCD-1234",
     ]

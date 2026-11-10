@@ -147,9 +147,13 @@ impl OrchestratorView {
 
     /// The project a row names: its checkout's, or how many hosts list it
     /// when several checkouts of the same repository do. Projects sharing a
-    /// Beads database are different projects, not one on several hosts.
-    fn row_project(&self, row: &ItemRow) -> String {
+    /// Beads database are different projects, not one on several hosts; a
+    /// Jira issue names its site, which every checkout lists alike.
+    pub(super) fn row_project(&self, row: &ItemRow) -> String {
         let repo = &self.repos[row.repo];
+        if let Some(site) = super::tasks::jira_site(self.row_item(row)) {
+            return site.to_owned();
+        }
         // An organization's list mixes repositories: each row names its own.
         if matches!(
             repo.remote,

@@ -243,6 +243,10 @@ impl SheprdWindow {
             self.gitea_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::Jira) {
+            self.jira_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::AzureDevOps) {
             self.azure_key(event, window, cx);
             return;

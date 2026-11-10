@@ -14,6 +14,7 @@ fn the_main_account_offers_the_github_cli_and_a_host_does_not(cx: &mut TestAppCo
                     Action::GitLab,
                     Action::Gitea,
                     Action::AzureDevOps,
+                    Action::Jira,
                     Action::GitHubCli,
                     Action::Start,
                     Action::Token,
@@ -51,6 +52,7 @@ fn a_github_cli_session_says_so_and_how_to_reach_private_repositories(cx: &mut T
                     Action::GitLab,
                     Action::Gitea,
                     Action::AzureDevOps,
+                    Action::Jira,
                     Action::SignOut,
                     Action::Add,
                     Action::Close

@@ -56,6 +56,7 @@ fn the_gitea_page_shows_only_messages_under_en_xa() {
             "GitLab",
             "Gitea",
             "Azure DevOps",
+            "Jira",
             "gitea.arpa",
             "http://gitea.arpa:3000",
             "forge.example.com",

@@ -55,6 +55,7 @@ fn the_azure_devops_page_shows_only_messages_under_en_xa() {
             "GitHub",
             "GitLab",
             "Azure DevOps",
+            "Jira",
             "contoso",
             "fabrikam",
             "Dev Example",

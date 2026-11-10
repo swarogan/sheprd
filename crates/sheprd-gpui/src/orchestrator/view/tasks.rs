@@ -97,6 +97,13 @@ pub(super) fn task_project(item: &Item) -> Option<String> {
     })
 }
 
+/// The site a Jira issue is on. Its source's repository is always
+/// `assigned`, which names no project, and it is listed in every checkout.
+pub(super) fn jira_site(item: &Item) -> Option<&str> {
+    let source = &item.key.source;
+    (source.provider == Provider::Jira).then_some(source.host.as_str())
+}
+
 /// What a status reads as. A word this build does not know, such as a
 /// project's own status, is shown as it is.
 pub(super) fn status_label(state: &str) -> String {

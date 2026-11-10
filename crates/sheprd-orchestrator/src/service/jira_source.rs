@@ -34,10 +34,8 @@ impl Worker {
         let Some(store) = self.store.as_mut() else {
             return Ok(SyncState::Unsupported);
         };
+        // The snapshot's viewer stays the remote forge's reader, which Mine matches.
         let count = listing.items.len();
-        if listing.viewer.is_some() {
-            self.snapshot.viewer.clone_from(&listing.viewer);
-        }
         if !listing.complete || !writable {
             self.uncached.insert(key.clone(), listing.items);
             return Ok(if listing.complete {

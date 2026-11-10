@@ -18,6 +18,7 @@ mod git;
 mod gitea;
 mod github;
 pub(crate) mod gitlab;
+mod jira;
 mod mute;
 mod open_checkout;
 mod open_link;

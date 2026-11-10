@@ -35,6 +35,7 @@ fn tab_walks_every_control_from_the_token_field(cx: &mut TestAppContext) {
             Action::GitHub,
             Action::GitLab,
             Action::Gitea,
+            Action::Jira,
             Action::Forget("contoso".into()),
             Action::Organization,
             Action::Token,
@@ -83,7 +84,7 @@ fn a_field_takes_focus_and_keeps_its_own_space(cx: &mut TestAppContext) {
 fn enter_uses_the_selected_control(cx: &mut TestAppContext) {
     let (view, cx) = page(cx);
     saved_contoso(&view, cx);
-    // Back from the token field: the organization, Forget, then Gitea.
+    // Back from the token field: the organization, Forget, then Jira.
     cx.simulate_keystrokes("shift-tab shift-tab");
     assert_eq!(selected(&view, cx), Some(Action::Forget("contoso".into())));
     cx.simulate_keystrokes("enter");
@@ -94,7 +95,7 @@ fn enter_uses_the_selected_control(cx: &mut TestAppContext) {
     );
     cx.simulate_keystrokes("shift-tab enter");
     draw(cx);
-    assert!(view.read_with(cx, |view, _| view.menu.page) == Some(Page::Gitea));
+    assert!(view.read_with(cx, |view, _| view.menu.page) == Some(Page::Jira));
 }
 
 #[gpui::test]
