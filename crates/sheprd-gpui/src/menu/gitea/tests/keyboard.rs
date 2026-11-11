@@ -41,6 +41,7 @@ fn tab_walks_every_control_from_the_token_field(cx: &mut TestAppContext) {
             Action::Forget("forge.example.com".into()),
             Action::Address,
             Action::Token,
+            Action::CreateToken,
             Action::Save,
             Action::Close,
         ],
@@ -178,4 +179,21 @@ fn each_stop_names_its_child_of_the_body(cx: &mut TestAppContext) {
             Some(2)
         );
     });
+}
+
+#[gpui::test]
+fn tab_from_the_token_field_reaches_the_link_before_save(cx: &mut TestAppContext) {
+    let (view, cx) = page(cx);
+    cx.simulate_keystrokes("tab");
+    assert_eq!(selected(&view, cx), Some(Action::CreateToken));
+    cx.simulate_keystrokes("tab");
+    assert_eq!(selected(&view, cx), Some(Action::Save));
+}
+
+#[gpui::test]
+fn enter_on_the_link_without_an_address_asks_for_it(cx: &mut TestAppContext) {
+    let (view, cx) = page(cx);
+    cx.simulate_keystrokes("tab enter");
+    draw(cx);
+    assert_eq!(message(&view, cx), "Type the instance's address first.");
 }

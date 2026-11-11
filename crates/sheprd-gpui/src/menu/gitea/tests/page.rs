@@ -182,3 +182,55 @@ fn a_saved_instance_offers_forget(cx: &mut TestAppContext) {
         Some("This window does not keep Gitea tokens.")
     );
 }
+
+#[test]
+fn the_token_page_is_under_the_instances_base_url() {
+    use crate::menu::gitea::token_page;
+    for (base, page) in [
+        (
+            "https://gitea.example.com",
+            "https://gitea.example.com/user/settings/applications",
+        ),
+        (
+            "https://gitea.example.com/",
+            "https://gitea.example.com/user/settings/applications",
+        ),
+        (
+            "http://192.168.1.5:3000",
+            "http://192.168.1.5:3000/user/settings/applications",
+        ),
+        (
+            "https://host/gitea",
+            "https://host/gitea/user/settings/applications",
+        ),
+        (
+            "https://host/gitea/",
+            "https://host/gitea/user/settings/applications",
+        ),
+    ] {
+        assert_eq!(token_page(base), page, "{base}");
+    }
+}
+
+#[gpui::test]
+fn the_page_links_to_creating_a_token(cx: &mut TestAppContext) {
+    let (_view, cx) = page(cx);
+    assert!(cx.debug_bounds("gitea-create-token").is_some());
+}
+
+#[gpui::test]
+fn the_link_without_a_usable_address_opens_nothing_and_says_why(cx: &mut TestAppContext) {
+    let (view, cx) = page(cx);
+    for (address, said) in [
+        ("", "Type the instance's address first."),
+        (
+            "ftp://gitea.arpa",
+            "\"ftp://gitea.arpa\" is not an address of a Gitea instance, such as http://gitea.example.com",
+        ),
+    ] {
+        type_in(&view, cx, address, "");
+        click(cx, "gitea-create-token");
+        let (message, _) = message_and_token(&view, cx);
+        assert_eq!(message, said, "{address:?}");
+    }
+}

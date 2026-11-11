@@ -8,6 +8,7 @@ gitea-menu-help = Type the address of your Gitea or Forgejo instance and paste a
 gitea-menu-no-store = This window does not keep Gitea tokens.
 gitea-menu-address = Instance address
 gitea-menu-token = Access token
+gitea-menu-create-token = Create a token on your instance
 gitea-menu-check-and-save = Check and save
 gitea-menu-forget = Forget
 gitea-menu-address-first = Type the instance's address first.

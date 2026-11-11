@@ -94,6 +94,15 @@ pub(crate) fn is_plain_http(typed: &str) -> bool {
     saved::normalize_address(typed).is_some_and(|(_, address)| address.starts_with("http://"))
 }
 
+/// The page that creates an access token on the instance at `base_url`,
+/// which Gitea and Forgejo both serve.
+pub(crate) fn token_page(base_url: &str) -> String {
+    format!(
+        "{}/user/settings/applications",
+        base_url.trim_end_matches('/')
+    )
+}
+
 impl SheprdWindow {
     /// Shows the Gitea page: makes its fields, and checks every saved
     /// instance's token.
@@ -243,6 +252,26 @@ impl SheprdWindow {
             .unwrap_or_default()
     }
 
+    /// The base URL of the instance typed, or what to tell when there is none.
+    fn typed_gitea_base_url(&self, cx: &App) -> Result<String, String> {
+        let address = self.typed_gitea_address(cx);
+        if address.is_empty() {
+            return Err(fl!("gitea-menu-address-first"));
+        }
+        saved::normalize_address(&address)
+            .map(|(_, base_url)| base_url)
+            .ok_or_else(|| crate::i18n::errors::Localize::localize(&gitea::Error::Address(address)))
+    }
+
+    /// Opens the instance's page for a new token, at the address typed.
+    pub(super) fn open_gitea_token_page(&mut self, cx: &mut Context<Self>) {
+        match self.typed_gitea_base_url(cx) {
+            Ok(base_url) => cx.open_url(&token_page(&base_url)),
+            Err(failure) => self.menu.gitea.message = Some(failure),
+        }
+        cx.notify();
+    }
+
     /// Checks the typed address and token with the instance, then saves them.
     pub(super) fn save_gitea(&mut self, cx: &mut Context<Self>) {
         if self.menu.gitea.working {
@@ -256,17 +285,13 @@ impl SheprdWindow {
             .as_ref()
             .map(|input| input.read(cx).text().trim().to_owned())
             .unwrap_or_default();
-        let ready = if address.is_empty() {
-            Err(fl!("gitea-menu-address-first"))
-        } else if saved::normalize_address(&address).is_none() {
-            Err(crate::i18n::errors::Localize::localize(
-                &gitea::Error::Address(address.clone()),
-            ))
-        } else if token.is_empty() {
-            Err(fl!("gitea-menu-paste-first"))
-        } else {
-            self.gitea_store().ok_or_else(no_store)
-        };
+        let ready = self.typed_gitea_base_url(cx).and_then(|_| {
+            if token.is_empty() {
+                Err(fl!("gitea-menu-paste-first"))
+            } else {
+                self.gitea_store().ok_or_else(no_store)
+            }
+        });
         let store = match ready {
             Ok(store) => store,
             Err(failure) => {

@@ -58,6 +58,8 @@ pub(crate) enum Action {
     Address,
     /// The token field, which takes focus rather than being used.
     Token,
+    /// The link to the page that creates a token.
+    CreateToken,
     Save,
     Close,
 }
@@ -76,7 +78,13 @@ impl GiteaMenu {
                 .iter()
                 .map(|status| Action::Forget(status.host.clone())),
         );
-        actions.extend([Action::Address, Action::Token, Action::Save, Action::Close]);
+        actions.extend([
+            Action::Address,
+            Action::Token,
+            Action::CreateToken,
+            Action::Save,
+            Action::Close,
+        ]);
         actions
     }
 
@@ -94,6 +102,7 @@ impl GiteaMenu {
                 .map(|index| cards + index),
             Action::Address => Some(form),
             Action::Token => Some(form + 1),
+            Action::CreateToken => Some(form + 2),
             Action::GitHub
             | Action::GitLab
             | Action::AzureDevOps
@@ -120,6 +129,7 @@ impl SheprdWindow {
             Action::Jira => self.open_jira_page(window, cx),
             Action::Forget(host) if !self.menu.gitea.working => self.forget_gitea(host, cx),
             Action::Forget(_) | Action::Address | Action::Token => {}
+            Action::CreateToken => self.open_gitea_token_page(cx),
             Action::Save => self.save_gitea(cx),
             Action::Close => self.dismiss_menu(window, cx),
         }

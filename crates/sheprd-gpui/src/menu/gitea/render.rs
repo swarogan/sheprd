@@ -173,6 +173,24 @@ impl SheprdWindow {
                 "gitea-token-input",
                 &gitea.token,
             ))
+            .child(
+                div()
+                    .id("gitea-create-token")
+                    .debug_selector(|| "gitea-create-token".into())
+                    .role(Role::Link)
+                    .aria_label(fl!("gitea-menu-create-token"))
+                    .cursor_pointer()
+                    .text_color(crate::menu::accent(theme))
+                    .hover(|style| style.underline())
+                    .when(gitea.is_selected(&Action::CreateToken), |link| {
+                        link.underline()
+                    })
+                    .child(fl!("gitea-menu-create-token"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.open_gitea_token_page(cx);
+                    })),
+            )
             .children(gitea.message.clone().map(|message| {
                 div()
                     .debug_selector(|| "gitea-message".into())
