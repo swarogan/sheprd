@@ -38,7 +38,9 @@ Right-click a linked worktree and choose **Teleport...** to move it to another c
 - the programs running in them, started again with their arguments,
 - agent sessions, resumed with their full history.
 
-Herdr 2 tabs in the worktree's workspace move too, after its Herdr tabs and with their splits. They run in the destination's Herdr 2 when it has `herdr-core`, and in its Herdr otherwise. With **Settings > Tabs > New terminals use Herdr 2** turned on, the Herdr tabs move into the destination's Herdr 2 as well, without their labels, and the workspace there keeps one Herdr shell tab. The review marks each tab that will run in Herdr 2. A tab of more than 16 panes stays in Herdr. Herdr 2 reports no agent session, so an agent there writes a handoff note and starts again with it on the destination, rather than resuming.
+Herdr 2 tabs in the worktree's workspace move too, after its Herdr tabs and with their splits. They run in the destination's Herdr 2 when it has `herdr-core`, and in its Herdr otherwise. With **Settings > Tabs > New terminals use Herdr 2** turned on, the Herdr tabs move into the destination's Herdr 2 as well, without their labels, and the workspace there keeps one Herdr shell tab. The review marks each tab that will run in Herdr 2. A tab of more than 16 panes stays in Herdr. Herdr 2 reports no agent session, so Sheprd reads Claude Code's own record of the running process (`~/.claude/sessions/<pid>.json`, checked against the process's start time) and resumes that session on the destination. Other agents in Herdr 2 write a handoff note and start again with it, rather than resuming.
+
+A Herdr 2 workspace on this computer, one Sheprd keeps with no Herdr workspace behind it, teleports the same way. Work coming to this computer lands in such a workspace when new workspaces here use Herdr 2 (that setting is on, or Herdr is not installed): Sheprd adds the worktree with Git under `~/.herdr/worktrees/<repository>/<branch>`, where Herdr would, and opens every tab in Herdr 2. A tab of more than 16 panes cannot open there, and the review says so. Herdr 2 workspaces on SSH hosts and cloud devices are not offered yet.
 
 Ignored files such as `.env` and build output stay behind, and so do submodule contents, environment variables, shell history, background jobs, and unsaved editor buffers.
 
@@ -81,6 +83,8 @@ Hosts rank by spare cores: cores less the 5 minute load average. Each agent work
 
 Choosing another host creates the checkout there through the same steps as Teleport: the repository is found, opened, or cloned, and the base commit is sent only when that host lacks it. The window switches to the new workspace when it is ready, and the repository's setup script asks for trust as a local creation does.
 
+This computer takes new work while its new workspaces use Herdr 2 (with **Settings > Tabs > New terminals use Herdr 2**, or with no Herdr 1 installed), even when no Herdr 1 runs here. Git creates the checkout, in the folder Herdr 1 would use, and the window opens it as a Herdr 2 workspace. A worktree left unnamed gets a generated branch name. A Herdr 2 workspace's **New worktree** dialog offers other hosts too, and sends the checkout to their Herdr. Another host counts only when Herdr 1 runs there: Smart Dispatch does not yet create work in another host's Herdr 2. A checkout it sends to this computer's Herdr 2 runs the repository's setup script in a new tab, as a local creation does.
+
 ### New machines from the dialog
 
 Once you have a container, Daytona sandbox, sprite, or OpenSandbox device, the dialogs also offer a **New container**, **New sprite**, or **New sandbox** tile, even with one host connected. A container or Daytona sandbox starts from the repository's [sandbox image](cloud.md#sandbox-images) when it has one. The new machine is saved as a device, gets Herdr, and runs the [cloud setup script](cloud.md#setup-scripts-for-new-machines).
@@ -94,3 +98,5 @@ Fan-out runs one prompt across several agents, each in its own worktree, so you 
 Fan-outs survive a quit or crash. The next launch shows an unfinished fan-out again as a comparison, and each lane says where it stopped. Nothing runs by itself: **Start agent** or **Send prompt** finishes a lane only when clicked. **Keep** removes the other worktrees after a confirmation; **Forget** lets the fan-out go and leaves every worktree as it is. Up to four fan-outs are kept.
 
 New containers are not offered to fan-out lanes yet, because a new container has no signed-in agent to start.
+
+A workspace Sheprd keeps for Herdr 2 terminals offers **Fan out** too, when its folder is a Git checkout. Git creates each lane's worktree, in the folder Herdr 1 would use, and each agent starts in a Herdr 2 shell there and gets the prompt once it is ready; each lane opens as a Herdr 2 workspace behind the one you are in. Compare, **Keep** and resuming after a quit work as on Herdr 1, and keeping a lane closes the other lanes' workspaces. These lanes stay on this computer: spreading across hosts needs a Herdr 1 workspace of the repository, and another host's Herdr 2 takes no lanes yet.

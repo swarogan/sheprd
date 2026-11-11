@@ -63,6 +63,7 @@ mod service;
 mod ssh_slots;
 mod store;
 mod store_beads;
+mod store_sessions;
 
 fn at(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)
@@ -143,8 +144,10 @@ fn session(run_id: &str) -> HerdrSession {
         run_id: run_id.into(),
         host: None,
         session: None,
-        workspace_id: "w12".into(),
-        pane_id: "p31".into(),
+        pane: Pane::Herdr1 {
+            workspace_id: "w12".into(),
+            pane_id: "p31".into(),
+        },
         agent_name: "herdr-gpui-0123456789abcdef0123456".into(),
         updated_at: at("2026-10-08T06:12:47+00:00"),
     }

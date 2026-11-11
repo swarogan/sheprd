@@ -28,10 +28,11 @@ pub use {
     error::{Error, Step},
     fresh::{
         Created, Naming, NewCheckout, Origin as FreshOrigin, Prepared, base_commit,
-        dispatch_workspace, dispatch_worktree, prepare,
+        dispatch_kept_workspace, dispatch_kept_worktree, dispatch_workspace, dispatch_worktree,
+        prepare,
     },
     host::{Host, installed_programs_script},
-    job::{HostRepositories, Place, Retired, Source, open_repositories},
+    job::{HostRepositories, Keeping, Landed, Place, Retired, Source, open_repositories},
     launch::AgentKind,
     marks::{Mark, Marks},
     snapshot::{
