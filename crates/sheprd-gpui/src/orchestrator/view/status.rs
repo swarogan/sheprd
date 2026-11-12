@@ -60,7 +60,7 @@ impl OrchestratorView {
                 ),
             });
         }
-        rows.push(self.run_row(runs, item_runs.first().copied()));
+        rows.push(self.run_row(item, runs, item_runs.first().copied()));
         let actions = self.status_actions(item, runs, item_runs, cx);
         div()
             .debug_selector(|| "orchestrator-status".into())
@@ -187,13 +187,19 @@ impl OrchestratorView {
     }
 
     /// The newest run on the item, or that none has worked on it.
-    fn run_row(&self, runs: &Runs<'_>, latest: Option<RunRow>) -> Row {
+    fn run_row(&self, item: &Item, runs: &Runs<'_>, latest: Option<RunRow>) -> Row {
         let look = &self.look;
         let Some(latest) = latest else {
+            let starting = self.is_starting(&item.key.canonical());
             return Row {
                 icon: "icons/play.svg",
                 hue: look.theme.muted,
-                title: fl!("orchestrator-no-agent").into(),
+                title: if starting {
+                    fl!("orchestrator-agent-starting")
+                } else {
+                    fl!("orchestrator-no-agent")
+                }
+                .into(),
                 detail: None,
             };
         };
@@ -247,6 +253,7 @@ impl OrchestratorView {
             return None;
         }
         let key = item.key.canonical();
+        let starting = self.is_starting(&key);
         let buttons = div()
             .flex()
             .flex_wrap()
@@ -258,6 +265,8 @@ impl OrchestratorView {
                         fl!("orchestrator-dispatch-agent"),
                         item_runs.is_empty(),
                     )
+                    .when(starting, |el| el.opacity(0.5))
+                    .debug_selector(|| "orchestrator-detail-dispatch".into())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_dispatch(key.clone(), window, cx);
                     })),

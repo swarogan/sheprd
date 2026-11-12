@@ -42,6 +42,7 @@ mod search_row;
 mod sessions;
 mod sign_in;
 mod source_chip;
+mod starting;
 mod status;
 mod stores;
 mod tasks;

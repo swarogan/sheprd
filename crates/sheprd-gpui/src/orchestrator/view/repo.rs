@@ -41,6 +41,8 @@ pub(crate) struct Repo {
     /// What it reads from Azure DevOps when no checkout is behind it: an
     /// organization's own pull requests, or a repository browsed to.
     pub(super) remote: Option<RemoteScope>,
+    /// Canonical keys of items whose dispatch the worker took and that show no run yet.
+    pub(super) starting: std::collections::HashSet<String>,
 }
 
 impl Repo {
@@ -65,6 +67,7 @@ impl Repo {
             task_rows: Vec::new(),
             login: None,
             remote: None,
+            starting: Default::default(),
         }
     }
 
@@ -107,6 +110,7 @@ impl Repo {
             task_rows: Vec::new(),
             login: None,
             remote: Some(scope),
+            starting: Default::default(),
         }
     }
 

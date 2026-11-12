@@ -415,6 +415,7 @@ impl OrchestratorView {
                 read = true;
             }
         }
+        self.settle_starting(noticed.as_ref(), read);
         if let Some(notice) = noticed {
             self.jira_noticed(&notice, cx);
             self.gitea_noticed(&notice, cx);

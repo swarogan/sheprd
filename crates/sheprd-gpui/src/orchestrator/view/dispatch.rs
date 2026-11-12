@@ -18,6 +18,7 @@ use crate::{
 use gpui::{prelude::*, *};
 use sheprd_orchestrator::actions::Done;
 
+mod starting;
 #[cfg(test)]
 mod tests;
 
@@ -221,6 +222,9 @@ impl OrchestratorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.is_starting(&item) {
+            return;
+        }
         self.open_dialog(item, false, window, cx);
     }
 
@@ -383,7 +387,10 @@ impl OrchestratorView {
                 endpoint,
             }),
             None => {
-                self.act(Action::Dispatch(Box::new(request)));
+                let key = request.item_key.clone();
+                if self.act(Action::Dispatch(Box::new(request))) {
+                    self.mark_starting(key);
+                }
             }
         }
         self.dialog = None;

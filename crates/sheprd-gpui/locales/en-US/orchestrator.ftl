@@ -219,6 +219,7 @@ orchestrator-checks-passed = Checks passed
 orchestrator-checks-none = No checks reported
 # $state is GitHub's word for the pull request, such as Open; $base a branch.
 orchestrator-merge-into = { $state } into { $base }
+orchestrator-agent-starting = Starting agent…
 orchestrator-no-agent = No agent yet
 orchestrator-review-with-agent = Review with agent
 orchestrator-open-agent = Open agent
