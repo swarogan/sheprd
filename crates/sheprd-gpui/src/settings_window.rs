@@ -16,6 +16,7 @@ mod navigation;
 mod pages;
 pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
 pub(crate) use pages::remote_control::open as open_remote;
+pub(crate) use pages::text_shortcuts::open as open_text_shortcuts;
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 mod native;
 mod persistence;
@@ -23,6 +24,7 @@ mod remote_history;
 mod scrollbar;
 mod search;
 mod section;
+use crate::window::main_window::MainWindow;
 use section::{Group, Section};
 mod sidebar;
 #[cfg(test)]
@@ -170,6 +172,7 @@ struct SettingsWindow {
     px0: controls::px0::Px0Settings,
     chat_env: controls::chat_env::ChatEnvSettings,
     remote: pages::remote_control::RemoteSettings,
+    text_shortcuts: pages::text_shortcuts::TextShortcutsPage,
     /// The open override dropdown, if any; its list renders inside its button.
     dropdown: Option<ui::Dropdown>,
     /// The number field being typed into, if any.
@@ -337,6 +340,7 @@ impl SettingsWindow {
             px0: Default::default(),
             chat_env: Default::default(),
             remote: Default::default(),
+            text_shortcuts: Default::default(),
             dropdown: None,
             number_edit: None,
             number_preview: None,
@@ -535,12 +539,9 @@ impl SettingsWindow {
             previous.is_some_and(|previous| crate::menus::changed(&previous.config, &self.config));
         // Future windows inherit an explicit Settings draft, but not a main
         // picker's cancellable hover preview. Logs follow live appearance.
-        let previewing = cx.windows().into_iter().any(|window| {
-            window.downcast::<SheprdWindow>().is_some_and(|window| {
-                window.read(cx).map_or(true, |source| {
-                    source.menu.page == Some(crate::menu::Page::Themes)
-                        || source.theme_save_in_flight()
-                })
+        let previewing = MainWindow::all(cx).into_iter().any(|window| {
+            window.read(cx).map_or(true, |source| {
+                source.menu.page == Some(crate::menu::Page::Themes) || source.theme_save_in_flight()
             })
         });
         let mut appearance = crate::app::InitialAppearance {
@@ -706,6 +707,9 @@ impl SettingsWindow {
         }
         if section == Section::General {
             self.open_chat_env_settings(cx);
+        }
+        if section == Section::TextShortcuts {
+            self.open_text_shortcuts_page(cx);
         }
         if section == Section::RemoteControl {
             self.open_remote_control(cx);

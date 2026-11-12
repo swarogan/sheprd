@@ -113,6 +113,7 @@ pub async fn run(options: Options) -> Result<()> {
         computer: options::computer_name(),
         connected: Mutex::new(HashMap::new()),
         fingerprint,
+        github: crate::native::changes::github::Reader::new(options.github_cli),
         hub,
         live_activities: options.live_activities,
         load,
@@ -126,7 +127,8 @@ pub async fn run(options: Options) -> Result<()> {
         push,
         reports: Mutex::new(web::report_limit()),
         seen: Mutex::new(seen),
-        tags: web::Tags::load(&options.state_dir),
+        shortcuts: web::Shortcuts::load(crate::app::shortcuts::file(&options.state_dir)),
+        tags: web::Tags::load(crate::app::tags::file(&options.state_dir)),
         typed: web::Typed::default(),
         updates: Mutex::default(),
         uploads: web::Uploads::new(&options.state_dir),
@@ -147,6 +149,9 @@ pub async fn run(options: Options) -> Result<()> {
     // pictures.
     state.uploads.remove_leftovers();
     tokio::spawn(notifier::run(state.clone()));
+    if state.github.enabled() {
+        tokio::spawn(crate::native::changes::github::badges(state.clone()));
+    }
     // A user's certificate lists fixed names; only the daemon's own follows
     // the computer's addresses.
     if state.authority.is_some() {

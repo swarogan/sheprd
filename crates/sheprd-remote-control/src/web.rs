@@ -13,13 +13,16 @@ mod api;
 mod assets;
 pub(crate) mod attention;
 mod fragments;
+mod github;
 mod hosts;
 mod indicators;
+mod kept;
 mod log;
 mod nearby;
 mod origins;
 mod pace;
 mod render;
+mod shortcuts;
 mod stream;
 mod tags;
 mod terminal;
@@ -33,6 +36,7 @@ pub(crate) use log::report_limit;
 pub(crate) use origins::Origins;
 pub(crate) use pace::Typed;
 pub(crate) use render::now_ms;
+pub(crate) use shortcuts::Shortcuts;
 pub(crate) use stream::Connected;
 pub(crate) use tags::Tags;
 pub(crate) use terminal::read_scrolled;
@@ -80,6 +84,7 @@ pub(crate) struct State {
     /// Streams open per device.
     pub(crate) connected: Mutex<HashMap<DeviceId, usize>>,
     pub(crate) fingerprint: String,
+    pub(crate) github: crate::native::changes::github::Reader,
     pub(crate) hub: Arc<Hub>,
     /// How much this computer lets Live Activities say.
     pub(crate) live_activities: crate::app::config::ActivityDetail,
@@ -102,6 +107,8 @@ pub(crate) struct State {
     pub(crate) reports: Mutex<auth::RateLimiter<std::net::IpAddr>>,
     /// Origins served before, which an installed app may still send.
     pub(crate) seen: Mutex<Origins>,
+    /// This computer's text shortcuts, which its phones and desktops share.
+    pub(crate) shortcuts: Shortcuts,
     /// This computer's tags, which its phones and desktops share.
     pub(crate) tags: Tags,
     /// Panes phones type into, so their screens are read again at once.
@@ -170,6 +177,8 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/computers", get(assets::shell))
         .route("/new", get(assets::shell))
         .route("/new-chat", get(assets::shell))
+        .route("/checks/{workspace}", get(assets::shell))
+        .route("/checks/{workspace}/{job}", get(assets::shell))
         .route("/pair", get(assets::shell))
         .route("/settings", get(assets::shell))
         .route("/term/{pane}", get(assets::shell))
@@ -226,6 +235,14 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/api/v2/live", get(crate::native::live))
         .route("/api/v2/new", get(crate::native::new_options))
         .route("/api/v2/search", get(crate::native::search))
+        .route(
+            "/api/v2/shortcuts",
+            get(shortcuts::get)
+                .put(shortcuts::put)
+                .layer(DefaultBodyLimit::max(
+                    crate::control::shortcuts::MAX_WIRE_BYTES,
+                )),
+        )
         .route("/api/v2/tags", get(tags::get).put(tags::put))
         .route("/api/v2/term/{pane}/convert", post(crate::native::convert))
         .route("/api/v2/update", get(update::status).post(update::request))
@@ -265,6 +282,8 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/f/new", get(fragments::new_workspace))
         .route("/f/new-chat", get(fragments::new_chat))
         .route("/f/settings", get(fragments::settings))
+        .route("/f/checks/{workspace}", get(github::checks))
+        .route("/f/checks/{workspace}/{job}", get(github::log))
         .route("/f/term/{pane}", get(terminal::fragment))
         .route("/f/term/{pane}/history", get(terminal::history))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))

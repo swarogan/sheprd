@@ -16,6 +16,7 @@ use std::{
 };
 
 mod activity;
+mod agent_row_rescroll;
 mod attachments;
 mod chats;
 mod code;
@@ -55,6 +56,7 @@ mod restore;
 mod running;
 mod selection;
 mod session;
+mod shortcuts;
 mod start;
 mod stop;
 mod streaming;

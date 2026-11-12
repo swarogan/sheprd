@@ -4,6 +4,11 @@ use std::path::PathBuf;
 #[cfg(unix)]
 use std::sync::mpsc;
 
+#[cfg(unix)]
+mod folder;
+#[cfg(unix)]
+mod recorded;
+
 /// A Claude session as Herdr's own integration reports it.
 #[cfg(unix)]
 const SESSION: &str = "0c6f0c39-3c1e-4b7e-9a51-6d1b8e2d7f10";
@@ -39,7 +44,16 @@ fn hub(layout: Layout, client_socket: Option<PathBuf>) -> Arc<Hub> {
 }
 
 #[cfg(unix)]
-fn pane_answer(status: &str) -> Value {
+fn pane_answer(status: &str, reported: bool) -> Value {
+    let mut answer = pane_reported(status);
+    if !reported {
+        answer["pane"]["agent_session"] = Value::Null;
+    }
+    answer
+}
+
+#[cfg(unix)]
+fn pane_reported(status: &str) -> Value {
     json!({"type": "pane_info", "pane": {
         "pane_id": "t2-p1", "tab_id": "t2", "cwd": "/shell", "agent": "claude",
         "agent_status": status,
@@ -50,11 +64,11 @@ fn pane_answer(status: &str) -> Value {
 }
 
 #[cfg(unix)]
-fn processes(front: u32) -> Value {
+fn processes(front: u32, cwd: &str) -> Value {
     json!({"type": "pane_process_info", "process_info": {
         "pane_id": "t2-p1", "shell_pid": 10, "foreground_process_group_id": front,
         "foreground_processes": [
-            {"pid": 20, "argv": ["claude", "--model", "opus"], "cwd": "/work"},
+            {"pid": 20, "argv": ["claude", "--model", "opus"], "cwd": cwd},
         ],
     }})
 }
@@ -63,6 +77,17 @@ fn processes(front: u32) -> Value {
 /// leaves once a Ctrl+C arrives. Sends each request's method and params.
 #[cfg(unix)]
 fn serve(dir: &std::path::Path, status: &'static str) -> mpsc::Receiver<(String, Value)> {
+    serve_in(dir, status, "/tmp", true)
+}
+
+/// As [`serve`], with the agent running in `cwd`.
+#[cfg(unix)]
+fn serve_in(
+    dir: &std::path::Path,
+    status: &'static str,
+    cwd: &'static str,
+    reported: bool,
+) -> mpsc::Receiver<(String, Value)> {
     use std::{
         io::{BufRead, BufReader, Write},
         os::unix::net::UnixListener,
@@ -78,8 +103,8 @@ fn serve(dir: &std::path::Path, status: &'static str) -> mpsc::Receiver<(String,
             let request: Value = serde_json::from_str(&line).unwrap();
             let method = request["method"].as_str().unwrap().to_owned();
             let result = match method.as_str() {
-                "pane.get" => pane_answer(status),
-                "pane.process_info" => processes(if stopped { 10 } else { 20 }),
+                "pane.get" => pane_answer(status, reported),
+                "pane.process_info" => processes(if stopped { 10 } else { 20 }, cwd),
                 "pane.send_keys" => {
                     stopped = true;
                     json!({})
@@ -126,7 +151,7 @@ async fn an_idle_agent_stops_on_ctrl_c_and_continues_as_a_chat() {
         typed["text"],
         format!(
             " sh -c 'exec \"$0\" \"$@\"' '/app/sheprd-acp' '--resume' '{SESSION}' \
-             '--cwd' '/work' 'claude' '--' '--model' 'opus'"
+             '--cwd' '/tmp' 'claude' '--' '--model' 'opus'"
         )
     );
     assert!(hub.moving.claim("t2-p1").is_ok(), "the claim is released");

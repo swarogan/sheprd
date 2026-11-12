@@ -94,22 +94,22 @@ sheprd chat convert [--pane ID]
 
 The agent's CLI stops, `sheprd-acp --resume` continues the same session in its shell, and the chat opens with the conversation so far and its context window use.
 
-| Agent | Moves |
-| --- | --- |
-| Claude | Yes, with its command line's flags, such as `--model` |
-| Codex | Yes |
-| Copilot | Yes |
-| OpenCode | Yes |
-| Gemini | No: Herdr reports no session for it |
-| Pi | No: nothing shows its earlier messages yet |
+| Agent | Herdr 1 | Herdr 2 |
+| --- | --- | --- |
+| Claude | Yes, with its command line's flags, such as `--model` | Local conversion reads the running process's Claude session record |
+| Codex | Yes | Not yet |
+| Copilot | Yes | Not yet |
+| OpenCode | Yes | Not yet |
+| Gemini | No: Herdr reports no session for it | Not yet |
+| Pi | No: nothing shows its earlier messages yet | Not yet |
 
-Herdr must know the agent's session, which takes its integration: run `herdr integration install claude` (or `codex`, `copilot`, `opencode`), then restart the agent.
+For Herdr 1, Herdr must know the agent's session, which takes its integration: run `herdr integration install claude` (or `codex`, `copilot`, `opencode`), then restart the agent. This does not install session reporting for Herdr 2. Herdr 2's Claude path reads `~/.claude/sessions/<pid>.json` and refuses a missing or mismatched record.
 
 Only an idle agent moves. The agent is stopped with Ctrl+C alone, so nothing in its input is submitted, but text in its input is lost and whatever it ran in the background stops with it. If it has not stopped after 30 seconds, the move gives up and the agent keeps running.
 
 Limits:
 
-- Herdr 1 panes only, on this machine or an SSH host, and not on Windows.
+- Herdr 1 conversion supports this machine or an SSH host, not Windows. Herdr 2 conversion is local; remote native chat attachment is not supported.
 - Claude's flags carry over, including `--dangerously-skip-permissions`. Other agents start with their default model and permissions, which the composer can change.
 - Claude and Codex show the last 8 MiB of their logs. Older messages stay in the agent's context.
 
@@ -163,7 +163,7 @@ This needs a Linux agent host. Only the tail of the log is shown, up to 8 MiB. `
 
 ## Chats on SSH hosts
 
-A chat on a saved SSH host shows in the native chat view like a local one, over the same SSH connection Sheprd uses for Herdr. Starting a chat there runs the host's own `sheprd-acp`, looked for in `~/.herdr/bin`, `~/.cargo/bin`, `~/.local/bin`, and then the remote `PATH`. Install it on the host with:
+A Herdr 1 chat on a saved SSH host shows in the native chat view like a local one, over the same SSH connection Sheprd uses for Herdr. Starting a chat there runs the host's own `sheprd-acp`, looked for in `~/.herdr/bin`, `~/.cargo/bin`, `~/.local/bin`, and then the remote `PATH`. Install it on the host with:
 
 ```sh
 cargo install --locked --git https://github.com/sheprd-labs/sheprd sheprd-acp --root ~/.herdr

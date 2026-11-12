@@ -35,6 +35,8 @@ pub struct Options {
     /// How long a device may stay away before it is forgotten; `None`
     /// keeps it until revoked.
     pub device_idle: Option<Duration>,
+    /// Explicit permission to read this machine's GitHub CLI credential.
+    pub github_cli: bool,
     /// The Herdr daemon's client socket, as Sheprd resolved it; `None`
     /// discovers it from this process's environment. A service manager's
     /// environment may lack the shell's `XDG_CONFIG_HOME`.
@@ -80,6 +82,12 @@ pub enum Invocation {
         state_dir: Option<PathBuf>,
         device: String,
     },
+    /// Reads this computer's text shortcuts, offering any given on standard
+    /// input.
+    Shortcuts {
+        state_dir: Option<PathBuf>,
+        offer: bool,
+    },
     /// Reads this computer's tags, offering any given on standard input.
     Tags {
         state_dir: Option<PathBuf>,
@@ -94,6 +102,7 @@ Usage: sheprd-remote-control serve --state-dir DIR [options]
        sheprd-remote-control enroll [--state-dir DIR] < REQUEST.json
        sheprd-remote-control revoke --device ID [--state-dir DIR]
        sheprd-remote-control tags [--offer] [--state-dir DIR] [< TAGS.json]
+       sheprd-remote-control shortcuts [--offer] [--state-dir DIR] [< SHORTCUTS.json]
 
 Serves this computer's Herdr chats to paired phones over HTTPS. Sheprd
 starts it when Remote control is on.
@@ -109,6 +118,8 @@ Options:
   --core-socket PATH --core-session NAME
                            The desktop core endpoint (default: discovered)
   --chat-dir DIR           Where chat sockets live (default: discovered)
+  --github-cli             Read PRs/checks/logs using this host's gh sign-in;
+                           permits paired phones to read accessible repositories
   --wsl-catalog FILE       The saved WSL distributions (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default excerpt)
@@ -134,7 +145,18 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     match args.next().as_deref().and_then(|arg| arg.to_str()) {
         Some("serve") => {}
         Some(verb @ ("enroll" | "revoke")) => return parse_host(verb == "enroll", args),
-        Some("tags") => return parse_tags(args),
+        Some("shortcuts") => {
+            return parse_edited(args, |state_dir, offer| Invocation::Shortcuts {
+                state_dir,
+                offer,
+            });
+        }
+        Some("tags") => {
+            return parse_edited(args, |state_dir, offer| Invocation::Tags {
+                state_dir,
+                offer,
+            });
+        }
         Some("-h" | "--help") | None => return Ok(Invocation::Help),
         Some("-V" | "--version") => return Ok(Invocation::Version),
         Some(other) => return Err(ParseError::Unknown(other.to_owned())),
@@ -149,6 +171,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let (mut herdr_socket, mut chat_dir, mut wsl_catalog) = (None, None, None);
     let (mut core_socket, mut core_session) = (None, None);
     let mut bonjour = true;
+    let mut github_cli = false;
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
         let mut value = |option: &'static str| args.next().ok_or(ParseError::Missing(option));
@@ -216,6 +239,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                     })?;
             }
             "--no-bonjour" => bonjour = false,
+            "--github-cli" => github_cli = true,
             "-h" | "--help" => return Ok(Invocation::Help),
             _ => return Err(ParseError::Unknown(name)),
         }
@@ -242,6 +266,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         chat_dir,
         core_endpoint,
         device_idle: (idle_days != 0).then(|| Duration::from_secs(idle_days * 24 * 60 * 60)),
+        github_cli,
         herdr_socket,
         live_activities,
         port,
@@ -288,8 +313,11 @@ fn parse_host(
     })
 }
 
-/// `tags [--offer] [--state-dir DIR]`.
-fn parse_tags(mut args: impl Iterator<Item = OsString>) -> Result<Invocation, ParseError> {
+/// `tags` or `shortcuts`, then `[--offer] [--state-dir DIR]`, as `made`.
+fn parse_edited(
+    mut args: impl Iterator<Item = OsString>,
+    made: fn(Option<PathBuf>, bool) -> Invocation,
+) -> Result<Invocation, ParseError> {
     let (mut state_dir, mut offer) = (None, false);
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
@@ -304,7 +332,7 @@ fn parse_tags(mut args: impl Iterator<Item = OsString>) -> Result<Invocation, Pa
             _ => return Err(ParseError::Unknown(name)),
         }
     }
-    Ok(Invocation::Tags { state_dir, offer })
+    Ok(made(state_dir, offer))
 }
 
 /// The computer's name as its owner knows it.

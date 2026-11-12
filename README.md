@@ -261,7 +261,11 @@ nix run github:sheprd-labs/sheprd
 ```
 
 The flake builds with the toolchain pinned in `rust-toolchain.toml` on x86_64 and
-ARM64 Linux. Like the packages, it never updates itself.
+ARM64 Linux, and Apple Silicon macOS (14.2 or newer). On macOS, `nix build`
+also creates `result/Applications/Sheprd.app`, including the pinned herdr-core
+and the native Bluetooth helper; launch it with `open result/Applications/Sheprd.app`.
+Linux users supply their own Herdr or herdr-core daemon. Nix builds never update
+themselves; upgrade through Nix.
 
 ### Windows installers
 
@@ -468,6 +472,9 @@ surfaces it is sent, and sends semantic input back. For herdr-core, it uses
 native cell presentation. Each daemon owns its terminal processes; the app
 keeps its own views and preferences. Closing or detaching the GUI leaves the
 daemons and their terminals running. Existing Herdr 1 sessions stay on Herdr 1.
+
+See the [Herdr 2 acceptance matrix](docs/herdr2-acceptance.md) for the audited
+feature scope, remaining gaps, implementation owners, and pending runtime QA.
 
 ### macOS Git permission errors
 

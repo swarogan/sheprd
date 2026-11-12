@@ -60,17 +60,20 @@ fn home(state: &Shared) -> Home {
         })
         .collect();
     let pull_requests = state.pull_requests.borrow().clone();
-    Home::project(Sources {
+    let mut home = Home::project(Sources {
         computer: &state.computer,
         fingerprint: &state.fingerprint,
         layout: &layout,
         load: *state.load.borrow(),
         summaries,
         pull_requests: &pull_requests,
+        shortcuts_ms: state.shortcuts.current().updated_ms,
         tags: state.tags.current(),
         version: crate::server::version(),
         waiting: state.attention().len(),
-    })
+    });
+    home.github = Some(state.github.enabled());
+    home
 }
 
 /// `GET /api/v2/home`.
@@ -145,7 +148,7 @@ async fn serve(mut socket: WebSocket, state: Shared, device: DeviceId, token: Se
                         Err(_) => Some("that message is not one this socket reads"),
                     };
                     if let Some(message) = reply {
-                        let error = ServerMessage::Error { message: message.to_owned() };
+                        let error = ServerMessage::Error { message: message.to_owned(), view: None };
                         if !send(&mut socket, &error).await {
                             break;
                         }

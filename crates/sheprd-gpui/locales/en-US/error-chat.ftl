@@ -38,16 +38,18 @@ error-chat-start-slot-busy = another tab is still opening
 error-chat-start-timeout = Herdr did not open the chat's tab in time
 
 # Moving a terminal agent into a chat. $agent is an agent's name, such as
-# Claude Code; $name is what Herdr calls the pane's agent.
+# Claude Code; $name is what Herdr calls the pane's agent; $folder is a
+# folder's path.
 error-chat-convert-already-chat = the pane already runs a chat
 error-chat-convert-already-converting = another agent is still moving into a chat
 error-chat-convert-answer = could not read the pane's processes
 error-chat-convert-busy = { $agent } is busy; wait until it is idle
+error-chat-convert-folder-gone = the session's folder { $folder } is gone, as when its worktree was removed
 error-chat-convert-host-program = sheprd-acp was not found on this host
 error-chat-convert-line = the session's folder or flags cannot be typed safely
 error-chat-convert-moved = the pane changed before its agent could stop
 error-chat-convert-no-agent = the pane runs no agent
-error-chat-convert-no-core-session = herdr-core reports no session for { $agent }; only Claude Code's own session record can be read
+error-chat-convert-no-core-session = No verified session is available for { $agent }; install its Sheprd session integration and restart the agent
 error-chat-convert-no-home = no home folder to find the agent's session in
 error-chat-convert-core = herdr-core: { $error }
 # $command is the agent's name as the `herdr` command takes it, such as claude.

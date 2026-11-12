@@ -26,6 +26,7 @@ pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
 pub(crate) use zen::slide_start;
 mod function_keys;
+pub(crate) mod host_regions;
 pub(crate) mod image_source;
 mod images;
 pub(crate) use images::external_paths;
@@ -33,6 +34,7 @@ mod input;
 mod layout_save;
 pub(crate) use layout_save::LayoutSaves;
 mod lifecycle;
+pub(crate) mod main_window;
 pub(crate) use lifecycle::reasserts;
 mod links;
 mod monitors;
@@ -231,6 +233,9 @@ pub(crate) struct SheprdWindow {
     /// Unknown keys in the GUI config, ignored but reported; follows `config`.
     pub(crate) gui_config_diagnostic: crate::config_diagnostic::ConfigDiagnostic,
     pub(crate) held_keys: crate::terminal::HeldKeys,
+    /// Another app's window holds this view, and draws the sidebar, status bar
+    /// and overlays as regions of its own; see `host_regions`.
+    pub(crate) hosted: bool,
     /// The sidebar row the pointer is resting on, waiting to open its menu.
     pub(crate) hover: Option<sidebar::HoverRest>,
     /// The menu that resting opened, which the pointer closes by leaving it.
@@ -326,10 +331,12 @@ pub(crate) struct SheprdWindow {
     /// The frame on screen, kept across the gap between two projections.
     pub(crate) presentation: Presentation,
     pub(crate) pressed_terminal_link: Option<PressedLink>,
-    /// The terminal grid's cached regions; see `regions`.
+    /// The terminal grid's cached regions; see `host_regions`.
     pub(crate) regions: Vec<regions::RegionLayers>,
     /// Pages remote agents asked for, waiting for their port's forward.
     pub(crate) remote_browser: Vec<crate::remote_browser::Forwarding>,
+    /// Sheprd on the other machines the window reaches, and updating it.
+    pub(crate) remote_updates: crate::remote_update::RemoteUpdates,
     /// A `worktree.remove` queued after its dialog closed.
     pub(crate) removal: Option<menu::Removal>,
     /// Herdr's resize mode: direction keys resize the focused pane until
@@ -742,6 +749,7 @@ impl SheprdWindow {
         self.poll_overview(cx);
         self.poll_security(cx);
         self.poll_automations(cx);
+        self.poll_remote_updates(window, cx);
         if self.update_system_load() {
             cx.notify();
         }

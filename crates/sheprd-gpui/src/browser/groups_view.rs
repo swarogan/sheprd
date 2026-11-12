@@ -300,6 +300,13 @@ impl SheprdWindow {
         }
     }
 
+    /// Whether a group of the focused workspace shows `pick`.
+    pub(crate) fn group_shows(&self, pick: &Pick) -> bool {
+        self.group_slots()
+            .iter()
+            .any(|slot| self.shown_pick(slot.id).as_ref() == Some(pick))
+    }
+
     /// Whether this window keeps `pick` out of the focused workspace's
     /// strips; see [`super::hidden`].
     fn hides_tab(&self, pick: &Pick) -> bool {

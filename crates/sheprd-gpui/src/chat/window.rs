@@ -13,7 +13,7 @@ use crate::{
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
-use sheprd_chat_protocol::{Attachment, Command, MAX_ATTACHMENTS, MAX_PROMPT_SIZE, Status, assist};
+use sheprd_chat_protocol::{Attachment, Command, MAX_ATTACHMENTS, MAX_PROMPT_SIZE, Status};
 use std::time::Instant;
 
 pub(super) mod visuals;
@@ -130,6 +130,7 @@ impl SheprdWindow {
         self.prepare_chat_visuals(window, cx);
         let font = self.chat_font();
         let theme = self.theme.clone();
+        let shortcuts = crate::text_shortcuts::Store::current(cx);
         for pane in self.chats.panes_mut() {
             if !pane.available() {
                 continue;
@@ -170,14 +171,22 @@ impl SheprdWindow {
                 pane.send = send;
                 changed = true;
             }
-            let found = assist::completions(pane.session.transcript(), &text);
+            let found = super::shortcuts::completions(
+                &shortcuts.shortcuts,
+                pane.session.transcript(),
+                &text,
+            );
             if pane.completion >= found.len() {
                 pane.completion = 0;
             }
-            let ghost = found
-                .get(pane.completion)
-                .and_then(|command| command.name.strip_prefix(text.get(1..).unwrap_or("")))
-                .map(str::to_owned);
+            // Only a command's name completes the text typed.
+            let ghost = match found.get(pane.completion) {
+                Some(super::shortcuts::Completion::Command(command)) => command
+                    .name
+                    .strip_prefix(text.get(1..).unwrap_or(""))
+                    .map(str::to_owned),
+                _ => None,
+            };
             composer.update(cx, |input, cx| {
                 input.set_completion(ghost, cx);
                 input.set_appearance(font.clone(), theme.clone(), cx);
@@ -349,6 +358,10 @@ impl SheprdWindow {
             return;
         };
         match event.keystroke.key.as_str() {
+            "enter" if menu == chats::Menu::Shortcuts => {
+                let query = search.read(cx).text().to_owned();
+                self.pick_first_chat_shortcut(pane_id, &query, window, cx);
+            }
             "enter" => {
                 let query = search.read(cx).text().to_owned();
                 let picked = match &menu {
@@ -515,18 +528,25 @@ impl SheprdWindow {
             return;
         }
         let text = input.read(cx).text().to_owned();
-        let found = assist::completions(pane.session.transcript(), &text).len();
+        let shortcuts = crate::text_shortcuts::Store::current(cx);
+        let completions =
+            super::shortcuts::completions(&shortcuts.shortcuts, pane.session.transcript(), &text);
+        let found = completions.len();
+        let chosen = completions
+            .get(pane.completion)
+            .map(super::shortcuts::Completion::chosen);
         let key = event.keystroke.key.as_str();
         match key {
-            "tab" if found > 0 => {
-                let Some(name) = assist::completions(pane.session.transcript(), &text)
-                    .get(pane.completion)
-                    .map(|command| command.name.clone())
-                else {
-                    return;
-                };
-                self.complete_chat_command(pane_id, &name, window, cx);
-            }
+            "tab" if found > 0 => match chosen {
+                Some(super::shortcuts::Chosen::Shortcut(text)) => {
+                    let picked = super::shortcuts::Picked::Slash;
+                    self.use_chat_shortcut(pane_id, &text, picked, window, cx);
+                }
+                Some(super::shortcuts::Chosen::Command(name)) => {
+                    self.complete_chat_command(pane_id, &name, window, cx);
+                }
+                None => return,
+            },
             "up" | "down" if found > 0 => {
                 pane.completion = if key == "up" {
                     pane.completion.saturating_sub(1)
@@ -689,7 +709,10 @@ impl SheprdWindow {
             return;
         }
         let host = match self.chats.pane(pane_id).map(|pane| &pane.target.route) {
-            Some(super::Route::Ssh(host)) => host.clone(),
+            Some(super::Route::Ssh(host)) => sheprd_client::ConnectTarget::Ssh {
+                target: host.clone(),
+                session: String::new(),
+            },
             Some(super::Route::Local) => return self.add_chat_files(pane_id, paths, window, cx),
             None => return,
         };
@@ -700,7 +723,7 @@ impl SheprdWindow {
     fn upload_chat_files(
         &mut self,
         pane_id: &str,
-        host: String,
+        host: sheprd_client::ConnectTarget,
         paths: Vec<std::path::PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -711,31 +734,67 @@ impl SheprdWindow {
         if paths.is_empty() {
             return;
         }
+        if paths
+            .len()
+            .saturating_add(pane.attachments.len())
+            .saturating_add(pane.uploading)
+            > MAX_ATTACHMENTS
+        {
+            pane.error = Some(fl!("chat-files-too-many", count = MAX_ATTACHMENTS));
+            self.redraw_terminal(cx);
+            return;
+        }
+        let target = pane.target.clone();
         pane.uploading += paths.len();
         let count = paths.len();
+        let upload_host = host.clone();
         let upload = cx.background_spawn(async move {
             let cancelled = std::sync::atomic::AtomicBool::new(false);
-            sheprd_client::upload_files(&host, &paths, &cancelled, |_, _| {})
+            crate::core_terminals::files::upload(&upload_host, &paths, &cancelled)
         });
         let pane_id = pane_id.to_owned();
+        let executor = cx.background_executor().clone();
         cx.spawn_in(window, async move |this, cx| {
             let uploaded = upload.await;
-            let _ = this.update_in(cx, |this, window, cx| {
-                let Some(pane) = this.chats.pane_mut(&pane_id) else {
-                    return;
-                };
-                pane.uploading = pane.uploading.saturating_sub(count);
-                match uploaded {
-                    Ok(remote) => {
-                        let remote = remote.into_iter().map(std::path::PathBuf::from).collect();
-                        this.add_chat_files(&pane_id, remote, window, cx);
+            let accepted = this
+                .update_in(cx, |this, window, cx| {
+                    let Some(pane) = this.chats.pane_mut(&pane_id) else {
+                        return false;
+                    };
+                    if pane.target != target {
+                        return false;
                     }
-                    Err(error) => {
-                        pane.error = Some(fl!("chat-files-not-attached", error = error.localize()));
-                        this.redraw_terminal(cx);
+                    pane.uploading = pane.uploading.saturating_sub(count);
+                    match &uploaded {
+                        Ok(remote) => {
+                            if pane.input() != ChatInput::Composer
+                                || remote.len().saturating_add(pane.attachments.len())
+                                    > MAX_ATTACHMENTS
+                            {
+                                return false;
+                            }
+                            let remote = remote.iter().map(std::path::PathBuf::from).collect();
+                            this.add_chat_files(&pane_id, remote, window, cx);
+                            true
+                        }
+                        Err(error) => {
+                            pane.error =
+                                Some(fl!("chat-files-not-attached", error = error.localize()));
+                            this.redraw_terminal(cx);
+                            false
+                        }
                     }
-                }
-            });
+                })
+                .unwrap_or(false);
+            if !accepted && let Ok(paths) = uploaded {
+                executor
+                    .spawn(async move {
+                        if let Err(error) = crate::core_terminals::files::cleanup(&host, &paths) {
+                            tracing::warn!(%error, "Could not remove unclaimed chat attachments");
+                        }
+                    })
+                    .detach();
+            }
         })
         .detach();
         self.redraw_terminal(cx);
@@ -823,7 +882,7 @@ impl SheprdWindow {
         cx.notify();
     }
 
-    fn submit_chat_prompt(
+    pub(super) fn submit_chat_prompt(
         &mut self,
         pane_id: &str,
         input: &Entity<MultilineInput>,

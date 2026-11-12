@@ -134,7 +134,18 @@ impl Hub {
             self.call(ApiMethod::PaneProcessInfo, params.clone())
                 .await?,
         )?;
-        let line = convert::resume(&found.pane, &info.process_info, agent)?.local_line(&program)?;
+        // Without Herdr's integration, Claude's own record names the
+        // session: this daemon runs where the pane does.
+        let home = self
+            .home
+            .clone()
+            .or_else(sheprd_client::local_path::home_dir);
+        let resume = convert::resume(&found.pane, &info.process_info, agent, |pid| {
+            let home = home.as_deref()?;
+            convert::recorded_session(agent, pid, home, |path| std::fs::read_to_string(path))
+        })?;
+        resume.folder_here()?;
+        let line = resume.local_line(&program)?;
         let (hub, owned, cancelled) = (self.clone(), pane.to_owned(), claim.cancelled.clone());
         let runtime = tokio::runtime::Handle::current();
         tokio::task::spawn_blocking(move || hub.stop_agent(&runtime, &owned, agent, &cancelled))

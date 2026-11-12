@@ -291,6 +291,20 @@ way to stop a command inside a thread, so its shells have no Stop, and Copilot's
 and OpenCode's sub-agents are listed without one, as ACP has no request for it.
 Gemini and Pi report none of this, so these sections stay away.
 
+OpenCode versions advertising child-session updates show both foreground and
+background sub-agents. Each gets a card linked from the rail, with its own
+steps even when several run concurrently. Background cards survive the parent
+turn and end when OpenCode reports that child completed, failed, or was
+interrupted. Older OpenCode versions without that extension can only track
+foreground launch calls reliably.
+
+For structured tasks in OpenCode V2, enable `"experimental": {"todo": true}`
+in your OpenCode configuration ([OpenCode's setting](https://opencode.ai/v2/docs/config#todos)).
+It defaults to false in release builds. The resulting `todowrite` calls feed
+the **Plan** section; an assistant's Markdown checklist does not. Child tasks
+remain separate from the parent's plan. Sheprd does not enable agent tools
+or change OpenCode configuration automatically.
+
 Every rail section folds to one line. While anything runs, **Plan** and
 **Changed** fold on their own to leave room, showing the current step and the
 change totals; once nothing runs they open again. Clicking a section's header
@@ -347,6 +361,20 @@ TeX. Collapsed card details and retained hidden source are omitted until opened;
 copy buttons remain available for complete retained code or original records.
 Image pixels, embedded webviews and widget controls are separate surfaces, not
 selectable conversation text.
+
+Text shortcuts are prompts you send often, such as asking the agent to carry
+on. Type `/` in the composer to see them first, above the agent's own slash
+commands, matched against what follows the slash by label or text; **Tab** or a
+click takes the selected one. The shortcuts button beside **+** opens them in a
+popover with a search field, where **Enter** takes the first match. Either way a
+shortcut sends at once when nothing else is drafted, as on the phone, and
+otherwise joins the end of the draft. Add, edit, reorder and delete them in
+Settings > Text Shortcuts, or **Edit Shortcuts…** at the foot of the popover;
+`sheprd chat shortcuts` lists them. They are one list: each computer's
+`sheprd-remote-control` keeps a copy for its phones, and Sheprd reads this
+computer's and every connected SSH host's that has the program, keeps the
+latest edit, and offers it to the others, so an edit made anywhere reaches all
+of them. A host without the program is skipped.
 
 ACP chats retain their native composer, permissions, tools, plans, context
 information and file attachments. Tool and thinking cards start collapsed and

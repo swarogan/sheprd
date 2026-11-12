@@ -9,7 +9,11 @@ fn info(id: &str, endpoint: Option<&str>) -> TerminalInfo {
     TerminalInfo {
         agent: AgentStatus::Unknown,
         cwd: None,
-        foreground: None,
+        foreground: Some(sheprd_backend::Process {
+            pid: 42,
+            name: "sheprd-acp".into(),
+            argv: vec!["sheprd-acp".into()],
+        }),
         id: TerminalId::new(id).unwrap(),
         labels: endpoint
             .map(|endpoint| BTreeMap::from([(TOKEN.to_owned(), endpoint.to_owned())]))

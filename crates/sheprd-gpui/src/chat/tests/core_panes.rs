@@ -20,7 +20,11 @@ fn info(name: &str, endpoint: Option<&str>) -> TerminalInfo {
     TerminalInfo {
         agent: AgentStatus::Unknown,
         cwd: None,
-        foreground: None,
+        foreground: Some(sheprd_backend::Process {
+            pid: 42,
+            name: "sheprd-acp".into(),
+            argv: vec!["sheprd-acp".into()],
+        }),
         id: id(name),
         labels: endpoint
             .map(|endpoint| {

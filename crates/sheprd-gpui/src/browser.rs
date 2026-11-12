@@ -61,6 +61,7 @@ mod tab_move;
 mod tab_scroll;
 #[cfg(target_os = "macos")]
 mod underlay;
+mod undo_close;
 mod view;
 #[cfg(test)]
 mod view_tests;

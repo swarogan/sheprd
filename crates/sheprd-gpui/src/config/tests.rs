@@ -67,6 +67,7 @@ mod tab_layout;
 mod terminal_padding;
 mod theme_files;
 mod themes;
+mod undo_close;
 mod update_channel;
 mod usage_inline;
 mod worktrees;

@@ -1,5 +1,6 @@
 mod accessibility;
 mod adopt;
+mod agent_row_rescroll;
 mod chats;
 mod clear;
 mod close;
@@ -12,6 +13,7 @@ mod cross_workspace;
 mod effects;
 mod fall_through;
 mod fallback_bells;
+mod file_images;
 mod focus;
 mod folders;
 mod history;
@@ -49,6 +51,7 @@ mod stale;
 mod tab_status;
 mod unended;
 mod wanted;
+mod window_asks;
 mod worker;
 mod zoom_drawn;
 

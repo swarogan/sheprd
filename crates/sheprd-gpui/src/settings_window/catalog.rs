@@ -423,6 +423,12 @@ pub(super) const CATALOG: &[Entry] = &[
     ),
     entry(
         Section::Tabs,
+        "tabs-undo-close",
+        "settings-tabs-undo-close",
+        "settings-tabs-undo-close-description",
+    ),
+    entry(
+        Section::Tabs,
         "tabs-focus-follows-mouse",
         "settings-tabs-focus-follows-mouse",
         "settings-tabs-focus-follows-mouse-description",
@@ -492,6 +498,12 @@ pub(super) const CATALOG: &[Entry] = &[
         "notif-volume",
         "settings-notif-volume",
         "settings-notif-volume-description",
+    ),
+    entry(
+        Section::TextShortcuts,
+        "text-shortcuts-add",
+        "settings-text-shortcuts-add",
+        "settings-text-shortcuts-add-description",
     ),
     entry(
         Section::Integrations,

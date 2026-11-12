@@ -10,7 +10,6 @@ use sheprd_chat_protocol::Agent;
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 const SESSION: &str = "0c6f0c39-3c1e-4b7e-9a51-6d1b8e2d7f10";
-const PID: i32 = 4242;
 
 /// `t1` running Claude Code until Ctrl+C reaches it, then its shell.
 fn agent_record(stopped: bool, status: &str) -> Value {
@@ -19,10 +18,10 @@ fn agent_record(stopped: bool, status: &str) -> Value {
     } else {
         ("claude", json!(["claude", "--model", "opus"]))
     };
-    json!({"address": "t1", "cols": 80, "rows": 24, "cwd": "/work/app", "state": "live",
+    json!({"address": "t1", "cols": 80, "rows": 24, "cwd": "/tmp", "state": "live",
         "pid": 100, "status": {"state": status, "app": "claude"},
-        "foreground": {"pid": if stopped { 100 } else { PID }, "name": name,
-            "argv": argv, "cwd": "/work/app"}})
+        "foreground": {"pid": if stopped { 100 } else { std::process::id() }, "name": name,
+            "argv": argv, "cwd": "/tmp"}})
 }
 
 struct Stand {
@@ -42,9 +41,21 @@ fn stand(status: &'static str) -> Stand {
     let home = dir.path().join("home");
     let sessions = home.join(".claude").join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
+    let pid = std::process::id();
+    let stamp = sheprd_client::new_command("ps")
+        .args(["-o", "lstart=", "-p", &pid.to_string()])
+        .env("LC_ALL", "C")
+        .env("TZ", "UTC")
+        .output()
+        .unwrap();
+    assert!(stamp.status.success());
+    let started = String::from_utf8(stamp.stdout).unwrap();
     std::fs::write(
-        sessions.join(format!("{PID}.json")),
-        format!(r#"{{"pid":{PID},"sessionId":"{SESSION}","cwd":"/work/app"}}"#),
+        sessions.join(format!("{pid}.json")),
+        serde_json::to_vec(
+            &json!({"pid":pid,"sessionId":SESSION,"cwd":"/tmp","procStart":started.trim()}),
+        )
+        .unwrap(),
     )
     .unwrap();
     let path = dir.path().join("core.sock");
@@ -73,6 +84,7 @@ fn stand(status: &'static str) -> Stand {
             let method = request["method"].as_str().unwrap().to_owned();
             let result = match method.as_str() {
                 "terminal.list" => json!({"terminals": [agent_record(stopped, status)]}),
+                "doc.get" => json!({"value": null, "version": 0}),
                 "terminal.keys" => {
                     stopped = true;
                     json!({})
@@ -82,7 +94,7 @@ fn stand(status: &'static str) -> Stand {
                 "terminal.label" => agent_record(stopped, status),
                 method => panic!("unexpected method {method}"),
             };
-            if method != "terminal.list" {
+            if method != "terminal.list" && method != "doc.get" {
                 sent.send((method, request["params"].clone())).unwrap();
             }
             let response = json!({"jsonrpc": "2.0", "id": request["id"], "result": result});
@@ -131,7 +143,7 @@ fn hub_on(stand: &Stand, home: Option<PathBuf>) -> Arc<Hub> {
         workspaces: vec![Workspace {
             branch: None,
             chats: Vec::new(),
-            cwd: "/work/app".into(),
+            cwd: "/tmp".into(),
             id: UNLISTED.into(),
             label: "Herdr 2".into(),
             session: None,
@@ -158,8 +170,8 @@ fn a_terminal_running_a_movable_agent_offers_it() {
 }
 
 fn record_of_shell() -> Value {
-    json!({"address": "t1", "cols": 80, "rows": 24, "cwd": "/work/app", "state": "live",
-        "foreground": {"pid": 100, "name": "zsh", "argv": ["-zsh"], "cwd": "/work/app"}})
+    json!({"address": "t1", "cols": 80, "rows": 24, "cwd": "/tmp", "state": "live",
+        "foreground": {"pid": 100, "name": "zsh", "argv": ["-zsh"], "cwd": "/tmp"}})
 }
 
 #[test]
@@ -273,9 +285,9 @@ fn a_moved_agents_terminal_is_a_chat_only_while_the_chat_runs() {
     let endpoint = sheprd_chat_protocol::EndpointId::random().to_string();
     let labelled = |front: &str| -> Terminal {
         serde_json::from_value(json!({"address": "t1", "cols": 80, "rows": 24,
-            "cwd": "/work/app", "state": "live",
+            "cwd": "/tmp", "state": "live",
             "labels": {sheprd_chat_protocol::TOKEN: endpoint},
-            "foreground": {"pid": 7, "name": front, "argv": [front], "cwd": "/work/app"}}))
+            "foreground": {"pid": 7, "name": front, "argv": [front], "cwd": "/tmp"}}))
         .unwrap()
     };
     for (front, chat) in [("sheprd-acp", true), ("zsh", false)] {

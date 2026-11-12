@@ -190,10 +190,22 @@ impl SheprdWindow {
             let painter = self.painter.clone();
             let look = look.clone();
             let observe = role == Role::Observer;
+            let paste_target = match &host {
+                Host::Local => Some(sheprd_client::ConnectTarget::Local),
+                Host::Remote(scope) => self
+                    .core_terminals
+                    .remote
+                    .get(scope)
+                    .map(|remote| remote.target.clone()),
+            };
             let to_window = super::asks::window_call(cx);
             let view = cx.new(|cx| {
-                CoreTerminalView::new(terminal.clone(), link, look, painter, observe, cx)
-                    .with_window(to_window)
+                let mut view =
+                    CoreTerminalView::new(terminal.clone(), link, look, painter, observe, cx)
+                        .with_window(to_window);
+                view.set_remote(host != Host::Local, cx);
+                view.set_paste_target(paste_target);
+                view
             });
             self.core_terminals.views.insert((tab, terminal), view);
         }
@@ -276,13 +288,23 @@ impl SheprdWindow {
         // Links are read against each pane's folder, and a path is no link
         // in another host's pane: both are known before the screens change.
         for ((tab, terminal), view) in &views {
-            let remote = self.core_terminals.host_of(*tab) != Host::Local;
+            let host = self.core_terminals.host_of(*tab);
+            let remote = host != Host::Local;
+            let paste_target = match &host {
+                Host::Local => Some(sheprd_client::ConnectTarget::Local),
+                Host::Remote(scope) => self
+                    .core_terminals
+                    .remote
+                    .get(scope)
+                    .map(|remote| remote.target.clone()),
+            };
             let cwd = self
                 .core_terminals
                 .info(*tab, terminal)
                 .and_then(|info| info.cwd.as_deref());
             view.update(cx, |view, cx| {
                 view.set_remote(remote, cx);
+                view.set_paste_target(paste_target.filter(|_| in_sight.contains(tab)));
                 view.set_cwd(cwd, cx);
             });
         }
