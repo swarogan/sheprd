@@ -52,13 +52,17 @@ impl OrchestratorView {
                 .when(item.key.source.provider == Provider::Jira, |el| {
                     el.child(self.render_jira_actions(&item, cx))
                 })
-                .when(item.key.source.provider == Provider::Gitea, |el| {
-                    el.child(self.render_gitea_actions(&item, cx))
-                })
+                .when(
+                    item.key.source.provider == Provider::Gitea && item.pull_request.is_none(),
+                    |el| el.child(self.render_gitea_actions(&item, cx)),
+                )
                 .when(item.key.source.provider == Provider::Beads, |el| {
                     el.child(self.render_task_facts(&item, cx))
                 })
                 .child(self.render_description(&item))
+                .when(super::comments::commented(&item), |el| {
+                    el.child(self.render_comments(&item, cx))
+                })
                 .into_any_element(),
             DetailTab::Conversation => div()
                 .flex_1()
@@ -409,6 +413,7 @@ impl OrchestratorView {
         };
         div()
             .id("orchestrator-description")
+            .debug_selector(|| "orchestrator-description".into())
             .min_w_0()
             .flex()
             .flex_col()

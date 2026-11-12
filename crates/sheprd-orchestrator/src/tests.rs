@@ -24,6 +24,7 @@ mod gitea;
 mod gitea_account;
 mod github;
 // The private credential file these save to is Unix-only.
+mod gitea_comments;
 #[cfg(unix)]
 mod gitea_saved;
 mod gitea_write;
@@ -44,6 +45,7 @@ mod jira_account;
 mod jira_adf;
 mod jira_dispatch;
 // The private credential file these save to is Unix-only.
+mod jira_comments;
 #[cfg(unix)]
 mod jira_saved;
 mod jira_write;

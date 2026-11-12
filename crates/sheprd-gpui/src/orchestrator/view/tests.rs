@@ -21,6 +21,7 @@ mod gitea_actions;
 mod gitea_mine;
 mod gitlab_merge_request;
 mod groups;
+mod issue_comments;
 mod jira_actions;
 mod jira_source;
 mod list_switch;

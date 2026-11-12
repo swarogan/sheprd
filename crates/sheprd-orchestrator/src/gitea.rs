@@ -10,6 +10,7 @@
 //! writes; `write` changes one issue from its page.
 
 pub mod account;
+pub mod comments;
 mod error;
 pub mod issue;
 pub mod pull_request;

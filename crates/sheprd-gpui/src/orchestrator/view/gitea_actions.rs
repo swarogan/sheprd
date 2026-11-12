@@ -12,7 +12,7 @@ use sheprd_orchestrator::gitea::write::Change;
 
 /// The number the Gitea API knows `item` by: its key, without a pull
 /// request's `pr/`.
-fn index(item: &Item) -> String {
+pub(super) fn index(item: &Item) -> String {
     let id = item.key.native_id.as_str();
     id.strip_prefix("pr/").unwrap_or(id).to_owned()
 }
@@ -32,6 +32,7 @@ impl OrchestratorView {
         self.gitea.busy = false;
         if matches!(notice.outcome, Ok(Done::GiteaCommented)) {
             self.gitea.comment.update(cx, |input, cx| input.clear(cx));
+            self.reload_comments();
         }
     }
 
@@ -71,7 +72,7 @@ impl OrchestratorView {
 
     /// Posts the comment field's text on the open item; an empty one sends
     /// nothing.
-    fn post_gitea_comment(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn post_gitea_comment(&mut self, cx: &mut Context<Self>) {
         let text = self.gitea.comment.read(cx).text().trim().to_owned();
         let Some(item) = self.open_gitea_item().filter(|_| !text.is_empty()) else {
             return;
@@ -99,8 +100,7 @@ impl OrchestratorView {
         true
     }
 
-    /// The close or reopen and Assign to me buttons of an issue, and the
-    /// comment field of an issue or a pull request.
+    /// The close or reopen and Assign to me buttons of an issue.
     pub(super) fn render_gitea_actions(&self, item: &Item, cx: &mut Context<Self>) -> Div {
         let look = &self.look;
         let busy = self.gitea.busy;
@@ -109,7 +109,7 @@ impl OrchestratorView {
         } else {
             fl!("gitea-actions-close")
         };
-        let buttons = div()
+        div()
             .flex()
             .flex_wrap()
             .gap_2()
@@ -128,21 +128,6 @@ impl OrchestratorView {
                 .debug_selector(|| "orchestrator-gitea-assign".into())
                 .when(busy, |el| el.opacity(0.5))
                 .on_click(cx.listener(|this, _, _, cx| this.assign_gitea_issue(cx))),
-            );
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .when(item.pull_request.is_none(), |el| el.child(buttons))
-            .child(self.gitea.row(
-                look,
-                (
-                    "orchestrator-gitea-comment-field",
-                    "orchestrator-gitea-comment",
-                ),
-                fl!("gitea-actions-comment"),
-                Self::post_gitea_comment,
-                cx,
-            ))
+            )
     }
 }

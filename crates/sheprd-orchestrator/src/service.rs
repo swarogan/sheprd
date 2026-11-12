@@ -116,11 +116,20 @@ enum Command {
     Act(Action),
     /// An action finished: read the database again, and sync when it changed
     /// a source.
-    Acted { resync: bool },
+    Acted {
+        resync: bool,
+    },
     /// Look up a pull request's status, checks, and merge state by number.
     LoadPullRequest(u64),
     /// Read the transitions Jira offers an issue of this source.
-    LoadJiraTransitions { source: SourceKey, issue: String },
+    LoadJiraTransitions {
+        source: SourceKey,
+        issue: String,
+    },
+    LoadComments {
+        source: SourceKey,
+        issue: String,
+    },
     LoadAgents {
         endpoint: Option<String>,
         target: ConnectTarget,
@@ -210,6 +219,8 @@ pub struct Snapshot {
     pub pull_request: Option<PullRequestLookup>,
     /// The newest Jira issue's transitions lookup.
     pub jira_transitions: Option<jira::Lookup>,
+    /// The newest issue's comments lookup.
+    pub comments: Option<crate::comments::Lookup>,
     /// The repository's branches named for items, as each sync read them.
     pub branches: Arc<Vec<String>>,
     /// Each open pull request's review and checks, by repository and number,
@@ -303,13 +314,6 @@ impl Service {
     /// Asks for pull request `number`'s status; a full queue drops it.
     pub fn load_pull_request(&self, number: u64) {
         let _ = self.commands.try_send(Command::LoadPullRequest(number));
-    }
-
-    /// Asks for the transitions Jira offers `issue`; a full queue drops it.
-    pub fn load_jira_transitions(&self, source: SourceKey, issue: String) {
-        let _ = self
-            .commands
-            .try_send(Command::LoadJiraTransitions { source, issue });
     }
 
     /// Outcomes of finished actions since the last call.
@@ -446,6 +450,7 @@ impl Worker {
                 Ok(Command::LoadJiraTransitions { source, issue }) => {
                     self.load_jira_transitions(&source, &issue);
                 }
+                Ok(Command::LoadComments { source, issue }) => self.load_comments(&source, &issue),
                 Ok(Command::LoadAgents { endpoint, target }) => {
                     self.snapshot.installed_endpoint = endpoint;
                     self.snapshot.installed = None;

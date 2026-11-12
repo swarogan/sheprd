@@ -18,7 +18,7 @@ fn source() -> SourceKey {
     jira::source_key("acme.atlassian.net")
 }
 
-fn run<T>(base: &str, call: impl FnOnce(&ureq::Agent, &Target<'_>) -> T) -> T {
+pub(super) fn run<T>(base: &str, call: impl FnOnce(&ureq::Agent, &Target<'_>) -> T) -> T {
     let token = token();
     let target = Target {
         base_url: base,

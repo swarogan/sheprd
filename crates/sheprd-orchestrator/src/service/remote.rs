@@ -300,7 +300,8 @@ impl RemoteWorker {
                 Ok(
                     Command::Acted { .. }
                     | Command::LoadPullRequest(_)
-                    | Command::LoadJiraTransitions { .. },
+                    | Command::LoadJiraTransitions { .. }
+                    | Command::LoadComments { .. },
                 ) => {}
                 Ok(Command::LoadAgents { .. }) => {}
                 Err(RecvTimeoutError::Timeout) if Instant::now() >= next_sync => {

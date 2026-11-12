@@ -56,7 +56,7 @@ impl Change {
 }
 
 /// `name`, when it can be one path segment of an owner or a repository.
-fn valid_name(name: &str) -> Result<&str, Error> {
+pub(super) fn valid_name(name: &str) -> Result<&str, Error> {
     let fits = !name.is_empty()
         && name.len() <= MAX_NAME
         && name != "."
@@ -68,7 +68,7 @@ fn valid_name(name: &str) -> Result<&str, Error> {
 }
 
 /// `index`, when it is an issue's number.
-fn valid_index(index: &str) -> Result<&str, Error> {
+pub(super) fn valid_index(index: &str) -> Result<&str, Error> {
     let fits = !index.is_empty()
         && index.len() <= MAX_INDEX
         && index.bytes().all(|byte| byte.is_ascii_digit());

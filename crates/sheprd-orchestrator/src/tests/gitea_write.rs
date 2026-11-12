@@ -18,7 +18,7 @@ use std::{
 
 const TOKEN: &str = "0123456789abcdef";
 
-fn source() -> SourceKey {
+pub(super) fn source() -> SourceKey {
     SourceKey {
         provider: Provider::Gitea,
         host: "forge.example.com".into(),
@@ -26,13 +26,13 @@ fn source() -> SourceKey {
     }
 }
 
-fn token() -> SecretString {
+pub(super) fn token() -> SecretString {
     SecretString::from(TOKEN)
 }
 
 /// Answers each connection with the next `(status, body)`, returning each
 /// request whole: its head, a blank line, and its body.
-fn serve(answers: Vec<(u16, String)>) -> (String, JoinHandle<Vec<String>>) {
+pub(super) fn serve(answers: Vec<(u16, String)>) -> (String, JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = std::thread::spawn(move || {
@@ -115,7 +115,7 @@ fn body_of(request: &str) -> Value {
     serde_json::from_str(body).unwrap()
 }
 
-fn authorization(request: &str) -> Option<&str> {
+pub(super) fn authorization(request: &str) -> Option<&str> {
     request
         .lines()
         .find(|line| line.to_ascii_lowercase().starts_with("authorization:"))

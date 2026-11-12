@@ -15,6 +15,7 @@ pub mod actions;
 pub mod azure;
 pub mod beads;
 pub mod cache;
+pub mod comments;
 mod error;
 pub mod git;
 pub mod gitea;

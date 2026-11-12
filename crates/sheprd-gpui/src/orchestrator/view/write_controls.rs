@@ -2,7 +2,7 @@
 //! write is in flight, and the comment row both draw.
 
 use super::{Look, OrchestratorView};
-use crate::{config::corners, search_input::SearchInput};
+use crate::{config::corners, i18n::fl, search_input::SearchInput};
 use gpui::{prelude::*, *};
 
 /// The comment field and whether a write is under way.
@@ -33,6 +33,14 @@ impl Controls {
             comment,
             busy: false,
         }
+    }
+
+    /// The Jira and Gitea pages' controls, in that order.
+    pub(super) fn pair(look: &Look, cx: &mut Context<OrchestratorView>) -> (Self, Self) {
+        (
+            Self::new(look, || fl!("jira-actions-comment-placeholder"), cx),
+            Self::new(look, || fl!("gitea-actions-comment-placeholder"), cx),
+        )
     }
 
     /// What `key` does, when the comment field has the focus: Enter posts,

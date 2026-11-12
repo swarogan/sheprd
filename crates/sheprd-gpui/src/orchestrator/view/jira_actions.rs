@@ -33,7 +33,10 @@ impl OrchestratorView {
     pub(super) fn jira_noticed(&mut self, notice: &Notice, cx: &mut Context<Self>) {
         self.jira.busy = false;
         match notice.outcome {
-            Ok(Done::JiraCommented) => self.jira.comment.update(cx, |input, cx| input.clear(cx)),
+            Ok(Done::JiraCommented) => {
+                self.jira.comment.update(cx, |input, cx| input.clear(cx));
+                self.reload_comments();
+            }
             Ok(Done::JiraTransitioned) => self.reload_jira_transitions(),
             _ => {}
         }
@@ -78,7 +81,7 @@ impl OrchestratorView {
         true
     }
 
-    /// The transitions, the comment field, and Assign to me of a Jira issue.
+    /// The transitions and Assign to me of a Jira issue.
     pub(super) fn render_jira_actions(&self, item: &Item, cx: &mut Context<Self>) -> Div {
         let look = &self.look;
         let busy = self.jira.busy;
@@ -125,34 +128,19 @@ impl OrchestratorView {
                 .into_any_element(),
         };
         let assign = Change::Assign { source, issue };
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(transitions)
-            .child(self.jira.row(
-                look,
-                (
-                    "orchestrator-jira-comment-field",
-                    "orchestrator-jira-comment",
-                ),
-                fl!("jira-actions-comment"),
-                Self::post_jira_comment,
-                cx,
-            ))
-            .child(
-                div().flex().child(
-                    look.button(
-                        "orchestrator-jira-assign",
-                        fl!("jira-actions-assign"),
-                        false,
-                    )
-                    .debug_selector(|| "orchestrator-jira-assign".into())
-                    .when(busy, |el| el.opacity(0.5))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.jira_change(assign.clone(), cx);
-                    })),
-                ),
-            )
+        div().flex().flex_col().gap_2().child(transitions).child(
+            div().flex().child(
+                look.button(
+                    "orchestrator-jira-assign",
+                    fl!("jira-actions-assign"),
+                    false,
+                )
+                .debug_selector(|| "orchestrator-jira-assign".into())
+                .when(busy, |el| el.opacity(0.5))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.jira_change(assign.clone(), cx);
+                })),
+            ),
+        )
     }
 }

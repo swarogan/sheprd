@@ -8,6 +8,7 @@
 //! the theme, live agent statuses, and the GitHub account from its tick.
 
 mod browse;
+mod comments;
 mod conversation;
 mod core_removal;
 mod detail;
@@ -237,6 +238,7 @@ pub(crate) struct OrchestratorView {
     mixed_sources: bool,
     /// The open item's description, parsed once per change of its text.
     description: markdown::Markdown,
+    comment_bodies: comments::Bodies,
     dialog: Option<dispatch::Dialog>,
     confirm: Option<dispatch::Confirm>,
     /// The newest action's outcome, until dismissed or replaced.
@@ -291,10 +293,7 @@ impl OrchestratorView {
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });
-        let jira =
-            jira_actions::Controls::new(&look, || fl!("jira-actions-comment-placeholder"), cx);
-        let gitea =
-            write_controls::Controls::new(&look, || fl!("gitea-actions-comment-placeholder"), cx);
+        let (jira, gitea) = write_controls::Controls::pair(&look, cx);
         Self {
             repos: Vec::new(),
             skipped_repos: HashSet::new(),
@@ -329,6 +328,7 @@ impl OrchestratorView {
             mixed_sources: false,
             holders: HashMap::new(),
             description: markdown::Markdown::default(),
+            comment_bodies: comments::Bodies::default(),
             dialog: None,
             confirm: None,
             notice: None,
@@ -645,7 +645,7 @@ impl OrchestratorView {
             }
         }
         self.reload_pull_request();
-        self.reload_jira_transitions();
+        self.reload_issue_lookups();
         self.reload_conversation();
     }
 
@@ -777,7 +777,7 @@ impl OrchestratorView {
         if pull_request {
             self.reload_pull_request();
         }
-        self.reload_jira_transitions();
+        self.reload_issue_lookups();
         self.follow_pull_request();
         cx.notify();
     }

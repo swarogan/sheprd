@@ -11,6 +11,7 @@
 
 pub mod account;
 pub mod adf;
+pub mod comments;
 mod error;
 pub mod issue;
 pub mod saved;
