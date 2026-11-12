@@ -9,6 +9,7 @@ fn saved(hosts: &[&str]) -> Arc<Saved> {
     let mut saved = Saved::default();
     for host in hosts {
         let login = Login {
+            cloud_id: None,
             email: "me@example.com".into(),
             token: "token".into(),
         };

@@ -365,8 +365,17 @@ authentication over HTTPS only. **Check and save** asks the site's
 and names its branch; its status category reads as open, in progress, or
 closed, with the status name, issue type, and project as its first labels;
 its description is converted from Atlassian Document Format to Markdown
-(`jira/adf.rs`), images left as placeholders. Scoped API tokens and Jira
-Server or Data Center are not read.
+(`jira/adf.rs`), images left as placeholders. Jira Server or Data Center is
+not read.
+
+Both kinds of API token work. A site answers a token with scopes with 401,
+so **Check and save** then reads the site's cloud id from its public
+`/_edge/tenant_info` and asks Atlassian's gateway,
+`https://api.atlassian.com/ex/jira/<cloudId>/rest/api/3/myself`, with the
+same email and token. A site the gateway accepts is saved with its cloud id
+and read through the gateway from then on; issue links still open on the
+site. A token with scopes needs `read:jira-work` and `read:jira-user`. The
+token is sent only to the site's own address and to that gateway.
 
 Sites are kept in one record, at most 32: the desktop keyring
 (`dev.herdr.gpui.jira`), or with `[jira] allow_plaintext_credentials = true`

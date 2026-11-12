@@ -66,6 +66,14 @@ pub const MAX_OPEN: usize = 1_000;
 const TIMEOUT: Duration = Duration::from_secs(30);
 /// One page of 100 issues, descriptions included.
 const LIMIT: u64 = 8 * 1024 * 1024;
+/// Where a token with scopes is accepted: Atlassian's gateway, which reaches
+/// a site by its cloud id.
+pub(crate) const GATEWAY: &str = "https://api.atlassian.com";
+
+/// The address of the site with `cloud_id` behind the gateway at `origin`.
+pub(crate) fn gateway_base(origin: &str, cloud_id: &str) -> String {
+    format!("{origin}/ex/jira/{cloud_id}")
+}
 
 /// The source of `host`'s issues assigned to the user.
 pub fn source_key(host: &str) -> SourceKey {
@@ -121,8 +129,20 @@ pub fn list(
     previous: Option<&Checkpoint>,
     fetch: &mut Fetch<'_>,
 ) -> super::Result<Listing> {
+    list_via(source, base_url, base_url, previous, fetch)
+}
+
+/// [`list`] with the API calls sent to `api_base`, the site's gateway address
+/// for a token with scopes; links to issues still hang from `base_url`.
+pub fn list_via(
+    source: &SourceKey,
+    base_url: &str,
+    api_base: &str,
+    previous: Option<&Checkpoint>,
+    fetch: &mut Fetch<'_>,
+) -> super::Result<Listing> {
     let started = Utc::now();
-    let search = api(base_url, &["search", "jql"])?;
+    let search = api(api_base, &["search", "jql"])?;
     let mut issues: Vec<issue::Issue> = Vec::new();
     let mut seen = HashSet::new();
     let mut tokens = HashSet::new();
@@ -155,7 +175,7 @@ pub fn list(
         .into_iter()
         .map(|node| node.into_item(source, base_url))
         .collect();
-    let viewer = reader(base_url, fetch)?;
+    let viewer = reader(api_base, fetch)?;
     let previous = previous.cloned().unwrap_or_default();
     Ok(Listing {
         items,
@@ -171,10 +191,10 @@ pub fn list(
     })
 }
 
-/// Who the token reads as on the site at `base_url`. A reply in another
+/// Who the token reads as on the site behind `api_base`. A reply in another
 /// shape names no one rather than failing the listing.
-fn reader(base_url: &str, fetch: &mut Fetch<'_>) -> super::Result<Option<String>> {
-    let bytes = fetch(&api(base_url, &["myself"])?, None)?;
+fn reader(api_base: &str, fetch: &mut Fetch<'_>) -> super::Result<Option<String>> {
+    let bytes = fetch(&api(api_base, &["myself"])?, None)?;
     Ok(serde_json::from_slice::<account::Myself>(&bytes)
         .ok()
         .and_then(account::Myself::name))
@@ -184,7 +204,8 @@ fn parse<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, Error> {
     serde_json::from_slice(bytes).map_err(Error::Json)
 }
 
-/// Lists `source` with the sign-in of `site` over its own address. Blocks on
+/// Lists `source` with the sign-in of `site`, over its own address or its
+/// gateway address when it has a cloud id. Blocks on
 /// the network, which `cancelled` stops between requests: call it from a
 /// worker.
 pub fn sync(
@@ -206,12 +227,19 @@ pub fn sync(
         email: site.email(),
         token: site.token(),
     };
-    list(source, site.base_url(), previous, &mut |url, body| {
-        if cancelled() {
-            return Err(super::Error::Cancelled);
-        }
-        Ok(send(&agent, &target, url, body, LIMIT, cooldown)?)
-    })
+    let api_base = site.api_base();
+    list_via(
+        source,
+        site.base_url(),
+        &api_base,
+        previous,
+        &mut |url, body| {
+            if cancelled() {
+                return Err(super::Error::Cancelled);
+            }
+            Ok(send(&agent, &target, url, body, LIMIT, cooldown)?)
+        },
+    )
 }
 
 /// Whom a request is made as, and where.
@@ -248,19 +276,29 @@ pub(crate) fn send(
     limit: u64,
     cooldown: &mut Option<Duration>,
 ) -> Result<Vec<u8>, Error> {
+    accept(request(agent, target, url, body)?, target, limit, cooldown)
+}
+
+/// The reply to [`send`]'s request, whatever its status.
+pub(crate) fn request(
+    agent: &ureq::Agent,
+    target: &Target<'_>,
+    url: &url::Url,
+    body: Option<&Value>,
+) -> Result<ureq::http::Response<ureq::Body>, Error> {
     let authorization = authorization(target.email, target.token)?;
     let network = |error| Error::Network {
         origin: target.base_url.to_owned(),
         source: Box::new(error),
     };
-    let mut reply = match body {
+    match body {
         None => agent
             .get(url.as_str())
             .header("User-Agent", "Sheprd")
             .header("Accept", "application/json")
             .header("Authorization", authorization)
             .call()
-            .map_err(network)?,
+            .map_err(network),
         Some(body) => agent
             .post(url.as_str())
             .header("User-Agent", "Sheprd")
@@ -268,8 +306,18 @@ pub(crate) fn send(
             .header("Authorization", authorization)
             .header("Content-Type", "application/json")
             .send(&serde_json::to_vec(body).map_err(Error::Json)?[..])
-            .map_err(network)?,
-    };
+            .map_err(network),
+    }
+}
+
+/// The body of at most `limit` bytes of a 200 `reply`, or what any other
+/// status means.
+pub(crate) fn accept(
+    mut reply: ureq::http::Response<ureq::Body>,
+    target: &Target<'_>,
+    limit: u64,
+    cooldown: &mut Option<Duration>,
+) -> Result<Vec<u8>, Error> {
     let status = reply.status().as_u16();
     if status != 200 {
         *cooldown = retry_after(status, reply.headers());
@@ -295,7 +343,10 @@ pub(crate) fn agent(timeout: Duration) -> ureq::Agent {
         .into()
 }
 
-fn read_body(reply: &mut ureq::http::Response<ureq::Body>, limit: u64) -> Result<Vec<u8>, Error> {
+pub(crate) fn read_body(
+    reply: &mut ureq::http::Response<ureq::Body>,
+    limit: u64,
+) -> Result<Vec<u8>, Error> {
     let mut bytes = Vec::new();
     reply
         .body_mut()

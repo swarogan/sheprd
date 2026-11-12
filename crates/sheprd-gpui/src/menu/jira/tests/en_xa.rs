@@ -33,6 +33,7 @@ fn the_jira_page_shows_only_messages_under_en_xa() {
             let account = Account {
                 account_id: "5b10ac8d".into(),
                 base_url: "https://acme.atlassian.net".into(),
+                cloud_id: None,
                 email: Some("ada@work.example".into()),
                 host: "acme.atlassian.net".into(),
                 name: "Ada Lovelace".into(),

@@ -8,6 +8,7 @@ fn account(email: Option<&str>) -> Account {
     Account {
         account_id: "5b10ac8d".into(),
         base_url: "https://acme.atlassian.net".into(),
+        cloud_id: None,
         email: email.map(str::to_owned),
         host: "acme.atlassian.net".into(),
         name: "Ada Lovelace".into(),

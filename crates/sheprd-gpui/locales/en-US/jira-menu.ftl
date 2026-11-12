@@ -3,9 +3,10 @@
 # a site's hostname, such as acme.atlassian.net; $name the name Jira shows for
 # an account, $email its Atlassian email, $user the name of the account a save
 # signed in as. https and id.atlassian.com are an address scheme and a website:
-# keep them as they are.
+# keep them as they are. So are read:jira-work and read:jira-user, the names of
+# the scopes an API token with scopes needs.
 
-jira-menu-help = Type your Jira Cloud site's address, your Atlassian account email, and an API token to list the issues assigned to you that are not done. Sites must use https.
+jira-menu-help = Type your Jira Cloud site's address, your Atlassian account email, and an API token to list the issues assigned to you that are not done. Sites must use https. A token with scopes needs the read:jira-work and read:jira-user scopes.
 jira-menu-no-store = This window does not keep Jira sign-ins.
 jira-menu-address = Site address
 jira-menu-email = Email

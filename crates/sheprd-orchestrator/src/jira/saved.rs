@@ -1,7 +1,8 @@
 //! Jira Cloud sites and the sign-ins pasted in the account menu: the site
 //! address typed, the Atlassian account email, and its API token, one line
 //! per site. They are kept together in one credential-store record of
-//! `hostname<TAB>base_url<TAB>email<TAB>token` lines, in the desktop keyring,
+//! `hostname<TAB>base_url<TAB>email<TAB>token` lines, with the site's cloud id
+//! as a fifth field when its token has scopes, in the desktop keyring,
 //! or the private `jira-credentials` file when `[jira] allow_plaintext_credentials`
 //! opts in. Every read and write blocks on the store, so callers run on a worker.
 
@@ -20,13 +21,16 @@ pub const MAX_SITES: usize = 32;
 /// A DNS name is at most 253 characters.
 const HOST_LIMIT: usize = 253;
 /// The longest address kept, scheme and sub-path included.
-const ADDRESS_LIMIT: usize = 512;
+const ADDRESS_LIMIT: usize = 448;
 /// An email address is at most 254 characters.
 pub const EMAIL_LIMIT: usize = 254;
 /// The longest token kept; Atlassian's are a few hundred characters.
 pub const TOKEN_LIMIT: usize = 1024;
+/// The longest cloud id kept; Atlassian's are 36-character UUIDs.
+const CLOUD_ID_LIMIT: usize = 64;
+// Four tabs and a newline separate the five fields of a line.
 const _: () = assert!(
-    MAX_SITES * (HOST_LIMIT + ADDRESS_LIMIT + EMAIL_LIMIT + TOKEN_LIMIT + 4)
+    MAX_SITES * (HOST_LIMIT + ADDRESS_LIMIT + EMAIL_LIMIT + TOKEN_LIMIT + CLOUD_ID_LIMIT + 5)
         <= sheprd_credentials::LIMIT
 );
 
@@ -45,6 +49,9 @@ static RECORD: Mutex<()> = Mutex::new(());
 /// The sign-in a site takes: an Atlassian account's email and an API token.
 #[derive(Clone, Debug)]
 pub struct Login {
+    /// The site's cloud id, when its token has scopes and goes through
+    /// Atlassian's gateway.
+    pub cloud_id: Option<String>,
     pub email: String,
     pub token: SecretString,
 }
@@ -53,6 +60,7 @@ pub struct Login {
 #[derive(Clone, Debug)]
 pub struct Site {
     base_url: String,
+    cloud_id: Option<String>,
     email: String,
     token: SecretString,
 }
@@ -62,6 +70,20 @@ impl Site {
     /// with no trailing slash.
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    /// The site's cloud id, kept for a token with scopes.
+    pub fn cloud_id(&self) -> Option<&str> {
+        self.cloud_id.as_deref()
+    }
+
+    /// Where API calls go: the gateway's address for the site when a cloud
+    /// id is kept, otherwise the site's own.
+    pub fn api_base(&self) -> String {
+        match &self.cloud_id {
+            Some(id) => super::gateway_base(super::GATEWAY, id),
+            None => self.base_url.clone(),
+        }
     }
 
     pub fn email(&self) -> &str {
@@ -97,6 +119,10 @@ impl Saved {
             Some(login) => {
                 let email = checked_email(&login.email)?;
                 let token = checked_token(&login.token)?;
+                let cloud_id = match login.cloud_id.as_deref() {
+                    Some(id) => Some(checked_cloud_id(id).ok_or(Error::Record)?),
+                    None => None,
+                };
                 if !self.0.contains_key(&host) && self.0.len() >= MAX_SITES {
                     return Err(Error::TooManySites);
                 }
@@ -104,6 +130,7 @@ impl Saved {
                     host,
                     Site {
                         base_url,
+                        cloud_id,
                         email,
                         token,
                     },
@@ -117,8 +144,8 @@ impl Saved {
     }
 
     /// Reads a record, refusing one that is not lines of a hostname, the
-    /// normalized address it belongs to, an email, and a valid token, or that
-    /// names more than [`MAX_SITES`].
+    /// normalized address it belongs to, an email, a valid token, and
+    /// optionally a valid cloud id, or that names more than [`MAX_SITES`].
     pub fn parse(record: &SecretString) -> Result<Self, Error> {
         let mut saved = BTreeMap::new();
         for line in record
@@ -127,8 +154,16 @@ impl Saved {
             .filter(|line| !line.is_empty())
         {
             let fields: Vec<&str> = line.split('\t').collect();
-            let [host, base_url, email, token] = fields[..] else {
-                return Err(Error::Record);
+            let (host, base_url, email, token, cloud_id) = match fields[..] {
+                [host, base_url, email, token] => (host, base_url, email, token, None),
+                [host, base_url, email, token, cloud_id] => {
+                    (host, base_url, email, token, Some(cloud_id))
+                }
+                _ => return Err(Error::Record),
+            };
+            let cloud_id = match cloud_id {
+                Some(id) => Some(checked_cloud_id(id).ok_or(Error::Record)?),
+                None => None,
             };
             let address = normalize_address(base_url)
                 .filter(|(normal_host, normal)| normal_host == host && normal == base_url);
@@ -141,6 +176,7 @@ impl Saved {
                 host.to_owned(),
                 Site {
                     base_url: base_url.to_owned(),
+                    cloud_id,
                     email,
                     token,
                 },
@@ -161,6 +197,10 @@ impl Saved {
                 text.push('\t');
             }
             text.push_str(site.token.expose_secret());
+            if let Some(id) = &site.cloud_id {
+                text.push('\t');
+                text.push_str(id);
+            }
             text.push('\n');
         }
         SecretString::from(text.as_str())
@@ -243,6 +283,17 @@ pub fn checked_token(token: &SecretString) -> Result<SecretString, Error> {
         return Err(Error::TokenLength { limit: TOKEN_LIMIT });
     }
     valid(token).ok_or(Error::Token)
+}
+
+/// A cloud id that may go into a request path: non-empty, at most
+/// [`CLOUD_ID_LIMIT`] characters, and only ASCII hex digits and `-`.
+pub(crate) fn checked_cloud_id(id: &str) -> Option<String> {
+    let shaped = !id.is_empty()
+        && id.len() <= CLOUD_ID_LIMIT
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b'-');
+    shaped.then(|| id.to_owned())
 }
 
 /// A token is a run of visible ASCII; anything else would corrupt the header

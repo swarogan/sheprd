@@ -295,7 +295,12 @@ impl SheprdWindow {
         // as a mistyped address, does not lose it.
         self.run_jira(cx, Some(token.clone()), move || {
             let checked = account::check(&address, &email, &token)?;
-            saved::save(store, &checked.base_url, Some(Login { email, token }))?;
+            let login = Login {
+                cloud_id: checked.cloud_id.clone(),
+                email,
+                token,
+            };
+            saved::save(store, &checked.base_url, Some(login))?;
             Ok(fl!(
                 "jira-menu-saved",
                 host = checked.host.as_str(),

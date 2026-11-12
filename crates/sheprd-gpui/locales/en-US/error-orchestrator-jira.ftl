@@ -1,10 +1,11 @@
 # Why a Jira Cloud site's issues could not be read, or its address, email, and
 # API token could not be saved.
 # [jira] allow_plaintext_credentials = true is a setting: keep it as it is.
+# read:jira-work and read:jira-user are Atlassian scope names: keep them as they are.
 
 # $address is what was typed, quoted.
 error-orchestrator-jira-address = { $address } is not an https address of a Jira Cloud site, such as https://acme.atlassian.net
-error-orchestrator-jira-authentication = Jira rejected the email or API token; replace them from the account menu with an Atlassian API token
+error-orchestrator-jira-authentication = Jira rejected the email or API token; replace them from the account menu with an Atlassian API token. A token with scopes needs the read:jira-work and read:jira-user scopes
 error-orchestrator-jira-directory = The folder for saved Jira API tokens could not be found: { $error }
 error-orchestrator-jira-email = The Atlassian account email must be an address such as you@example.com
 error-orchestrator-jira-email-length = An Atlassian account email is at most { $limit } characters

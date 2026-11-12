@@ -394,3 +394,31 @@ fn only_a_missing_or_refused_sign_in_offers_the_sign_in_page() {
         assert!(!error.needs_sign_in() && !error.needs_user(), "{error}");
     }
 }
+
+#[test]
+fn a_site_with_a_cloud_id_is_read_through_the_gateway_but_linked_at_its_own_address() {
+    let record = "acme.atlassian.net\thttps://acme.atlassian.net\tme@example.com\ttok\t0a1b2c3d-4e5f-6789-abcd-ef0123456789\n";
+    let saved = jira::saved::Saved::parse(&secrecy::SecretString::from(record)).unwrap();
+    let site = saved.get("acme.atlassian.net").unwrap();
+    let (mut fetch, asked) = replies(vec![page(vec![issue("PROJ-123")], None, true)]);
+    let listing = jira::list_via(
+        &source(),
+        site.base_url(),
+        &site.api_base(),
+        None,
+        &mut fetch,
+    )
+    .unwrap();
+    let gateway = format!(
+        "{}/ex/jira/0a1b2c3d-4e5f-6789-abcd-ef0123456789/rest/api/3",
+        jira::GATEWAY
+    );
+    let asked = asked.borrow();
+    assert_eq!(asked[0].0, format!("{gateway}/search/jql"));
+    assert_eq!(asked[1].0, format!("{gateway}/myself"));
+    assert_eq!(
+        listing.items[0].url.as_deref(),
+        Some("https://acme.atlassian.net/browse/PROJ-123")
+    );
+    assert_eq!(listing.items[0].key.source.host, "acme.atlassian.net");
+}

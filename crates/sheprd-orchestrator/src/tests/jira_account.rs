@@ -75,8 +75,24 @@ fn token() -> SecretString {
     SecretString::from("s3cret")
 }
 
+/// The one fake server stands in for the site and the gateway alike.
 fn check(base: &str, email: &str) -> Result<account::Account, JiraError> {
-    account::check_at("127.0.0.1".into(), base.to_owned(), email, &token())
+    account::check_at("127.0.0.1".into(), base.to_owned(), base, email, &token())
+}
+
+const CLOUD_ID: &str = "0a1b2c3d-4e5f-6789-abcd-ef0123456789";
+const BASIC: &str = "Basic bWVAZXhhbXBsZS5jb206czNjcmV0";
+
+fn me() -> Value {
+    json!({ "accountId": "5b10ac8d82e05b22cc7d4ef5", "displayName": "Ada Lovelace" })
+}
+
+fn refused() -> Answer {
+    (401, Vec::new(), "{}".to_owned())
+}
+
+fn tenant(body: Value) -> Answer {
+    ok(body)
 }
 
 #[test]
@@ -146,7 +162,6 @@ fn the_email_stands_in_for_a_missing_name_and_an_answer_without_an_account_is_a_
 #[test]
 fn a_refusal_is_mapped_by_its_status() {
     for (status, expect) in [
-        (401, "Authentication"),
         (403, "Authentication"),
         (404, "NotFound"),
         (429, "RateLimit"),
@@ -310,6 +325,7 @@ fn a_bad_address_email_or_token_is_refused_before_any_request() {
         account::check_at(
             "127.0.0.1".into(),
             "http://127.0.0.1:1".into(),
+            "http://127.0.0.1:1",
             "me@example.com",
             &spaced
         ),
@@ -319,4 +335,133 @@ fn a_bad_address_email_or_token_is_refused_before_any_request() {
         check("http://127.0.0.1:1", "me@example.com"),
         Err(JiraError::Network { .. })
     ));
+}
+
+#[test]
+fn a_classic_token_is_accepted_at_the_site_with_no_lookup_and_no_cloud_id() {
+    let (base, server) = serve(vec![ok(me())]);
+    let found = check(&base, "me@example.com").unwrap();
+    assert_eq!(found.cloud_id, None);
+    assert_eq!(server.join().unwrap().len(), 1);
+}
+
+#[test]
+fn a_token_with_scopes_is_accepted_through_the_gateway_with_its_cloud_id() {
+    let (base, server) = serve(vec![
+        refused(),
+        tenant(json!({ "cloudId": CLOUD_ID })),
+        ok(me()),
+    ]);
+    let found = check(&base, "me@example.com").unwrap();
+    assert_eq!(found.cloud_id.as_deref(), Some(CLOUD_ID));
+    assert_eq!(found.name, "Ada Lovelace");
+    assert_eq!(found.base_url, base);
+    let requests = server.join().unwrap();
+    assert!(
+        requests[0].starts_with("GET /rest/api/3/myself "),
+        "{requests:?}"
+    );
+    assert_eq!(
+        header(&requests[0], "authorization").as_deref(),
+        Some(BASIC)
+    );
+    assert!(
+        requests[1].starts_with("GET /_edge/tenant_info "),
+        "{requests:?}"
+    );
+    assert_eq!(header(&requests[1], "authorization"), None);
+    let gateway = format!("GET /ex/jira/{CLOUD_ID}/rest/api/3/myself ");
+    assert!(requests[2].starts_with(&gateway), "{requests:?}");
+    assert_eq!(
+        header(&requests[2], "authorization").as_deref(),
+        Some(BASIC)
+    );
+}
+
+#[test]
+fn a_gateway_that_refuses_too_is_the_sites_refusal() {
+    let (base, server) = serve(vec![
+        refused(),
+        tenant(json!({ "cloudId": CLOUD_ID })),
+        refused(),
+    ]);
+    assert!(matches!(
+        check(&base, "me@example.com"),
+        Err(JiraError::Authentication)
+    ));
+    assert_eq!(server.join().unwrap().len(), 3);
+}
+
+#[test]
+fn an_unusable_tenant_answer_leaves_the_sites_refusal_and_no_gateway_request() {
+    let long = "a".repeat(65);
+    let bodies = [
+        (404, "{}".to_owned()),
+        (200, "<html>not json</html>".to_owned()),
+        (200, "{}".to_owned()),
+        (200, json!({ "cloudId": "" }).to_string()),
+        (200, json!({ "cloudId": "../etc" }).to_string()),
+        (200, json!({ "cloudId": "ab/cd" }).to_string()),
+        (200, json!({ "cloudId": "0a1b?x=1" }).to_string()),
+        (200, json!({ "cloudId": "not-hex-zz" }).to_string()),
+        (200, json!({ "cloudId": long }).to_string()),
+        (200, json!({ "cloudId": 7 }).to_string()),
+        (200, "x".repeat(8192)),
+    ];
+    for (status, body) in bodies {
+        // A third request would find no answer: the check would not end as a refusal.
+        let (base, server) = serve(vec![refused(), (status, Vec::new(), body.clone())]);
+        assert!(
+            matches!(
+                check(&base, "me@example.com"),
+                Err(JiraError::Authentication)
+            ),
+            "{status} {body:.40}"
+        );
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[1].starts_with("GET /_edge/tenant_info "));
+    }
+}
+
+#[test]
+fn a_redirecting_tenant_lookup_is_not_followed() {
+    let redirect = (
+        302,
+        vec![("Location", "http://127.0.0.1:1/")],
+        String::new(),
+    );
+    let (base, server) = serve(vec![refused(), redirect]);
+    assert!(matches!(
+        check(&base, "me@example.com"),
+        Err(JiraError::Authentication)
+    ));
+    assert_eq!(server.join().unwrap().len(), 2);
+}
+
+#[test]
+fn only_a_401_from_the_site_goes_on_to_the_gateway() {
+    for status in [403, 404, 429, 500] {
+        let (base, server) = serve(vec![(status, Vec::new(), "{}".to_owned())]);
+        assert!(check(&base, "me@example.com").is_err(), "{status}");
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 1, "{status}");
+    }
+}
+
+#[test]
+fn a_gateway_that_cannot_be_reached_is_a_network_failure() {
+    let (base, server) = serve(vec![refused(), tenant(json!({ "cloudId": CLOUD_ID }))]);
+    let result = account::check_at(
+        "127.0.0.1".into(),
+        base,
+        "http://127.0.0.1:1",
+        "me@example.com",
+        &token(),
+    );
+    assert!(
+        matches!(&result, Err(JiraError::Network { origin, .. }) if origin == "http://127.0.0.1:1"),
+        "{result:?}"
+    );
+    server.join().unwrap();
 }

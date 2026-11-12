@@ -8,7 +8,7 @@ pub enum Error {
     )]
     Address(String),
     #[error(
-        "Jira rejected the email or API token; replace them from the account menu with an Atlassian API token"
+        "Jira rejected the email or API token; replace them from the account menu with an Atlassian API token. A token with scopes needs the read:jira-work and read:jira-user scopes"
     )]
     Authentication,
     #[error("The folder for saved Jira API tokens could not be found: {0}")]

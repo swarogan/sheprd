@@ -17,6 +17,7 @@ fn secret(text: &str) -> SecretString {
 
 fn login(email: &str, token: &str) -> Option<Login> {
     Some(Login {
+        cloud_id: None,
         email: email.to_owned(),
         token: secret(token),
     })
@@ -356,4 +357,94 @@ fn no_credential_store_says_how_to_opt_in_for_jira() {
         allow_plaintext_credentials: true,
     };
     assert_eq!(opted.store(), Store::for_policy(true));
+}
+
+const CLOUD_ID: &str = "0a1b2c3d-4e5f-6789-abcd-ef0123456789";
+
+#[test]
+fn a_cloud_id_is_kept_as_a_fifth_field_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    let scoped = Some(Login {
+        cloud_id: Some(CLOUD_ID.to_owned()),
+        email: "me@example.com".to_owned(),
+        token: secret("tok"),
+    });
+    save_in(Store::File, path, "acme.atlassian.net", scoped).unwrap();
+    save_in(
+        Store::File,
+        path,
+        "example.com",
+        login("you@example.com", "tok2"),
+    )
+    .unwrap();
+    let saved = read_in(Store::File, path).unwrap();
+    let site = saved.get("acme.atlassian.net").unwrap();
+    assert_eq!(site.cloud_id(), Some(CLOUD_ID));
+    assert_eq!(site.base_url(), "https://acme.atlassian.net");
+    assert_eq!(
+        site.api_base(),
+        format!("{}/ex/jira/{CLOUD_ID}", jira::GATEWAY)
+    );
+    let classic = saved.get("example.com").unwrap();
+    assert_eq!(classic.cloud_id(), None);
+    assert_eq!(classic.api_base(), "https://example.com");
+}
+
+#[test]
+fn a_site_without_a_cloud_id_is_written_as_four_fields_and_four_still_parse() {
+    let dir = tempfile::tempdir().unwrap();
+    save_in(
+        Store::File,
+        dir.path(),
+        "acme.atlassian.net",
+        login("me@example.com", "tok"),
+    )
+    .unwrap();
+    let file = std::fs::read_dir(dir.path())
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    let text = std::fs::read_to_string(file.path()).unwrap();
+    assert_eq!(
+        text,
+        "acme.atlassian.net\thttps://acme.atlassian.net\tme@example.com\ttok\n"
+    );
+    let parsed = Saved::parse(&secret(&text)).unwrap();
+    assert_eq!(parsed.get("acme.atlassian.net").unwrap().cloud_id(), None);
+}
+
+#[test]
+fn a_five_field_line_keeps_its_id_and_an_invalid_one_refuses_the_record() {
+    let line =
+        |id: &str| format!("acme.example\thttps://acme.example\tme@example.com\ttok\t{id}\n");
+    let parsed = Saved::parse(&secret(&line(CLOUD_ID))).unwrap();
+    assert_eq!(
+        parsed.get("acme.example").unwrap().cloud_id(),
+        Some(CLOUD_ID)
+    );
+    let long = "a".repeat(65);
+    for bad in ["", "a/b", "..", "zz", "ab cd", long.as_str()] {
+        assert!(
+            matches!(Saved::parse(&secret(&line(bad))), Err(jira::Error::Record)),
+            "{bad:?}"
+        );
+    }
+    let six = "acme.example\thttps://acme.example\tme@example.com\ttok\tab\tcd\n";
+    assert!(matches!(
+        Saved::parse(&secret(six)),
+        Err(jira::Error::Record)
+    ));
+    // A bad id is refused on the way in as well.
+    let mut saved = Saved::default();
+    let bad = Some(Login {
+        cloud_id: Some("a/b".to_owned()),
+        email: "me@example.com".to_owned(),
+        token: secret("tok"),
+    });
+    assert!(matches!(
+        saved.set("acme.example", bad),
+        Err(jira::Error::Record)
+    ));
 }
