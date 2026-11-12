@@ -13,10 +13,20 @@ pub enum Error {
     Authentication,
     #[error("The folder for saved Jira API tokens could not be found: {0}")]
     Directory(#[source] sheprd_client::local_path::PathError),
+    #[error("Write a comment before posting it")]
+    Comment,
+    #[error("A comment is at most {limit} bytes")]
+    CommentLength { limit: usize },
     #[error("The Atlassian account email must be an address such as you@example.com")]
     Email,
     #[error("An Atlassian account email is at most {limit} characters")]
     EmailLength { limit: usize },
+    #[error(
+        "Jira refused the change; a token with scopes needs the write:jira-work scope, and your account needs permission on the issue"
+    )]
+    Forbidden,
+    #[error("That is not the key of a Jira issue")]
+    Issue,
     #[error("Jira's answer is not the expected JSON: {0}")]
     Json(#[source] serde_json::Error),
     #[error("Jira could not be reached at {origin}: {source}")]
@@ -55,6 +65,8 @@ pub enum Error {
     Status(u16),
     #[error("The Jira API token could not be read or saved: {0}")]
     Store(#[source] sheprd_credentials::Error),
+    #[error("That is not the number of a Jira transition")]
+    Transition,
     #[error("The Jira API token is not one an HTTP header can carry")]
     Token,
     #[error("A Jira API token is at most {limit} characters; paste the token Atlassian showed")]

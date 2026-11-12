@@ -297,7 +297,11 @@ impl RemoteWorker {
                     },
                 ),
                 // Nothing here has a GitHub pull request, agents, or actions.
-                Ok(Command::Acted { .. } | Command::LoadPullRequest(_)) => {}
+                Ok(
+                    Command::Acted { .. }
+                    | Command::LoadPullRequest(_)
+                    | Command::LoadJiraTransitions { .. },
+                ) => {}
                 Ok(Command::LoadAgents { .. }) => {}
                 Err(RecvTimeoutError::Timeout) if Instant::now() >= next_sync => {
                     if self.retry_until.is_none_or(|until| Instant::now() >= until) {

@@ -12,11 +12,11 @@ use std::{
 };
 
 /// A reply: status, extra headers, body.
-type Answer = (u16, Vec<(&'static str, &'static str)>, String);
+pub(super) type Answer = (u16, Vec<(&'static str, &'static str)>, String);
 
 /// Answers each connection with the next of `answers`, returning each
 /// request as read: its head with the headers, a blank line, and its body.
-fn serve(answers: Vec<Answer>) -> (String, std::thread::JoinHandle<Vec<String>>) {
+pub(super) fn serve(answers: Vec<Answer>) -> (String, std::thread::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = std::thread::spawn(move || {
@@ -59,7 +59,7 @@ fn serve(answers: Vec<Answer>) -> (String, std::thread::JoinHandle<Vec<String>>)
 }
 
 /// The value of header `name` in a request as `serve` returns it.
-fn header(request: &str, name: &str) -> Option<String> {
+pub(super) fn header(request: &str, name: &str) -> Option<String> {
     request.lines().find_map(|line| {
         let (key, value) = line.split_once(':')?;
         key.eq_ignore_ascii_case(name)
@@ -67,11 +67,11 @@ fn header(request: &str, name: &str) -> Option<String> {
     })
 }
 
-fn ok(body: Value) -> Answer {
+pub(super) fn ok(body: Value) -> Answer {
     (200, Vec::new(), body.to_string())
 }
 
-fn token() -> SecretString {
+pub(super) fn token() -> SecretString {
     SecretString::from("s3cret")
 }
 
@@ -80,7 +80,7 @@ fn check(base: &str, email: &str) -> Result<account::Account, JiraError> {
     account::check_at("127.0.0.1".into(), base.to_owned(), base, email, &token())
 }
 
-const CLOUD_ID: &str = "0a1b2c3d-4e5f-6789-abcd-ef0123456789";
+pub(super) const CLOUD_ID: &str = "0a1b2c3d-4e5f-6789-abcd-ef0123456789";
 const BASIC: &str = "Basic bWVAZXhhbXBsZS5jb206czNjcmV0";
 
 fn me() -> Value {

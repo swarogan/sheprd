@@ -43,6 +43,11 @@ pub(super) struct Myself {
 }
 
 impl Myself {
+    /// The account's id, if Jira gave one.
+    pub(super) fn account_id(self) -> Option<String> {
+        self.account_id
+    }
+
     /// The name Jira shows, if it gave one.
     pub(super) fn name(self) -> Option<String> {
         self.display_name.filter(|name| !name.trim().is_empty())

@@ -45,6 +45,7 @@ mod jira_dispatch;
 // The private credential file these save to is Unix-only.
 #[cfg(unix)]
 mod jira_saved;
+mod jira_write;
 mod keys;
 mod line_endings;
 mod location;

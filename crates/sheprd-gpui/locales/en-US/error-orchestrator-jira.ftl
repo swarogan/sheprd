@@ -1,7 +1,7 @@
 # Why a Jira Cloud site's issues could not be read, or its address, email, and
 # API token could not be saved.
 # [jira] allow_plaintext_credentials = true is a setting: keep it as it is.
-# read:jira-work and read:jira-user are Atlassian scope names: keep them as they are.
+# read:jira-work, read:jira-user, and write:jira-work are Atlassian scope names: keep them as they are.
 
 # $address is what was typed, quoted.
 error-orchestrator-jira-address = { $address } is not an https address of a Jira Cloud site, such as https://acme.atlassian.net
@@ -26,3 +26,8 @@ error-orchestrator-jira-store = The Jira API token could not be read or saved: {
 error-orchestrator-jira-token = The Jira API token is not one an HTTP header can carry
 error-orchestrator-jira-token-length = A Jira API token is at most { $limit } characters; paste the token Atlassian showed
 error-orchestrator-jira-too-many-sites = Jira sites are saved for at most { $limit } sites
+error-orchestrator-jira-comment = Write a comment before posting it
+error-orchestrator-jira-comment-length = A comment is at most { $limit } bytes
+error-orchestrator-jira-forbidden = Jira refused the change; a token with scopes needs the write:jira-work scope, and your account needs permission on the issue
+error-orchestrator-jira-issue = That is not the key of a Jira issue
+error-orchestrator-jira-transition = That is not the number of a Jira transition

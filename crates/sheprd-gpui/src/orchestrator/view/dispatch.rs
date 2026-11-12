@@ -88,6 +88,9 @@ pub(crate) enum Confirm {
 pub(super) fn done(done: Done) -> String {
     match done {
         Done::BeadDeleted => fl!("orchestrator-done-bead-deleted"),
+        Done::JiraAssigned => fl!("jira-actions-done-assigned"),
+        Done::JiraCommented => fl!("jira-actions-done-commented"),
+        Done::JiraTransitioned => fl!("jira-actions-done-transitioned"),
         Done::Removed => fl!("orchestrator-done-removed"),
         Done::Sent => fl!("orchestrator-done-sent"),
         Done::Started => fl!("orchestrator-done-started"),
@@ -375,7 +378,9 @@ impl OrchestratorView {
                 request: Box::new(request),
                 endpoint,
             }),
-            None => self.act(Action::Dispatch(Box::new(request))),
+            None => {
+                self.act(Action::Dispatch(Box::new(request)));
+            }
         }
         self.dialog = None;
         window.focus(&self.focus, cx);
@@ -383,13 +388,14 @@ impl OrchestratorView {
     }
 
     /// Hands `action` to the worker, or says why it could not take it.
-    pub(super) fn act(&mut self, action: Action) {
+    pub(super) fn act(&mut self, action: Action) -> bool {
         let taken = self.service().is_some_and(|service| service.act(action));
         if !taken {
             self.notice = Some(Notice {
                 outcome: Err(std::sync::Arc::new(crate::orchestrator::Error::Busy)),
             });
         }
+        taken
     }
 
     /// Sends the message field's text to the newest run of the open item.

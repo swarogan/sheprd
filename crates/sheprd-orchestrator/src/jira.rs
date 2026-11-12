@@ -6,15 +6,18 @@
 //! token for in the account menu (`saved`). Nothing in a repository names a
 //! Jira project: every repository has one source per saved site, keyed by the
 //! site's hostname and the repository `assigned`, listing the issues
-//! assigned to the token's owner. Nothing is ever written to Jira.
+//! assigned to the token's owner. Listing never writes; `write` changes one
+//! issue from its page.
 
 pub mod account;
 pub mod adf;
 mod error;
 pub mod issue;
 pub mod saved;
+pub mod write;
 
 pub use error::Error;
+pub use write::{Change, Lookup, Transition};
 
 /// The `[jira]` table.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]

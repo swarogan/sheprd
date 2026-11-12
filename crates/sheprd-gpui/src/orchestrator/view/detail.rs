@@ -49,6 +49,9 @@ impl OrchestratorView {
                     el.child(self.render_status_box(&item, &runs, &item_runs, cx))
                 })
                 .child(self.render_meta(&item))
+                .when(item.key.source.provider == Provider::Jira, |el| {
+                    el.child(self.render_jira_actions(&item, cx))
+                })
                 .when(item.key.source.provider == Provider::Beads, |el| {
                     el.child(self.render_task_facts(&item, cx))
                 })

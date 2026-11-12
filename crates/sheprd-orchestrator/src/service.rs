@@ -37,6 +37,7 @@ mod gitea_source;
 mod github_source;
 mod gitlab_source;
 mod jira_source;
+mod lookups;
 pub mod remote;
 mod schedule;
 mod sources;
@@ -118,6 +119,8 @@ enum Command {
     Acted { resync: bool },
     /// Look up a pull request's status, checks, and merge state by number.
     LoadPullRequest(u64),
+    /// Read the transitions Jira offers an issue of this source.
+    LoadJiraTransitions { source: SourceKey, issue: String },
     LoadAgents {
         endpoint: Option<String>,
         target: ConnectTarget,
@@ -205,6 +208,8 @@ pub struct Snapshot {
     pub installed_error: Option<Arc<Error>>,
     /// The newest pull request lookup.
     pub pull_request: Option<PullRequestLookup>,
+    /// The newest Jira issue's transitions lookup.
+    pub jira_transitions: Option<jira::Lookup>,
     /// The repository's branches named for items, as each sync read them.
     pub branches: Arc<Vec<String>>,
     /// Each open pull request's review and checks, by repository and number,
@@ -298,6 +303,13 @@ impl Service {
     /// Asks for pull request `number`'s status; a full queue drops it.
     pub fn load_pull_request(&self, number: u64) {
         let _ = self.commands.try_send(Command::LoadPullRequest(number));
+    }
+
+    /// Asks for the transitions Jira offers `issue`; a full queue drops it.
+    pub fn load_jira_transitions(&self, source: SourceKey, issue: String) {
+        let _ = self
+            .commands
+            .try_send(Command::LoadJiraTransitions { source, issue });
     }
 
     /// Outcomes of finished actions since the last call.
@@ -431,6 +443,9 @@ impl Worker {
                 }
                 Ok(Command::Act(action)) => self.act(action),
                 Ok(Command::LoadPullRequest(number)) => self.load_pull_request(number),
+                Ok(Command::LoadJiraTransitions { source, issue }) => {
+                    self.load_jira_transitions(&source, &issue);
+                }
                 Ok(Command::LoadAgents { endpoint, target }) => {
                     self.snapshot.installed_endpoint = endpoint;
                     self.snapshot.installed = None;
@@ -511,13 +526,18 @@ impl Worker {
             return;
         }
         let resync = action.changes_items();
+        let sites = match action {
+            Action::Jira(_) => self.jira_record(),
+            _ => Arc::default(),
+        };
         let (notices, commands, actions) = (
             self.notices.clone(),
             self.commands.clone(),
             self.actions.clone(),
         );
         let spawned = spawn_action(move |cancelled| {
-            let outcome = super::actions::perform(&site, &action, cancelled).map_err(Arc::new);
+            let outcome =
+                super::actions::perform_signed(&site, &action, &sites, cancelled).map_err(Arc::new);
             push(&notices, Notice { outcome });
             actions.fetch_sub(1, Ordering::SeqCst);
             let _ = commands.try_send(Command::Acted { resync });
@@ -526,35 +546,6 @@ impl Worker {
             self.actions.fetch_sub(1, Ordering::SeqCst);
             self.notice(Err(Arc::new(Error::Worker(error))));
         }
-    }
-
-    fn load_pull_request(&mut self, number: u64) {
-        let remote = self
-            .snapshot
-            .repo
-            .as_ref()
-            .and_then(|info| info.remote.as_ref())
-            .filter(|remote| remote.source.provider == Provider::Github);
-        let (Some(remote), Some(token)) = (remote, self.request.token.clone()) else {
-            return;
-        };
-        let Some((owner, repo)) = remote.source.repository.split_once('/') else {
-            return;
-        };
-        let cancelled = self.cancelled.clone();
-        let result = sheprd_github::pull_request::by_number(
-            owner,
-            repo,
-            number,
-            token.for_owner(owner),
-            || cancelled.load(Ordering::Relaxed),
-            &mut self.cooldown,
-        );
-        self.snapshot.pull_request = Some(PullRequestLookup {
-            number,
-            result: Arc::new(result),
-        });
-        self.publish();
     }
 
     fn notice(&self, outcome: std::result::Result<crate::actions::Done, Arc<Error>>) {

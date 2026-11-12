@@ -7,6 +7,7 @@ use super::{
     Error, HerdrSession, ItemKey, Owner, Provider, Result, Run, RunState, SourceKey, Store,
     Terminals, beads,
     error::script,
+    jira,
     model::{Backend, Pane, Workspace},
 };
 use chrono::Utc;
@@ -100,13 +101,15 @@ pub enum Action {
         source: SourceKey,
         id: String,
     },
+    /// Change a Jira issue from its page.
+    Jira(jira::Change),
 }
 
 impl Action {
     /// Whether it changes a source's items, which the next sync then shows.
     pub(crate) fn changes_items(&self) -> bool {
         match self {
-            Self::DeleteBead { .. } => true,
+            Self::DeleteBead { .. } | Self::Jira(_) => true,
             Self::Dispatch(request) => request.bead().is_some(),
             Self::Stop { .. } | Self::Send { .. } | Self::Remove { .. } => false,
         }
@@ -120,6 +123,9 @@ impl Action {
             Self::Send { .. } => Done::Sent,
             Self::Remove { .. } => Done::Removed,
             Self::DeleteBead { .. } => Done::BeadDeleted,
+            Self::Jira(jira::Change::Transition { .. }) => Done::JiraTransitioned,
+            Self::Jira(jira::Change::Comment { .. }) => Done::JiraCommented,
+            Self::Jira(jira::Change::Assign { .. }) => Done::JiraAssigned,
         }
     }
 }
@@ -129,6 +135,9 @@ impl Action {
 pub enum Done {
     // keep-sorted start
     BeadDeleted,
+    JiraAssigned,
+    JiraCommented,
+    JiraTransitioned,
     Removed,
     Sent,
     Started,
@@ -138,7 +147,24 @@ pub enum Done {
 
 /// Runs `action` to completion; what it did, or why it failed.
 pub fn perform(site: &Site, action: &Action, cancelled: &AtomicBool) -> Result<Done> {
+    perform_signed(site, action, &jira::saved::Saved::default(), cancelled)
+}
+
+/// [`perform`] with the Jira sites saved in the account menu, which a Jira
+/// change signs in with.
+pub fn perform_signed(
+    site: &Site,
+    action: &Action,
+    sites: &jira::saved::Saved,
+    cancelled: &AtomicBool,
+) -> Result<Done> {
     match action {
+        Action::Jira(change) => {
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
+            jira::write::perform(sites.get(&change.source().host), change)?;
+        }
         Action::Dispatch(request) => dispatch(site, request, cancelled)?,
         Action::Stop { run } => {
             let (mut store, mut found, session, host) = own_run(site, run)?;

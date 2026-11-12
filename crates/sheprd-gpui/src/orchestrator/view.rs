@@ -14,6 +14,7 @@ mod detail;
 mod dispatch;
 mod hosts;
 mod inbox;
+mod jira_actions;
 mod list;
 mod listing;
 mod look;
@@ -243,6 +244,8 @@ pub(crate) struct OrchestratorView {
     /// The open pull request's conversation, comment, and merge.
     pr: crate::pr_actions::Actions,
     comment: Entity<SearchInput>,
+    /// The open Jira issue's comment field, and whether a write is under way.
+    jira: jira_actions::Controls,
     /// Conversation rows, the list drawing them, and the threads unfolded.
     conversation: conversation::Rows,
     /// Conversation authors' avatars by URL.
@@ -284,6 +287,7 @@ impl OrchestratorView {
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });
+        let jira = jira_actions::Controls::new(&look, cx);
         Self {
             repos: Vec::new(),
             skipped_repos: HashSet::new(),
@@ -324,6 +328,7 @@ impl OrchestratorView {
             message,
             pr: crate::pr_actions::Actions::default(),
             comment,
+            jira,
             conversation: conversation::Rows::default(),
             avatars: conversation::Avatars::default(),
             merge_open: false,
@@ -386,11 +391,13 @@ impl OrchestratorView {
     pub(crate) fn poll(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         let mut read = false;
+        let mut noticed = None;
         for repo in &mut self.repos {
             let Some(service) = &repo.service else {
                 continue;
             };
             if let Some(notice) = service.notices().pop() {
+                noticed = Some(notice.clone());
                 self.notice = Some(notice);
                 changed = true;
             }
@@ -399,6 +406,9 @@ impl OrchestratorView {
                 repo.snapshot = snapshot;
                 read = true;
             }
+        }
+        if let Some(notice) = noticed {
+            self.jira_noticed(&notice, cx);
         }
         if read {
             self.discard_non_projects();
@@ -535,7 +545,12 @@ impl OrchestratorView {
         {
             return;
         }
-        for input in [&self.search, &self.message, &self.comment] {
+        for input in [
+            &self.search,
+            &self.message,
+            &self.comment,
+            &self.jira.comment,
+        ] {
             input.update(cx, |input, cx| {
                 input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             });
@@ -620,6 +635,7 @@ impl OrchestratorView {
             }
         }
         self.reload_pull_request();
+        self.reload_jira_transitions();
         self.reload_conversation();
     }
 
@@ -751,6 +767,7 @@ impl OrchestratorView {
         if pull_request {
             self.reload_pull_request();
         }
+        self.reload_jira_transitions();
         self.follow_pull_request();
         cx.notify();
     }
@@ -821,6 +838,10 @@ impl OrchestratorView {
             return;
         }
         if self.dialog.is_some() {
+            return;
+        }
+        if self.jira_key(event.keystroke.key.as_str(), window, cx) {
+            cx.stop_propagation();
             return;
         }
         if self.comment.read(cx).focus.is_focused(window) {

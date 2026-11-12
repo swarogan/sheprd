@@ -14,6 +14,11 @@ impl Localize for Error {
                 address = format!("{address:?}")
             ),
             Self::Authentication => fl!("error-orchestrator-jira-authentication"),
+            Self::Comment => fl!("error-orchestrator-jira-comment"),
+            Self::CommentLength { limit } => fl!(
+                "error-orchestrator-jira-comment-length",
+                limit = limit.to_string()
+            ),
             Self::Directory(error) => fl!(
                 "error-orchestrator-jira-directory",
                 error = error.localize()
@@ -23,6 +28,8 @@ impl Localize for Error {
                 "error-orchestrator-jira-email-length",
                 limit = limit.to_string()
             ),
+            Self::Forbidden => fl!("error-orchestrator-jira-forbidden"),
+            Self::Issue => fl!("error-orchestrator-jira-issue"),
             Self::Json(error) => fl!("error-orchestrator-jira-json", error = error.to_string()),
             Self::Network { origin, source } => fl!(
                 "error-orchestrator-jira-network",
@@ -46,6 +53,7 @@ impl Localize for Error {
             Self::Size => fl!("error-orchestrator-jira-size"),
             Self::Status(status) => fl!("error-orchestrator-jira-status", status = *status),
             Self::Store(error) => fl!("error-orchestrator-jira-store", error = error.localize()),
+            Self::Transition => fl!("error-orchestrator-jira-transition"),
             Self::Token => fl!("error-orchestrator-jira-token"),
             Self::TokenLength { limit } => fl!(
                 "error-orchestrator-jira-token-length",
