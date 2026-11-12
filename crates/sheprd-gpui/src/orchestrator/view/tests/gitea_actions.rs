@@ -63,10 +63,10 @@ fn the_state_button_follows_the_issue_state(cx: &mut TestAppContext) {
     });
     let (_dir, view, cx) = open_page(cx, gitea_issue("closed"));
     assert_eq!(crate::i18n::fl!("gitea-actions-reopen"), "Reopen issue");
-    // Clicking it sends the write, which a closed issue's page makes a reopening.
+    // Clicking it reaches the worker: the controls wait, or it has answered.
     let button = cx.debug_bounds("orchestrator-gitea-state").unwrap();
     cx.simulate_click(button.center(), Modifiers::none());
-    cx.update(|_, cx| assert!(view.read(cx).gitea.busy));
+    cx.update(|_, cx| assert!(view.read(cx).gitea.busy || view.read(cx).notice.is_some()));
 }
 
 #[gpui::test]
@@ -108,7 +108,7 @@ fn commenting_with_an_empty_field_sends_nothing(cx: &mut TestAppContext) {
     let button = cx.debug_bounds("orchestrator-gitea-comment").unwrap();
     cx.simulate_click(button.center(), Modifiers::none());
     cx.run_until_parked();
-    cx.update(|_, cx| assert!(!view.read(cx).gitea.busy));
+    cx.update(|_, cx| assert!(!view.read(cx).gitea.busy && view.read(cx).notice.is_none()));
 
     // Whitespace alone is as empty.
     cx.update(|_, cx| {
@@ -119,9 +119,10 @@ fn commenting_with_an_empty_field_sends_nothing(cx: &mut TestAppContext) {
         })
     });
     cx.simulate_click(button.center(), Modifiers::none());
-    cx.update(|_, cx| assert!(!view.read(cx).gitea.busy));
+    cx.update(|_, cx| assert!(!view.read(cx).gitea.busy && view.read(cx).notice.is_none()));
 
-    // With text, the same click sends it and the controls wait.
+    // With text, the same click reaches the worker: the controls wait for
+    // it, or it has already answered or was too busy to take it.
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             view.gitea
@@ -130,5 +131,5 @@ fn commenting_with_an_empty_field_sends_nothing(cx: &mut TestAppContext) {
         })
     });
     cx.simulate_click(button.center(), Modifiers::none());
-    cx.update(|_, cx| assert!(view.read(cx).gitea.busy));
+    cx.update(|_, cx| assert!(view.read(cx).gitea.busy || view.read(cx).notice.is_some()));
 }

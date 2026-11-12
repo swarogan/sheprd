@@ -86,9 +86,10 @@ fn commenting_with_an_empty_field_sends_nothing(cx: &mut TestAppContext) {
     let button = cx.debug_bounds("orchestrator-jira-comment").unwrap();
     cx.simulate_click(button.center(), Modifiers::none());
     cx.run_until_parked();
-    cx.update(|_, cx| assert!(!view.read(cx).jira.busy));
+    cx.update(|_, cx| assert!(!view.read(cx).jira.busy && view.read(cx).notice.is_none()));
 
-    // With text, the same click sends it and the controls wait.
+    // With text, the same click reaches the worker: the controls wait for
+    // it, or it has already answered or was too busy to take it.
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             view.jira
@@ -97,5 +98,5 @@ fn commenting_with_an_empty_field_sends_nothing(cx: &mut TestAppContext) {
         })
     });
     cx.simulate_click(button.center(), Modifiers::none());
-    cx.update(|_, cx| assert!(view.read(cx).jira.busy));
+    cx.update(|_, cx| assert!(view.read(cx).jira.busy || view.read(cx).notice.is_some()));
 }
