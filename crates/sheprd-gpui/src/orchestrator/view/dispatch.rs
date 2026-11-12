@@ -88,6 +88,10 @@ pub(crate) enum Confirm {
 pub(super) fn done(done: Done) -> String {
     match done {
         Done::BeadDeleted => fl!("orchestrator-done-bead-deleted"),
+        Done::GiteaAssigned => fl!("gitea-actions-done-assigned"),
+        Done::GiteaClosed => fl!("gitea-actions-done-closed"),
+        Done::GiteaCommented => fl!("gitea-actions-done-commented"),
+        Done::GiteaReopened => fl!("gitea-actions-done-reopened"),
         Done::JiraAssigned => fl!("jira-actions-done-assigned"),
         Done::JiraCommented => fl!("jira-actions-done-commented"),
         Done::JiraTransitioned => fl!("jira-actions-done-transitioned"),

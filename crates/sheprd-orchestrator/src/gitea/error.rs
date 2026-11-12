@@ -9,8 +9,18 @@ pub enum Error {
         "Gitea rejected the token; replace it from the account menu with one that can read repositories and issues"
     )]
     Authentication,
+    #[error("Write a comment before posting it")]
+    Comment,
+    #[error("A comment is at most {limit} bytes")]
+    CommentLength { limit: usize },
     #[error("The folder for saved Gitea tokens could not be found: {0}")]
     Directory(#[source] sheprd_client::local_path::PathError),
+    #[error(
+        "Gitea refused the change; the token needs the write:issue scope, and your account needs permission on the repository"
+    )]
+    Forbidden,
+    #[error("That is not an issue of a Gitea repository")]
+    Issue,
     #[error("Gitea's answer is not the expected JSON: {0}")]
     Json(#[source] serde_json::Error),
     #[error("Gitea could not be reached at {origin}: {source}")]

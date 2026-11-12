@@ -6,13 +6,15 @@
 //! An instance is one the user pasted an address and access token for in the
 //! account menu (`saved`). A remote is a Gitea source when its hostname, port
 //! aside, has one (`recognize`); the source keeps the remote's host and
-//! repository, and requests go to the address that was typed.
+//! repository, and requests go to the address that was typed. Listing never
+//! writes; `write` changes one issue from its page.
 
 pub mod account;
 mod error;
 pub mod issue;
 pub mod pull_request;
 pub mod saved;
+pub mod write;
 
 pub use error::Error;
 
@@ -381,7 +383,7 @@ fn get(
 /// An agent for Gitea's API: bounded by `timeout`, following no redirect, so
 /// a token is never carried to another address, and returning refusals as
 /// statuses to read.
-fn agent(timeout: Duration) -> ureq::Agent {
+pub(crate) fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
         .max_redirects(0)

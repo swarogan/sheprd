@@ -14,10 +14,17 @@ impl Localize for Error {
                 address = format!("{address:?}")
             ),
             Self::Authentication => fl!("error-orchestrator-gitea-authentication"),
+            Self::Comment => fl!("error-orchestrator-gitea-comment"),
+            Self::CommentLength { limit } => fl!(
+                "error-orchestrator-gitea-comment-length",
+                limit = limit.to_string()
+            ),
             Self::Directory(error) => fl!(
                 "error-orchestrator-gitea-directory",
                 error = error.localize()
             ),
+            Self::Forbidden => fl!("error-orchestrator-gitea-forbidden"),
+            Self::Issue => fl!("error-orchestrator-gitea-issue"),
             Self::Json(error) => fl!("error-orchestrator-gitea-json", error = error.to_string()),
             Self::Network { origin, source } => fl!(
                 "error-orchestrator-gitea-network",

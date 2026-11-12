@@ -1,11 +1,16 @@
 # Why a Gitea (or Forgejo) instance's issues or pull requests could not be read,
 # or its address and token could not be saved.
 # [gitea] allow_plaintext_credentials = true is a setting: keep it as it is.
+# write:issue is a Gitea scope name: keep it as it is.
 
 # $address is what was typed, quoted.
 error-orchestrator-gitea-address = { $address } is not an address of a Gitea instance, such as http://gitea.example.com
 error-orchestrator-gitea-authentication = Gitea rejected the token; replace it from the account menu with one that can read repositories and issues
+error-orchestrator-gitea-comment = Write a comment before posting it
+error-orchestrator-gitea-comment-length = A comment is at most { $limit } bytes
 error-orchestrator-gitea-directory = The folder for saved Gitea tokens could not be found: { $error }
+error-orchestrator-gitea-forbidden = Gitea refused the change; the token needs the write:issue scope, and your account needs permission on the repository
+error-orchestrator-gitea-issue = That is not an issue of a Gitea repository
 error-orchestrator-gitea-json = Gitea's answer is not the expected JSON: { $error }
 # $origin is the address tried, so a wrong one shows.
 error-orchestrator-gitea-network = Gitea could not be reached at { $origin }: { $error }

@@ -26,6 +26,7 @@ mod github;
 // The private credential file these save to is Unix-only.
 #[cfg(unix)]
 mod gitea_saved;
+mod gitea_write;
 mod gitlab;
 mod gitlab_envrc;
 mod gitlab_hosts;

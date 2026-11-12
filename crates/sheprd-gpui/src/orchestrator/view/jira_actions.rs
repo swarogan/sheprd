@@ -2,36 +2,15 @@
 //! Jira offers, comment, and take the issue. The worker does the writing;
 //! the controls wait while one of them is in flight.
 
-use super::{OrchestratorView, look::RED};
+use super::{OrchestratorView, look::RED, write_controls::Press};
 use crate::{
-    config::corners,
     i18n::{Localize, fl},
     orchestrator::{Action, Done, Item, Notice, Provider},
-    search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
 use sheprd_orchestrator::jira::Change;
 
-/// The comment field and whether a write is under way.
-pub(super) struct Controls {
-    pub(super) comment: Entity<SearchInput>,
-    pub(super) busy: bool,
-}
-
-impl Controls {
-    pub(super) fn new(look: &super::Look, cx: &mut Context<OrchestratorView>) -> Self {
-        let comment = cx.new(|cx| {
-            let mut input = SearchInput::new(cx);
-            input.set_placeholder_with(|| fl!("jira-actions-comment-placeholder"), cx);
-            input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
-            input
-        });
-        Self {
-            comment,
-            busy: false,
-        }
-    }
-}
+pub(super) use super::write_controls::Controls;
 
 impl OrchestratorView {
     /// The open item, when it is a Jira issue.
@@ -91,13 +70,10 @@ impl OrchestratorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.jira.comment.read(cx).focus.is_focused(window) {
-            return false;
-        }
-        match key {
-            "enter" => self.post_jira_comment(cx),
-            "escape" => window.focus(&self.focus, cx),
-            _ => return false,
+        match self.jira.press(key, window, cx) {
+            Some(Press::Post) => self.post_jira_comment(cx),
+            Some(Press::Leave) => window.focus(&self.focus, cx),
+            None => return false,
         }
         true
     }
@@ -105,7 +81,6 @@ impl OrchestratorView {
     /// The transitions, the comment field, and Assign to me of a Jira issue.
     pub(super) fn render_jira_actions(&self, item: &Item, cx: &mut Context<Self>) -> Div {
         let look = &self.look;
-        let theme = &look.theme;
         let busy = self.jira.busy;
         let source = item.key.source.clone();
         let issue = item.identifier.clone();
@@ -155,34 +130,16 @@ impl OrchestratorView {
             .flex_col()
             .gap_2()
             .child(transitions)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .debug_selector(|| "orchestrator-jira-comment-field".into())
-                            .flex_1()
-                            .min_w(px(160.))
-                            .px_2()
-                            .py(px(4.))
-                            .rounded(px(corners::CONTROL))
-                            .border_1()
-                            .border_color(rgb(theme.active))
-                            .child(self.jira.comment.clone()),
-                    )
-                    .child(
-                        look.button(
-                            "orchestrator-jira-comment",
-                            fl!("jira-actions-comment"),
-                            true,
-                        )
-                        .debug_selector(|| "orchestrator-jira-comment".into())
-                        .when(busy, |el| el.opacity(0.5))
-                        .on_click(cx.listener(|this, _, _, cx| this.post_jira_comment(cx))),
-                    ),
-            )
+            .child(self.jira.row(
+                look,
+                (
+                    "orchestrator-jira-comment-field",
+                    "orchestrator-jira-comment",
+                ),
+                fl!("jira-actions-comment"),
+                Self::post_jira_comment,
+                cx,
+            ))
             .child(
                 div().flex().child(
                     look.button(

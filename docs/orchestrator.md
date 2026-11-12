@@ -340,6 +340,14 @@ makes Mine work. An address typed without a scheme is `https`; `http` is
 accepted for an instance on a private network, with a note that the token
 then travels unencrypted. Requests follow no redirect.
 
+An issue's page writes three things, each only when you press its control
+(`gitea/write.rs`): **Close issue** or **Reopen issue** (`PATCH
+/repos/<owner>/<repo>/issues/<number>` with its `state`), a comment (`POST
+.../comments`), and **Assign to me** (the same `PATCH` with the token
+owner's login as its `assignees`). A pull request's page takes a comment
+only. The token needs the `write:issue` scope; a refusal says so. Open
+issues only are listed, so a closed one leaves the list at the next read.
+
 Addresses and tokens are kept together in one record, at most 32 instances:
 the desktop keyring (`dev.herdr.gpui.gitea`), or with `[gitea]
 allow_plaintext_credentials = true` the private `0600` `gitea-credentials`
@@ -354,8 +362,15 @@ statusCategory != Done ORDER BY updated DESC`), a page of 100 at a time up
 to 1,000. Nothing in a repository names a Jira project and none is asked
 for: every repository lists one source per saved site, keyed by the site's
 hostname and the repository `assigned`, so an issue shows the same in each
-checkout and names its site where the others name their project. Nothing is
-written to Jira.
+checkout and names its site where the others name their project.
+
+An issue's page writes three things, each only when you press its control
+(`jira/write.rs`): a status change, from the transitions Jira offers the
+issue (`GET` then `POST /rest/api/3/issue/<key>/transitions`); a comment
+(`POST .../comment`, plain text as an Atlassian document); and **Assign to
+me** (`PUT .../assignee` with the token owner's account id). A token with
+scopes needs `write:jira-work` for them; a refusal says so. The list is
+read again after each.
 
 The account menu's **Jira** tab saves a site: its address, your Atlassian
 account email, and an API token from

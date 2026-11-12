@@ -7,7 +7,7 @@ use super::{
     Error, HerdrSession, ItemKey, Owner, Provider, Result, Run, RunState, SourceKey, Store,
     Terminals, beads,
     error::script,
-    jira,
+    gitea, jira,
     model::{Backend, Pane, Workspace},
 };
 use chrono::Utc;
@@ -103,13 +103,15 @@ pub enum Action {
     },
     /// Change a Jira issue from its page.
     Jira(jira::Change),
+    /// Change a Gitea issue from its page.
+    Gitea(gitea::write::Change),
 }
 
 impl Action {
     /// Whether it changes a source's items, which the next sync then shows.
     pub(crate) fn changes_items(&self) -> bool {
         match self {
-            Self::DeleteBead { .. } | Self::Jira(_) => true,
+            Self::DeleteBead { .. } | Self::Jira(_) | Self::Gitea(_) => true,
             Self::Dispatch(request) => request.bead().is_some(),
             Self::Stop { .. } | Self::Send { .. } | Self::Remove { .. } => false,
         }
@@ -126,6 +128,12 @@ impl Action {
             Self::Jira(jira::Change::Transition { .. }) => Done::JiraTransitioned,
             Self::Jira(jira::Change::Comment { .. }) => Done::JiraCommented,
             Self::Jira(jira::Change::Assign { .. }) => Done::JiraAssigned,
+            Self::Gitea(gitea::write::Change::SetState { closed: true, .. }) => Done::GiteaClosed,
+            Self::Gitea(gitea::write::Change::SetState { closed: false, .. }) => {
+                Done::GiteaReopened
+            }
+            Self::Gitea(gitea::write::Change::Comment { .. }) => Done::GiteaCommented,
+            Self::Gitea(gitea::write::Change::Assign { .. }) => Done::GiteaAssigned,
         }
     }
 }
@@ -135,6 +143,10 @@ impl Action {
 pub enum Done {
     // keep-sorted start
     BeadDeleted,
+    GiteaAssigned,
+    GiteaClosed,
+    GiteaCommented,
+    GiteaReopened,
     JiraAssigned,
     JiraCommented,
     JiraTransitioned,
@@ -147,18 +159,31 @@ pub enum Done {
 
 /// Runs `action` to completion; what it did, or why it failed.
 pub fn perform(site: &Site, action: &Action, cancelled: &AtomicBool) -> Result<Done> {
-    perform_signed(site, action, &jira::saved::Saved::default(), cancelled)
+    perform_signed(
+        site,
+        action,
+        &jira::saved::Saved::default(),
+        &gitea::saved::Saved::default(),
+        cancelled,
+    )
 }
 
-/// [`perform`] with the Jira sites saved in the account menu, which a Jira
-/// change signs in with.
+/// [`perform`] with the Jira sites and Gitea instances saved in the account
+/// menu, which a Jira or Gitea change signs in with.
 pub fn perform_signed(
     site: &Site,
     action: &Action,
     sites: &jira::saved::Saved,
+    instances: &gitea::saved::Saved,
     cancelled: &AtomicBool,
 ) -> Result<Done> {
     match action {
+        Action::Gitea(change) => {
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
+            gitea::write::perform(instances.get(&change.source().host), change)?;
+        }
         Action::Jira(change) => {
             if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                 return Err(Error::Cancelled);

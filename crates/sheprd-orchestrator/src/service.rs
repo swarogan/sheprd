@@ -530,6 +530,10 @@ impl Worker {
             Action::Jira(_) => self.jira_record(),
             _ => Arc::default(),
         };
+        let instances = match action {
+            Action::Gitea(_) => self.gitea_record(),
+            _ => Arc::default(),
+        };
         let (notices, commands, actions) = (
             self.notices.clone(),
             self.commands.clone(),
@@ -537,7 +541,8 @@ impl Worker {
         );
         let spawned = spawn_action(move |cancelled| {
             let outcome =
-                super::actions::perform_signed(&site, &action, &sites, cancelled).map_err(Arc::new);
+                super::actions::perform_signed(&site, &action, &sites, &instances, cancelled)
+                    .map_err(Arc::new);
             push(&notices, Notice { outcome });
             actions.fetch_sub(1, Ordering::SeqCst);
             let _ = commands.try_send(Command::Acted { resync });

@@ -12,6 +12,7 @@ mod conversation;
 mod core_removal;
 mod detail;
 mod dispatch;
+mod gitea_actions;
 mod hosts;
 mod inbox;
 mod jira_actions;
@@ -29,6 +30,7 @@ mod repo;
 mod rows;
 mod status;
 mod tasks;
+mod write_controls;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -246,6 +248,8 @@ pub(crate) struct OrchestratorView {
     comment: Entity<SearchInput>,
     /// The open Jira issue's comment field, and whether a write is under way.
     jira: jira_actions::Controls,
+    /// The open Gitea issue's comment field, and whether a write is under way.
+    gitea: write_controls::Controls,
     /// Conversation rows, the list drawing them, and the threads unfolded.
     conversation: conversation::Rows,
     /// Conversation authors' avatars by URL.
@@ -287,7 +291,10 @@ impl OrchestratorView {
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });
-        let jira = jira_actions::Controls::new(&look, cx);
+        let jira =
+            jira_actions::Controls::new(&look, || fl!("jira-actions-comment-placeholder"), cx);
+        let gitea =
+            write_controls::Controls::new(&look, || fl!("gitea-actions-comment-placeholder"), cx);
         Self {
             repos: Vec::new(),
             skipped_repos: HashSet::new(),
@@ -329,6 +336,7 @@ impl OrchestratorView {
             pr: crate::pr_actions::Actions::default(),
             comment,
             jira,
+            gitea,
             conversation: conversation::Rows::default(),
             avatars: conversation::Avatars::default(),
             merge_open: false,
@@ -409,6 +417,7 @@ impl OrchestratorView {
         }
         if let Some(notice) = noticed {
             self.jira_noticed(&notice, cx);
+            self.gitea_noticed(&notice, cx);
         }
         if read {
             self.discard_non_projects();
@@ -550,6 +559,7 @@ impl OrchestratorView {
             &self.message,
             &self.comment,
             &self.jira.comment,
+            &self.gitea.comment,
         ] {
             input.update(cx, |input, cx| {
                 input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
@@ -840,7 +850,9 @@ impl OrchestratorView {
         if self.dialog.is_some() {
             return;
         }
-        if self.jira_key(event.keystroke.key.as_str(), window, cx) {
+        if self.jira_key(event.keystroke.key.as_str(), window, cx)
+            || self.gitea_key(event.keystroke.key.as_str(), window, cx)
+        {
             cx.stop_propagation();
             return;
         }

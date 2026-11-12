@@ -52,6 +52,9 @@ impl OrchestratorView {
                 .when(item.key.source.provider == Provider::Jira, |el| {
                     el.child(self.render_jira_actions(&item, cx))
                 })
+                .when(item.key.source.provider == Provider::Gitea, |el| {
+                    el.child(self.render_gitea_actions(&item, cx))
+                })
                 .when(item.key.source.provider == Provider::Beads, |el| {
                     el.child(self.render_task_facts(&item, cx))
                 })
