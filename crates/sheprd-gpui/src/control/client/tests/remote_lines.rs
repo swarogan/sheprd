@@ -3,6 +3,7 @@ use crate::control::protocol::remote::Reply;
 use sheprd_remote_control::control::{Device, DeviceId, Status};
 
 mod addresses;
+mod relays;
 
 fn status() -> Status {
     Status {
@@ -20,6 +21,7 @@ fn status() -> Status {
         chats: 3,
         devices: 2,
         connected: 1,
+        relays: Default::default(),
     }
 }
 

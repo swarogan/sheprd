@@ -12,6 +12,7 @@
 //! live_activities = "detailed" # or "generic": no chat names or steps
 //! device_idle_days = 30         # 0 never forgets a device
 //! presence = false             # hold phone alerts while its owner is at this Mac
+//! relays = ["https://relay.example.org"]  # reach this computer from any network
 //! ```
 //!
 //! Secrets and device keys never go here: the daemon keeps them in its own
@@ -47,6 +48,9 @@ pub struct RemoteConfig {
     /// Whether paired iPhones near this Mac over Bluetooth hold their
     /// alerts while the desktop is in use (`herdr-nearby`, macOS only).
     pub presence: bool,
+    /// Relays the daemon listens on, so paired phones reach this computer
+    /// from any network (`docs/relay-plan.md`); none by default.
+    pub relays: Vec<String>,
     // keep-sorted end
 }
 
@@ -64,6 +68,7 @@ impl Default for RemoteConfig {
             notifications: Privacy::default(),
             port: DEFAULT_PORT,
             presence: false,
+            relays: Vec::new(),
             // keep-sorted end
         }
     }
@@ -77,6 +82,12 @@ impl RemoteConfig {
         }
         if !IDLE_DAYS.contains(&self.device_idle_days) {
             return Err(Error::IdleDays);
+        }
+        for relay in &self.relays {
+            sheprd_relay::Endpoint::parse(relay).map_err(|source| Error::Relay {
+                relay: relay.clone(),
+                source,
+            })?;
         }
         if let Certificate::Files { cert, key } = &self.certificate {
             for (which, path) in [("cert", cert), ("key", key)] {

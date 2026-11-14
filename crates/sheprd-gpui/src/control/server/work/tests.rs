@@ -5,11 +5,15 @@ use crate::sidebar::layout_tests::{REPO_KEY, fixture_window, snapshot};
 mod core_only;
 mod dialogs;
 mod identity;
+mod kept_commands;
 // Teleport needs a POSIX client, so the test only runs there.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod kept_teleport;
+mod kept_worktrees;
 mod list_budget;
 mod muting;
+#[cfg(unix)]
+mod remote;
 
 /// A caller in workspace `workspace` of the fixture window's daemon.
 fn caller(workspace: Option<&str>) -> Caller {

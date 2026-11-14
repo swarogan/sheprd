@@ -10,8 +10,10 @@
 mod flows;
 mod mute;
 mod notes;
+mod remote;
 #[cfg(test)]
 mod tests;
+mod worktrees;
 
 pub(super) use flows::bring_forward;
 
@@ -21,11 +23,21 @@ use crate::{
     control::protocol::{Call, Caller, ErrorCode, Response, work::WorkOp},
 };
 use gpui::App;
-use sheprd_client::protocol::{ClientShellSnapshot, ClientShellWorkspace};
+use sheprd_client::protocol::ClientShellSnapshot;
 
 pub(super) fn serve(call: Call<WorkOp>, incoming: socket::Incoming, _: &mut Watches, cx: &mut App) {
     let Call { caller, op } = call;
     let response = match op {
+        WorkOp::KeptList {} => in_window(&caller, cx, |view, _, _| worktrees::list(view, &caller)),
+        WorkOp::KeptCreate { branch } => in_free_window(&caller, cx, |view, window, cx| {
+            worktrees::dialog(view, &caller, worktrees::Dialog::Create(branch), window, cx)
+        }),
+        WorkOp::KeptOpen {} => in_free_window(&caller, cx, |view, window, cx| {
+            worktrees::dialog(view, &caller, worktrees::Dialog::Open, window, cx)
+        }),
+        WorkOp::KeptDelete {} => in_free_window(&caller, cx, |view, window, cx| {
+            worktrees::dialog(view, &caller, worktrees::Dialog::Delete, window, cx)
+        }),
         WorkOp::Notes => notes::list(cx),
         WorkOp::Note => notes::get(&caller, cx),
         WorkOp::SetNote { text } => notes::set(&caller, &text, cx),
@@ -55,29 +67,30 @@ pub(super) struct Found<'a> {
     pub index: usize,
     /// The workspace as the session model has it, whichever keeps it.
     pub workspace: sheprd_session::Workspace,
-    /// Herdr 1's state of it; `None` for a workspace the app keeps for
-    /// Herdr 2, which has none of what mutes, scripts, and fan-out keep.
+    /// Herdr 1's state of it; `None` for a workspace the app keeps.
     pub herdr: Option<Herdr<'a>>,
 }
 
 /// A workspace as Herdr 1's snapshot holds it.
 pub(super) struct Herdr<'a> {
     pub snapshot: &'a ClientShellSnapshot,
-    pub workspace: &'a ClientShellWorkspace,
 }
 
-impl<'a> Found<'a> {
-    /// Herdr 1's state, or why a workspace the app keeps cannot do `what`.
-    pub(super) fn herdr(&self, what: &str) -> Result<&Herdr<'a>, Response> {
-        self.herdr.as_ref().ok_or_else(|| {
-            Response::error(
-                ErrorCode::Unsupported,
-                format!(
-                    "Workspace {} is a Herdr 2 workspace, where {what} is not available yet",
-                    self.workspace.label
-                ),
-            )
-        })
+/// A local socket caller, or a workspace derived from a remote terminal's
+/// authoritative host and driven tab. Remote JSON never constructs this.
+#[derive(Clone, Copy)]
+pub(super) enum Source<'a> {
+    Local(&'a Caller),
+    Remote {
+        index: usize,
+        scope: &'a crate::browser::Scope,
+        workspace: &'a str,
+    },
+}
+
+impl<'a> From<&'a Caller> for Source<'a> {
+    fn from(caller: &'a Caller) -> Self {
+        Self::Local(caller)
     }
 }
 
@@ -85,12 +98,53 @@ impl<'a> Found<'a> {
 /// when it names one, else on any endpoint showing a workspace of that ID. A
 /// caller in a herdr-core terminal is in the workspace of the tab holding
 /// it: Herdr 1's, or one the app keeps for Herdr 2.
-pub(super) fn find<'a>(view: &'a SheprdWindow, caller: &Caller) -> Result<Found<'a>, Response> {
+pub(super) fn find<'a, 'b>(
+    view: &'a SheprdWindow,
+    caller: impl Into<Source<'b>>,
+) -> Result<Found<'a>, Response> {
+    let caller = match caller.into() {
+        Source::Local(caller) => caller,
+        Source::Remote {
+            index,
+            scope,
+            workspace,
+        } => {
+            if view
+                .endpoints
+                .get(index)
+                .is_none_or(|endpoint| crate::browser::scope(endpoint) != *scope)
+            {
+                return Err(not_found("The caller's host changed"));
+            }
+            let workspace = view
+                .sessions(index)
+                .core
+                .and_then(|core| core.workspace(workspace).cloned())
+                .ok_or_else(|| not_found("The caller's workspace is no longer kept"))?;
+            return Ok(Found {
+                index,
+                workspace,
+                herdr: None,
+            });
+        }
+    };
     let target = target(caller);
-    let (index, id) = target
-        .strictness()
-        .iter()
-        .find_map(|strict| view.control_target(&target, *strict))
+    let focused_kept = (target.workspace.is_none()
+        && target.terminal.is_none()
+        && target.pane.is_none()
+        && target.daemon.is_none())
+    .then(|| {
+        view.kept_in_front()
+            .map(|id| (view.selected_endpoint, id.to_owned()))
+    })
+    .flatten();
+    let (index, id) = focused_kept
+        .or_else(|| {
+            target
+                .strictness()
+                .iter()
+                .find_map(|strict| view.control_target(&target, *strict))
+        })
         .ok_or_else(|| match &caller.workspace_id {
             Some(id) => Response::error(
                 ErrorCode::WorkspaceNotFound,
@@ -126,13 +180,15 @@ pub(super) fn find<'a>(view: &'a SheprdWindow, caller: &Caller) -> Result<Found<
     let snapshot = live.snapshot.as_deref().ok_or_else(|| {
         unsupported().unwrap_or_else(|| not_found("The window has no state from that host yet"))
     })?;
-    let workspace = snapshot
+    if !snapshot
         .workspaces
         .iter()
-        .find(|workspace| workspace.workspace_id == id)
-        .ok_or_else(|| {
+        .any(|workspace| workspace.workspace_id == id)
+    {
+        return Err(
             unsupported().unwrap_or_else(|| not_found(format!("No window shows workspace {id}")))
-        })?;
+        );
+    }
     let session = sessions
         .herdr_1
         .as_ref()
@@ -142,17 +198,17 @@ pub(super) fn find<'a>(view: &'a SheprdWindow, caller: &Caller) -> Result<Found<
     Ok(Found {
         index,
         workspace: session,
-        herdr: Some(Herdr {
-            snapshot,
-            workspace,
-        }),
+        herdr: Some(Herdr { snapshot }),
     })
 }
 
 /// The caller's workspace ID, when it is on the window's selected host:
 /// dialogs act through that host alone, and a Herdr 1 workspace only while
 /// its daemon is connected.
-pub(super) fn selected_workspace(view: &SheprdWindow, caller: &Caller) -> Result<String, Response> {
+pub(super) fn selected_workspace<'a>(
+    view: &SheprdWindow,
+    caller: impl Into<Source<'a>>,
+) -> Result<String, Response> {
     let found = find(view, caller)?;
     if found.index != view.selected_endpoint {
         return Err(Response::error(

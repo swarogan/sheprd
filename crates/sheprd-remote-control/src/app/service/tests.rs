@@ -90,6 +90,7 @@ fn the_daemon_runs_with_every_setting_as_an_argument() {
         port: 9443,
         // Sheprd's own: presence runs beside the daemon, not in its args.
         presence: true,
+        relays: vec!["https://relay.example.org".into()],
     };
     assert_eq!(
         words(&custom.args()),
@@ -109,6 +110,8 @@ fn the_daemon_runs_with_every_setting_as_an_argument() {
             "excerpt",
             "--device-idle-days",
             "9",
+            "--relay",
+            "https://relay.example.org",
         ]
     );
 }
@@ -316,6 +319,7 @@ fn status(version: &str) -> Response {
         chats: 0,
         devices: 0,
         connected: 0,
+        relays: Default::default(),
     })
 }
 

@@ -28,6 +28,13 @@ ignore = [
     # Field and variant order is part of protocol compatibility, so this is not
     # a swappable dependency. Revisit if an actual vulnerability is filed.
     { id = "RUSTSEC-2025-0141", reason = "bincode 2 is the daemon wire format; unmaintained, not vulnerable" },
+    # `pgp` (sheprd-relay's `signed-directory`, checking Sheprd's relay list)
+    # pulls in `rsa` and the 0.13 elliptic-curve crates. Both advisories are
+    # timing side channels in private-key operations (RSA decryption and
+    # signing; constant-time scalar arithmetic). The relay list is only ever
+    # verified, with public keys compiled in, so no secret is processed.
+    { id = "RUSTSEC-2023-0071", reason = "rsa via pgp: Marvin affects private-key operations; relay lists are only verified" },
+    { id = "RUSTSEC-2026-0387", reason = "elliptic-curve 0.13 via pgp: timing in secret-scalar operations; relay lists are only verified" },
 ]
 
 # GHSA-38c5-483c-4qqp / CVE-2026-42199: integer overflow in grid's

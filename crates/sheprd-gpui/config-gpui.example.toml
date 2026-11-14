@@ -33,6 +33,12 @@
 # To follow the system light/dark appearance, name a theme for each side, as
 # Ghostty does: theme = "light:Catppuccin Latte,dark:Catppuccin Mocha"
 theme = "Default"
+# Explicit Herdr 2 click adapters, disabled by default. See docs/link-handlers.md.
+# Each entry names plugin, id, host, pattern, directory and command (argv).
+link_handlers = []
+# Opt-in existing herdr-plugin.toml link actions, with per-host enable and
+# manifest platform filtering. No build/startup/event hooks are imported.
+link_plugins = []
 # Themes starred in the Color Scheme picker, listed above the rest. The
 # picker's star button keeps this list in config-gpui.local.toml.
 # favorite_themes = ["Nord", "Catppuccin Mocha"]

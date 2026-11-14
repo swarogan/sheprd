@@ -224,12 +224,40 @@ tell whether a window opened the page, so say what you asked for. Notes the
 user sends on the page arrive as your next prompt; `browser feedback` does
 not work there.
 
-In a Herdr 2 terminal on such a host (`HC_TERMINAL_ID` set, no
-`HERDR_WORKSPACE_ID`), the shim reaches the app through that terminal's
-labels instead, and only `sheprd browser open` with a web address works:
-`browser reload` exits 8, and notes on the page do not come back to you.
-Ask the user to tell you what they want changed, and after editing, to
-reload the tab themselves.
+In a remote Herdr 2 terminal (`HC_TERMINAL_ID` set, no
+`HERDR_WORKSPACE_ID`), the shim uses that terminal's labels over the existing
+authenticated core connection. `browser open` and `browser reload` address
+the calling terminal's pages on that host; another host's identically named
+terminal is a different caller. Collect the user's notes with
+`sheprd browser feedback --wait 600` (or `sheprd feedback --wait 600`). This
+requires Python 3 on the host. Without `--wait`, it checks once; exit 4 means
+no notes. `--json` returns `{"notes": "..."}` or `{"notes": null}`.
+Keep the desktop window connected and the terminal in a driving tab while
+waiting. Cancellation or disconnection keeps unacknowledged notes for retry;
+the reply is acknowledged only after it is printed. A lost acknowledgement
+can return the same notes again. The bridge allows eight pending callers,
+waits at most 600 seconds, and needs no remote browser server. Requests made
+before the window connected, or while their terminal was not shown, are not
+replayed. Cloud and WSL core callers use the same label bridge; automatic
+localhost forwarding currently requires an SSH endpoint (WSL uses its host's
+localhost integration). Remote file URLs and `--beside` remain unsupported.
+Annotation screenshots are copied to the original caller's host before notes
+are returned (WSL maps the saved artifact). If transfer is unavailable or fails,
+the app warns and returns textual notes without unreadable local paths. SSH/cloud
+screenshot transfer currently requires a Linux or macOS desktop client.
+
+The remote Herdr 2 shim also supports `worktree status|mute|unmute|list`,
+`worktree create [BRANCH]`, `worktree open|delete`, `notes list|get|set|clear`,
+`scripts setup|run`, `checkpoint restore [ID]`, `teleport --to HOST`, and
+`fan-out PROMPT [--agent KIND[:N]]...`. These require Python 3 and a driving
+tab in a connected window. `--window ID` must name a window holding that
+terminal on that host; dialogs require its host selected and retain normal
+confirmation/trust. Remote `notes list` lists only that host's notes.
+Replies confirm preparation, not the user's approval. After timeout or
+cancellation, inspect the app before retrying: the request is never replayed
+automatically, and an already launched trusted script cannot be undone by
+cancelling its reply. Checkpoint reads/diffs and `scripts list` need the full
+CLI installed on the host.
 
 On Linux the app has no embedded browser yet: web pages open in the system
 browser, and local files and annotations are not available.
@@ -249,10 +277,13 @@ what Sheprd shows or keeps.
 | --- | --- |
 | Show a file at a line, read-only | `sheprd code open src/main.rs:42` |
 | Open the review of your uncommitted changes | `sheprd review` |
+| Ask the user to restart an owned orchestrator run, or adopt a legacy run's current process | `sheprd orchestrator restart RUN` / `sheprd orchestrator adopt RUN` (loaded project; confirmation required) |
 | Open px0 to browse, edit, or review your local checkout (macOS/Windows) | `sheprd px0 open` |
 | Get notes the user sent this pane (pages, reviews, terminals) | `sheprd feedback --wait 600` |
 | Keep a note on this worktree (repository and branch) | `sheprd notes set waiting on CI` |
 | Silence this worktree's notifications | `sheprd worktree mute` |
+| List app-kept Git workspaces on your host | `sheprd worktree list` |
+| Review creating, opening, or deleting an app-kept worktree | `sheprd worktree create [BRANCH]`, `sheprd worktree open`, `sheprd worktree delete` (confirm in Sheprd) |
 | Silence a whole host's notifications | `sheprd host mute studio` |
 | Update the Sheprd app on another machine (the user confirms in Sheprd) | `sheprd host update studio` |
 | Save the working tree before a risky change, and compare later | `sheprd checkpoint create before refactor`, `sheprd checkpoint diff ID` |
@@ -292,16 +323,18 @@ it in the app.
 Add `--json` to any command for machine-readable output; errors then come
 back as `{"error": {"code", "message"}}`. Exit statuses are the ones in the
 table above. A command acts in the window that shows your workspace; it
-exits 5 rather than act in another session's window. A Herdr 2 caller is resolved
-through the app-kept workspace of its tab. Notes, checkpoint restore, and
-Teleport can target a kept workspace; each still enforces its checkout, host
-and platform requirements. The CLI paths for worktree mutes, scripts, and
-fan-out still require Herdr 1 workspace state and exit 8 for app-kept Herdr 2
-workspaces, even where the corresponding desktop menu works. Local support does not imply
-Herdr 2-only remote worktree support. A terminal outside a workspace the window
-keeps is refused rather than targeting an unrelated workspace. Chat conversion
-on Herdr 2 currently needs a local Claude process with an exact session record;
-Herdr 1 integration installation does not establish Herdr 2 session identity.
+exits 5 rather than act in another session's window. A Herdr 2 caller is
+resolved through the app-kept workspace of its tab: `sheprd work` notes,
+mutes, restores, scripts, Teleport, and fan-out target it without needing
+Herdr 1. Each still enforces its checkout, host, and platform requirements,
+and scripts and dialogs retain the workspace menu's host capabilities and
+confirmation rules. Select the caller's host in the window before opening a
+dialog. Worktree dialogs and scripts run Git on the caller's host, including
+SSH, cloud, and WSL devices. A terminal outside every workspace the window
+keeps is refused rather than targeting an unrelated workspace. Chat
+conversion on Herdr 2 currently needs a local Claude process with an exact
+session record; Herdr 1 integration installation does not establish Herdr 2
+session identity.
 
 Some commands only open the app's dialog and the user confirms there:
 restoring a checkpoint, teleporting a worktree, fanning out a prompt, running

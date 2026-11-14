@@ -27,10 +27,13 @@ public struct NearbySAS: Sendable {
         public var sealed: String
     }
 
-    /// What the sealed offer holds: a claim token and where to claim it.
+    /// What the sealed offer holds: a claim token and where to claim it,
+    /// and, when the computer listens on relays, how to claim through them
+    /// from another network (the token is also the pairing secret).
     public struct Offer: Codable, Hashable, Sendable {
         public var token: String
         public var origins: [String]
+        public var relay: API.RelayInfo?
     }
 
     /// The finished exchange.

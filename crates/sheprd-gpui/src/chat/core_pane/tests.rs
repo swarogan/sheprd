@@ -1,6 +1,10 @@
 use super::*;
+
 use sheprd_backend::RunState;
 use sheprd_client::protocol::AgentStatus;
+
+mod identity;
+mod remote;
 
 const A: &str = "0123456789abcdef0123456789abcdef";
 const B: &str = "fedcba9876543210fedcba9876543210";
@@ -9,9 +13,9 @@ fn info(id: &str, endpoint: Option<&str>) -> TerminalInfo {
     TerminalInfo {
         agent: AgentStatus::Unknown,
         cwd: None,
-        foreground: Some(sheprd_backend::Process {
-            pid: 42,
+        foreground: endpoint.map(|_| sheprd_backend::Process {
             name: "sheprd-acp".into(),
+            pid: 42,
             argv: vec!["sheprd-acp".into()],
         }),
         id: TerminalId::new(id).unwrap(),
@@ -142,6 +146,11 @@ fn the_terminal_a_chat_is_started_in_is_found_as_that_chat() {
         &BTreeMap::new(),
     );
     let mut started = info("t9", None);
+    started.foreground = Some(sheprd_backend::Process {
+        name: "sheprd-acp".into(),
+        pid: 42,
+        ..Default::default()
+    });
     started.labels = spawn.labels;
     let found = targets(&[started]);
     assert_eq!(found.len(), 1);

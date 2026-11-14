@@ -36,14 +36,17 @@ pub(crate) mod mutes;
 mod phone;
 mod processes;
 mod programs;
+mod recovery;
 mod requests;
 mod screen;
 mod selection;
 mod session;
 mod sidebar;
 mod split;
+mod start;
 mod tabs;
 mod view;
+mod work_requests;
 mod worker;
 mod workspaces;
 
@@ -51,6 +54,7 @@ mod workspaces;
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;
 
+pub(crate) use attention::forget_pending_posts;
 pub(crate) use commands::acts_on_panes;
 pub(crate) use error::Error;
 pub(crate) use fallback::Holder;
@@ -81,7 +85,7 @@ pub(crate) const WORKSPACE: &str = "herdr-2";
 /// store tab, whose IDs count up from zero, ever reaches it.
 pub(crate) const SHELL_TAB: u64 = u64::MAX;
 
-type Started = std::sync::mpsc::Receiver<Result<TerminalInfo, sheprd_core_client::Error>>;
+type Started = std::sync::mpsc::Receiver<start::Outcome>;
 
 /// What a terminal being started is for.
 #[derive(Clone, Debug)]
@@ -153,12 +157,10 @@ struct TabPanes {
 }
 
 impl TabPanes {
-    /// Whether chats are drawn over the tab's panes: it drives its
-    /// terminals, and they run in this computer's core. A chat runs
-    /// `herdr-acp`, whose program and socket are this computer's, so a tab
-    /// on another host shows its terminals only.
+    /// Only driven tabs draw interactive chats. Their owning host determines
+    /// the ACP launch and attach route; mirrors remain terminal-only.
     fn holds_chats(&self) -> bool {
-        !self.observe && self.host == Host::Local
+        !self.observe
     }
 
     fn new(host: Host, panes: Panes, observe: bool) -> Self {
@@ -446,12 +448,12 @@ impl CoreTerminals {
     }
 
     /// What this computer's core reports of the terminals in the panes of
-    /// tabs that hold chats, which a chat may be drawn over. A mirror only
-    /// watches, and a tab on another host runs no chat.
+    /// tabs that hold chats. Local-only readers use this iterator; native
+    /// chat discovery uses `routed_chat_terminals` to retain host identity.
     pub(crate) fn chat_terminals(&self) -> impl Iterator<Item = &TerminalInfo> {
         self.tabs
             .values()
-            .filter(|shown| shown.holds_chats())
+            .filter(|shown| shown.holds_chats() && shown.host == Host::Local)
             .flat_map(|shown| shown.panes.terminals())
             .filter_map(|terminal| self.infos.get(terminal))
     }
@@ -513,6 +515,13 @@ impl CoreTerminals {
         self.checkouts.seed(cwd, identity);
     }
 
+    /// The latest terminal waiting to start, as no core answers in tests.
+    #[cfg(all(test, feature = "cloud"))]
+    pub(crate) fn last_wanted_for_test(&self) -> Option<(&Purpose, &Spawn)> {
+        let (purpose, _, spawn, _) = self.wanted.back()?;
+        Some((purpose, spawn))
+    }
+
     /// Places `tab` in `workspace` of `scope`, as showing the workspace does.
     #[cfg(test)]
     pub(crate) fn place_for_test(&mut self, tab: TabId, scope: Scope, workspace: &str) {
@@ -522,7 +531,7 @@ impl CoreTerminals {
     }
 
     /// Whether `tab` is a herdr-core tab that holds chats: it drives its
-    /// terminals, rather than a mirror that only watches, on this computer.
+    /// terminals, rather than a mirror that only watches, on any host.
     pub(crate) fn drives(&self, tab: TabId) -> bool {
         self.tabs.get(&tab).is_some_and(TabPanes::holds_chats)
     }
@@ -557,7 +566,9 @@ impl CoreTerminals {
     pub(crate) fn tab_of(&self, terminal: &TerminalId) -> Option<TabId> {
         self.tabs
             .iter()
-            .find(|(_, shown)| shown.holds_chats() && shown.panes.contains(terminal))
+            .find(|(_, shown)| {
+                shown.host == Host::Local && shown.holds_chats() && shown.panes.contains(terminal)
+            })
             .map(|(id, _)| *id)
     }
 
@@ -656,9 +667,10 @@ impl SheprdWindow {
 
     /// Starts `spawn` in herdr-core for `purpose`, once the hub of its
     /// host's core connects, in the folder and with the Herdr variables of
-    /// where it opens.
-    pub(crate) fn start_core_program(&mut self, purpose: Purpose, spawn: Spawn, cx: &App) {
-        self.start_core_program_with(purpose, spawn, None, cx);
+    /// where it opens. False when it was dropped: the queue is full, or the
+    /// host has no core to ask.
+    pub(crate) fn start_core_program(&mut self, purpose: Purpose, spawn: Spawn, cx: &App) -> bool {
+        self.start_core_program_with(purpose, spawn, None, cx)
     }
 
     /// Starts `spawn` as [`Self::start_core_program`] does, handing `file`
@@ -670,14 +682,14 @@ impl SheprdWindow {
         mut spawn: Spawn,
         file: Option<tempfile::TempPath>,
         cx: &App,
-    ) {
+    ) -> bool {
         if self.core_terminals.wanted.len() >= MAX_WANTED {
             tracing::warn!("Too many herdr-core terminals waiting to start; dropped one");
-            return;
+            return false;
         }
         let host = self.purpose_host(&purpose);
         let Some(hub) = self.core_hub(&host) else {
-            return;
+            return false;
         };
         hub.connect(Start::IfMissing);
         self.give_core_context(&purpose, &host, &mut spawn, cx);
@@ -685,6 +697,7 @@ impl SheprdWindow {
             .wanted
             .push_back((purpose, host, spawn, file));
         self.start_core_shell();
+        true
     }
 
     /// The core a terminal started for `purpose` runs in, read once as it is
@@ -717,15 +730,22 @@ impl SheprdWindow {
             .name("herdr-core-spawn".into())
             .spawn(move || {
                 let started = backend.spawn(&spawn);
-                // The program removes its file; a failed start leaves it
-                // here, where dropping it removes it.
-                if started.is_ok()
+                let succeeded = started.is_ok();
+                let handed = start::deliver(started, send, |terminal| {
+                    // The receiver vanished with its host/window. End only
+                    // the terminal this worker created, on its captured core;
+                    // never retry its ID against a replacement saved host.
+                    if let Err(error) = backend.kill(terminal) {
+                        tracing::warn!(%error, %terminal, "Could not end an abandoned herdr-core start");
+                    }
+                });
+                // Keep a program's handoff file only after its window accepts
+                // the start; failed/cancelled starts retain local cleanup.
+                if handed && succeeded
                     && let Some(file) = file
-                    && let Err(error) = file.keep()
-                {
+                    && let Err(error) = file.keep() {
                     tracing::warn!(%error, "Could not hand a file to a herdr-core program");
                 }
-                let _ = send.send(started);
             });
         match spawned {
             Ok(_) => terminals.starting = Some((purpose, host, receive)),
@@ -799,7 +819,13 @@ impl SheprdWindow {
         // against its folder, which this computer's core reports.
         let fallback = self.core_fallback_view();
         self.answer_phone_split(cx);
-        let listed = self.core_terminals.poll_infos(std::time::Instant::now());
+        let dispatching = self.dispatch_sampling();
+        let listed = self
+            .core_terminals
+            .poll_infos(std::time::Instant::now(), dispatching);
+        if listed {
+            self.remap_recovered_chats(window, cx);
+        }
         self.adopt_labelled_terminals(listed, cx);
         if listed {
             self.hear_core_agents(cx);
@@ -839,7 +865,7 @@ impl SheprdWindow {
             return;
         };
         let outcome = match started.try_recv() {
-            Ok(outcome) => outcome,
+            Ok(outcome) => outcome.take(),
             Err(std::sync::mpsc::TryRecvError::Empty) => return,
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 self.core_terminals.starting = None;
@@ -874,10 +900,12 @@ impl SheprdWindow {
                 self.end_core_terminal(&host, info.id);
             }
             Purpose::Tab { scope, workspace } => {
+                let terminal = info.id.clone();
                 let location = Location::core_terminal(Panes::single(info.id), false);
                 let Some(id) = Store::update(cx, |store| {
                     store.open(scope, &workspace, Some(location), None)
                 }) else {
+                    self.end_core_terminal(&host, terminal);
                     self.show_flash(Flash::warning(fl!("core-terminals-too-many-tabs")), cx);
                     return;
                 };

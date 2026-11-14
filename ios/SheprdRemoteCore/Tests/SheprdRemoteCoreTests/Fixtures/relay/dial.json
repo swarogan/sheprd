@@ -1,0 +1,34 @@
+{
+  "endpoints": [
+    {
+      "dial": "wss://relay.example.org/v1/dial/BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "proof_name": "relay.example.org",
+      "text": "relay.example.org"
+    },
+    {
+      "dial": "wss://relay.example.org/v1/dial/BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "proof_name": "relay.example.org",
+      "text": "https://Relay.Example.org:443/"
+    },
+    {
+      "dial": "wss://relay.example.org:8443/sheprd/v1/dial/BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "proof_name": "relay.example.org:8443/sheprd",
+      "text": "https://relay.example.org:8443/sheprd/"
+    },
+    {
+      "dial": "wss://161-35-226-62.sslip.io/v1/dial/BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "proof_name": "161-35-226-62.sslip.io",
+      "text": "wss://161-35-226-62.sslip.io"
+    },
+    {
+      "dial": "ws://127.0.0.1:8080/v1/dial/BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "proof_name": "127.0.0.1:8080",
+      "text": "http://127.0.0.1:8080"
+    }
+  ],
+  "nonce": "4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e",
+  "proof_name": "relay.example.org/sheprd",
+  "route": "5252525252525252525252525252525252525252525252525252525252525252",
+  "route_text": "UlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlI",
+  "signed": "7368657072642d72656c61792f6469616c2f76310072656c61792e6578616d706c652e6f72672f736865707264004e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e5252525252525252525252525252525252525252525252525252525252525252"
+}

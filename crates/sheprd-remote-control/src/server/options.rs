@@ -44,6 +44,9 @@ pub struct Options {
     pub live_activities: ActivityDetail,
     pub port: u16,
     pub privacy: Privacy,
+    /// The relays to listen on, so paired phones reach this computer from
+    /// any network; none when empty.
+    pub relays: Vec<sheprd_relay::Endpoint>,
     pub state_dir: PathBuf,
     /// The saved WSL distributions, as Sheprd resolved them; `None` resolves
     /// them from this process's environment.
@@ -128,6 +131,8 @@ Options:
                            (default detailed)
   --device-idle-days N     Forget devices unseen this long, 0 for never
                            (default 30)
+  --relay URL              Listen on this relay too, so paired phones reach
+                           this computer from any network; repeatable
   --no-bonjour             Do not advertise over Bonjour; phones then pair
                            by QR code only (on macOS, Sheprd advertises
                            while its pairing dialog is open instead)
@@ -172,6 +177,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let (mut core_socket, mut core_session) = (None, None);
     let mut bonjour = true;
     let mut github_cli = false;
+    let mut relays = Vec::new();
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
         let mut value = |option: &'static str| args.next().ok_or(ParseError::Missing(option));
@@ -238,6 +244,13 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                         option: "--device-idle-days",
                     })?;
             }
+            "--relay" => {
+                let endpoint = text(value("--relay")?, "--relay")?;
+                relays.push(
+                    sheprd_relay::Endpoint::parse(&endpoint)
+                        .map_err(|_| ParseError::Value { option: "--relay" })?,
+                );
+            }
             "--no-bonjour" => bonjour = false,
             "--github-cli" => github_cli = true,
             "-h" | "--help" => return Ok(Invocation::Help),
@@ -271,6 +284,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         live_activities,
         port,
         privacy,
+        relays,
         state_dir: state_dir.ok_or(ParseError::NoStateDir)?,
         wsl_catalog,
     })))

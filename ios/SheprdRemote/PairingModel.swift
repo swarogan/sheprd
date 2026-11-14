@@ -126,16 +126,49 @@ final class PairingModel {
             origins = result.offer.origins.filter(Computer.isOrigin)
         }
         step = .code(result.code)
+        // When the computer listens on relays, the claim carries this
+        // phone's keys for them, so once approved it reaches the computer
+        // from any network.
+        let relay = result.offer.relay.flatMap(RelayRecord.make)
         // The claim pins the fingerprint the code vouched for.
         for origin in origins {
             let client = RemoteClient(origin: origin, fingerprint: result.fingerprint)
             guard await client.ping() else { continue }
             return try await claim(
                 at: client, token: result.offer.token, fingerprint: result.fingerprint,
-                deviceName: deviceName, expected: result.code
+                deviceName: deviceName, expected: result.code, relay: relay
             )
         }
+        // No address answers: the phone is on another network. The
+        // computer opened a pairing dial on its relays for this token.
+        if let relay, let secret = Base64URL.decode(result.offer.token) {
+            return try await claimThroughRelay(relay, secret: secret, result: result, deviceName: deviceName)
+        }
         throw RemoteError.unreachable
+    }
+
+    /// Claims through the computer's relays: the first connection is the
+    /// one-dial pairing session the offer's token opens; any after it use
+    /// this phone's own relay keys, which the relays let through once the
+    /// desktop approves.
+    private func claimThroughRelay(
+        _ relay: RelayRecord,
+        secret: Data,
+        result: NearbySAS.Result,
+        deviceName: String
+    ) async throws -> Computer {
+        let first = FirstDial()
+        let proxy = try RelayProxy(open: {
+            if first.take() { return try await relay.openPairing(secret: secret) }
+            return try await relay.open()
+        })
+        let port = try await proxy.start()
+        defer { proxy.stop() }
+        let client = RemoteClient(origin: "https://127.0.0.1:\(port)", fingerprint: result.fingerprint)
+        return try await claim(
+            at: client, token: result.offer.token, fingerprint: result.fingerprint,
+            deviceName: deviceName, expected: result.code, relay: relay, throughRelay: true
+        )
     }
 
     /// Claims `token` with a new device key, then waits for Allow. A nearby
@@ -145,19 +178,30 @@ final class PairingModel {
         token: String,
         fingerprint: Fingerprint,
         deviceName: String,
-        expected: String?
+        expected: String?,
+        relay: RelayRecord? = nil,
+        throughRelay: Bool = false
     ) async throws -> Computer {
         let key = try DeviceKey.create()
         let claim = try await client.claim(API.ClaimRequest(
             token: token,
             name: deviceName,
-            publicKey: DeviceKeyEncoding.publicKey(key.publicKey)
+            publicKey: DeviceKeyEncoding.publicKey(key.publicKey),
+            relay: relay?.enrollment
         ))
         if let expected, claim.code != expected { throw NearbyFailure.codeMismatch }
         step = .code(claim.code)
         for _ in 0..<Self.pollLimit {
             try await Task.sleep(for: Self.pollInterval)
-            switch try await client.claimStatus(claim.claim) {
+            let status: API.ClaimStatus
+            do {
+                status = try await client.claimStatus(claim.claim)
+            } catch where throughRelay {
+                // A relay session can drop; the next poll dials again, with
+                // this phone's own keys, which work once Allow is pressed.
+                continue
+            }
+            switch status {
             case .waiting:
                 continue
             case .denied:
@@ -169,13 +213,32 @@ final class PairingModel {
                 return Computer(
                     device: approval.device,
                     name: approval.computer,
-                    origins: Computer.origins(pairedAt: client.origin, served: approval.origins),
+                    // Through a relay, the address claimed at is this
+                    // phone's own loopback: only the computer's count.
+                    origins: throughRelay
+                        ? approval.origins.filter(Computer.isOrigin)
+                        : Computer.origins(pairedAt: client.origin, served: approval.origins),
                     fingerprint: fingerprint,
                     keyKind: key.kind,
-                    keyData: key.data
+                    keyData: key.data,
+                    relay: relay
                 )
             }
         }
         throw Failure.timedOut
+    }
+}
+
+/// True once: the first connection a pairing proxy opens.
+private final class FirstDial: @unchecked Sendable {
+    private var taken = false
+    private let lock = NSLock()
+
+    func take() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if taken { return false }
+        taken = true
+        return true
     }
 }

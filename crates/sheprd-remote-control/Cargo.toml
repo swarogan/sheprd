@@ -22,6 +22,8 @@ server = [
     "dep:getrandom",
     "dep:gix",
     "dep:hkdf",
+    "dep:hyper",
+    "dep:hyper-util",
     "dep:if-addrs",
     "dep:maud",
     "dep:mdns-sd",
@@ -33,8 +35,10 @@ server = [
     "dep:rustls",
     "dep:secrecy",
     "dep:sheprd-apns",
+    "sheprd-relay/client",
     "dep:sha2",
     "dep:sheprd-terminal",
+    "dep:sheprd-tunnel",
     "dep:socket2",
     "dep:sysinfo",
     "dep:time",
@@ -56,6 +60,9 @@ sheprd-apns                    = { optional = true, workspace = true }
 sheprd-chat-protocol.workspace = true
 sheprd-client.workspace        = true
 sheprd-github.workspace        = true
+# Relay addresses in `[remote] relays`; with `server`, listening on them
+# (`client`), so paired phones reach this computer from anywhere.
+sheprd-relay.workspace         = true
 # The pairing dialog's QR code, drawn by Sheprd.
 qrcode.workspace              = true
 # The macOS user ID the LaunchAgent loads under, and the server's host name.
@@ -80,6 +87,9 @@ futures-lite   = { optional = true, workspace = true }
 getrandom      = { optional = true, workspace = true }
 gix            = { optional = true, workspace = true }
 hkdf           = { optional = true, workspace = true }
+# Serving the API over a relay's end-to-end tunnel, as axum serves it over TLS.
+hyper          = { features = ["http1", "server"], optional = true, workspace = true }
+hyper-util     = { features = ["service", "tokio"], optional = true, workspace = true }
 if-addrs       = { optional = true, workspace = true }
 maud           = { optional = true, workspace = true }
 # Advertises the daemon over Bonjour so phones nearby find it to pair.
@@ -93,6 +103,7 @@ sheprd-backend = { optional = true, workspace = true }
 sheprd-core-client.workspace = true
 sheprd-session = { optional = true, workspace = true }
 sheprd-terminal = { optional = true, workspace = true }
+sheprd-tunnel  = { features = ["tokio"], optional = true, workspace = true }
 socket2        = { optional = true, workspace = true }
 # This computer's CPU and memory, shown above its workspaces on a phone.
 sysinfo        = { optional = true, workspace = true }
@@ -109,6 +120,8 @@ x509-parser    = { optional = true, workspace = true }
 
 [dev-dependencies]
 futures-util.workspace      = true
+# A real relay on loopback, for the daemon's relay tests.
+sheprd-relay                = { features = ["client", "server"], workspace = true }
 p256.workspace              = true
 roxmltree.workspace         = true
 tokio-tungstenite.workspace = true

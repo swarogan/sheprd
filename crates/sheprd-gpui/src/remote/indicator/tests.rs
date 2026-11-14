@@ -18,6 +18,7 @@ fn status(connected: usize) -> Status {
         chats: 0,
         devices: 2,
         connected,
+        relays: Default::default(),
     }
 }
 

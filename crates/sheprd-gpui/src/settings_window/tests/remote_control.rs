@@ -35,6 +35,7 @@ fn status() -> Status {
         chats: 2,
         devices: 2,
         connected: 1,
+        relays: Default::default(),
     }
 }
 

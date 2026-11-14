@@ -7,6 +7,7 @@
 //! It never blocks: the [`Service`] worker does the I/O, and the host pushes
 //! the theme, live agent statuses, and the GitHub account from its tick.
 
+mod adoption;
 mod browse;
 mod comments;
 mod conversation;
@@ -17,6 +18,7 @@ mod gitea_actions;
 mod hosts;
 mod inbox;
 mod jira_actions;
+mod keys;
 mod list;
 mod listing;
 mod look;
@@ -73,15 +75,17 @@ pub(crate) enum Event {
         pane_id: String,
     },
     /// Show a Herdr 2 run's agent: the workspace the app keeps at its
-    /// checkout on this machine, kept with `terminal` as its tab when none is.
+    /// checkout on its recorded host, kept with `terminal` as its tab when none is.
     OpenCoreRun {
+        target: sheprd_client::ConnectTarget,
         path: std::path::PathBuf,
         terminal: String,
         label: String,
     },
-    /// Close the workspace the app keeps at `path` on this machine: a
+    /// Close the workspace the app keeps at `path` on its recorded host: a
     /// removed Herdr 2 run's checkout.
     CloseCoreRun {
+        target: sheprd_client::ConnectTarget,
         path: std::path::PathBuf,
     },
     /// Show a run's Herdr workspace on the host it is on: `None` for this
@@ -260,10 +264,12 @@ pub(crate) struct OrchestratorView {
     /// Hosts a dispatch could go to, while the dialog is open.
     hosts: Arc<Vec<crate::dispatch::Candidate>>,
     /// Which Herdr starts a dispatch on this machine.
-    local_terminals: super::Terminals,
+    terminals: Vec<(sheprd_client::ConnectTarget, super::Terminals)>,
     /// Herdr 2 runs being removed here, by ID, with their checkouts, whose
     /// kept workspaces close once the worker forgot the run.
-    core_removals: Vec<(String, std::path::PathBuf)>,
+    core_removals: Vec<(String, core_removal::Checkout)>,
+    pending_core_open: Option<String>,
+    adoption_pending: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -341,8 +347,10 @@ impl OrchestratorView {
             avatars: conversation::Avatars::default(),
             merge_open: false,
             hosts: Arc::default(),
-            local_terminals: super::Terminals::default(),
+            terminals: Vec::new(),
             core_removals: Vec::new(),
+            pending_core_open: None,
+            adoption_pending: false,
             _subscriptions: vec![subscription],
         }
     }
@@ -518,8 +526,11 @@ impl OrchestratorView {
 
     /// Which Herdr starts a dispatch on this machine: Herdr 2 when the
     /// window's workspaces here use herdr-core.
-    pub(crate) fn set_local_terminals(&mut self, terminals: super::Terminals) {
-        self.local_terminals = terminals;
+    pub(crate) fn set_terminals(
+        &mut self,
+        terminals: Vec<(sheprd_client::ConnectTarget, super::Terminals)>,
+    ) {
+        self.terminals = terminals;
     }
 
     /// The banner's text, for tests outside the view.
@@ -795,15 +806,33 @@ impl OrchestratorView {
     /// the workspace it worked in, else says why there is nothing to show.
     fn open_run(&mut self, run: usize, cx: &mut Context<Self>) {
         let runs = Runs::new(&self.snapshot().runs, &self.snapshot().sessions, &self.live);
+        if runs
+            .session(run)
+            .is_some_and(|session| matches!(session.pane, super::Pane::Pending))
+        {
+            if let Some(run) = runs.runs.get(run) {
+                let id = run.id.clone();
+                self.pending_core_open = Some(id.clone());
+                self.act(super::Action::Recover { run: id });
+            }
+            return;
+        }
+        if runs
+            .session(run)
+            .is_some_and(|session| matches!(session.pane, super::Pane::Herdr2 { .. }))
+        {
+            if let Some(event) = core_run(&runs, run) {
+                cx.emit(event);
+            } else {
+                self.report(super::Error::NothingToOpen, cx);
+            }
+            return;
+        }
         if let Some(agent) = runs.live(run) {
             cx.emit(Event::OpenRun {
                 endpoint: agent.endpoint,
                 pane_id: agent.pane_id.clone(),
             });
-            return;
-        }
-        if let Some(event) = core_run(&runs, run) {
-            cx.emit(event);
             return;
         }
         let workspace = self.snapshot().runs.get(run).and_then(|run| {
@@ -838,104 +867,6 @@ impl OrchestratorView {
                 });
                 cx.notify();
             }
-        }
-    }
-
-    fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if (self.dialog.is_some() || self.confirm.is_some())
-            && self.dialog_key(&event.keystroke.key, window, cx)
-        {
-            cx.stop_propagation();
-            return;
-        }
-        if self.dialog.is_some() {
-            return;
-        }
-        if self.jira_key(event.keystroke.key.as_str(), window, cx)
-            || self.gitea_key(event.keystroke.key.as_str(), window, cx)
-        {
-            cx.stop_propagation();
-            return;
-        }
-        if self.comment.read(cx).focus.is_focused(window) {
-            match event.keystroke.key.as_str() {
-                "enter" => self.post_comment(cx),
-                "escape" => window.focus(&self.focus, cx),
-                _ => return,
-            }
-            cx.stop_propagation();
-            return;
-        }
-        if self.message.read(cx).focus.is_focused(window) {
-            match event.keystroke.key.as_str() {
-                "enter" => self.send_message(cx),
-                "escape" => window.focus(&self.focus, cx),
-                _ => return,
-            }
-            cx.stop_propagation();
-            return;
-        }
-        if self.search.read(cx).focus.is_focused(window) {
-            if event.keystroke.key == "escape" {
-                window.focus(&self.focus, cx);
-                cx.stop_propagation();
-            }
-            return;
-        }
-        let modifiers = &event.keystroke.modifiers;
-        if modifiers.platform || modifiers.control || modifiers.alt {
-            return;
-        }
-        let handled = match (event.keystroke.key.as_str(), &self.detail) {
-            ("escape", Some(_)) => {
-                self.detail = None;
-                cx.notify();
-                true
-            }
-            ("escape", None) if self.menu.is_some() => {
-                self.menu = None;
-                cx.notify();
-                true
-            }
-            ("/", None) => {
-                window.focus(&self.search.read(cx).focus.clone(), cx);
-                true
-            }
-            ("up" | "k", None) => {
-                self.move_selection(-1, cx);
-                true
-            }
-            ("down" | "j", None) => {
-                self.move_selection(1, cx);
-                true
-            }
-            ("enter", None) => {
-                if let Some(key) = self.selected.clone() {
-                    self.open_detail(key, cx);
-                }
-                true
-            }
-            ("r", _) => {
-                self.ask_refresh();
-                true
-            }
-            ("1" | "2" | "3" | "4" | "5", Some(detail)) => {
-                let index = event.keystroke.key.parse::<usize>().unwrap_or(1) - 1;
-                let pull_request = self
-                    .item(&detail.key)
-                    .is_some_and(|item| item.github_pull_request().is_some());
-                let tabs = DetailTab::tabs(pull_request);
-                let mut detail = detail.clone();
-                detail.tab = tabs[index.min(tabs.len() - 1)];
-                self.detail = Some(detail);
-                self.follow_pull_request();
-                cx.notify();
-                true
-            }
-            _ => false,
-        };
-        if handled {
-            cx.stop_propagation();
         }
     }
 }
@@ -981,7 +912,7 @@ impl Render for OrchestratorView {
     }
 }
 
-/// The event showing run `run` when Herdr 2 runs its agent on this machine:
+/// The event showing run `run` when Herdr 2 runs its agent:
 /// its checkout and the herdr-core terminal its session records.
 fn core_run(runs: &Runs<'_>, run: usize) -> Option<Event> {
     let session = runs.session(run)?;
@@ -989,10 +920,8 @@ fn core_run(runs: &Runs<'_>, run: usize) -> Option<Event> {
         return None;
     };
     let workspace = runs.runs.get(run)?.workspace.as_ref()?;
-    if session.host.is_some() {
-        return None;
-    }
     Some(Event::OpenCoreRun {
+        target: super::actions::target_of(session),
         path: workspace.path.clone()?,
         terminal: terminal.clone(),
         label: workspace.branch.clone(),

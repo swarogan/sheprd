@@ -22,6 +22,8 @@ mod native;
 #[cfg(feature = "server")]
 mod push;
 #[cfg(feature = "server")]
+mod relay;
+#[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]
 mod tls;

@@ -18,6 +18,8 @@ error-remote-control-pairing-url = The daemon supplied an invalid pairing URL
 error-remote-control-path-text = { $path } cannot go in a service definition
 error-remote-control-port = remote.port must be between 1 and 65535
 error-remote-control-program-missing = sheprd-remote-control was not found beside Sheprd or on PATH
+# $relay is an entry of remote.relays as the user wrote it.
+error-remote-control-relay = remote.relays has { $relay }, which is not a relay address
 error-remote-control-qr = The pairing link does not fit in a QR code
 # $program is the service manager command, such as launchctl or systemctl;
 # $status is how it ended, in the system's words; $stderr is its own output.

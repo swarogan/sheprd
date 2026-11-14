@@ -253,6 +253,7 @@ final class AppModel {
         tokens.computers = computers
         fleet.sync(computers)
         presence.onAddresses = { [weak self] fingerprint, origins in self?.update(fingerprint, origins: origins) }
+        fleet.onRelay = { [weak self] device, record in self?.setRelay(device, record) }
         // Back in range after iOS relaunched the app: tokens may be stale.
         presence.onWake = { [weak self] in
             guard let self else { return }
@@ -339,6 +340,15 @@ final class AppModel {
             save()
         case .send: fleet.offerTags(for: computers[index])
         }
+    }
+
+    /// How this phone reaches a computer through its relays, once sent.
+    private func setRelay(_ device: String, _ record: RelayRecord?) {
+        guard let index = computers.firstIndex(where: { $0.device == device }),
+              computers[index].relay != record
+        else { return }
+        computers[index].relay = record
+        save()
     }
 
     /// Addresses a computer sent over Bluetooth, sealed to this phone.

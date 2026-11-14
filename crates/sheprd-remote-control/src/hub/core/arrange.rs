@@ -26,9 +26,22 @@ use sheprd_session::{
 };
 use std::{collections::BTreeMap, io::Read, path::Path, time::SystemTime};
 
+// Serialize phones before taking the cross-process ownership lock.
+static EDITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// How often a held saved-tabs lock is tried again before Sheprd is taken
+/// to hold it, and how long apart: 100ms in all, on the blocking pool.
+const OWNER_RETRIES: u32 = 5;
+const OWNER_RETRY: std::time::Duration = std::time::Duration::from_millis(20);
+
 impl From<Error> for HubError {
     fn from(error: Error) -> Self {
         Self::Core(super::Error::Arrange(error))
+    }
+}
+
+impl HubError {
+    pub(crate) fn desktop_owns_layout(&self) -> bool {
+        matches!(self, Self::Core(super::Error::Arrange(Error::SheprdOpen)))
     }
 }
 
@@ -135,13 +148,26 @@ impl Source {
             .as_deref()
             .zip(self.scope.as_deref())
             .ok_or(Error::NoTabs)?;
+        let _editing = lock(&EDITING);
+        // Take ownership before starting a split's shell. A running desktop
+        // must receive the intent without a speculative terminal being made.
+        let _owner = file_owner(path)?;
         if let Op::RenameWorkspace { workspace, name } = op {
-            edit_file(path, |bytes| {
+            edit_owned_file(path, |bytes| {
                 edit::rename_workspace(bytes, scope, workspace, name.trim())
             })?;
             return Ok(None);
         }
         let at = TerminalId::new(address).map_err(Error::from)?;
+        // The phone names a recovered chat's replacement, which a file saved
+        // before the recovery does not: rebind it within the same edit.
+        let replacements = lock(&self.poller).replacements.clone();
+        let remapped = |bytes: &[u8]| -> std::result::Result<Vec<u8>, edit::Error> {
+            if replacements.is_empty() {
+                return Ok(bytes.to_vec());
+            }
+            edit::remap(bytes, scope, &replacements)
+        };
         if let Some(axis) = axis(op) {
             let record = self.record(address)?;
             let workspace = lock(&self.poller).saved_workspace(scope, tab);
@@ -154,13 +180,13 @@ impl Source {
             let split = TerminalId::new(new.address.as_str())
                 .map_err(Error::from)
                 .and_then(|id| {
-                    edit_file(path, |bytes| {
+                    edit_owned_file(path, |bytes| {
                         let change = Change::Split {
                             at: &at,
                             axis,
                             new: id,
                         };
-                        edit::edit_tab(bytes, scope, tab, change)
+                        edit::edit_tab(&remapped(bytes)?, scope, tab, change)
                     })
                 });
             if let Err(error) = split {
@@ -181,7 +207,9 @@ impl Source {
                 return Err(super::Error::Unsupported.into());
             }
         };
-        edit_file(path, |bytes| edit::edit_tab(bytes, scope, tab, change))?;
+        edit_owned_file(path, |bytes| {
+            edit::edit_tab(&remapped(bytes)?, scope, tab, change)
+        })?;
         Ok(None)
     }
 
@@ -201,6 +229,26 @@ impl Source {
 }
 
 impl Hub {
+    /// The file lock is released on desktop exit, before its last heartbeat
+    /// expires. Probe on the blocking pool and serialize with our own edits.
+    pub(crate) async fn desktop_layout_owner(&self) -> Result<Option<bool>> {
+        let Some(core) = self.core.clone() else {
+            return Ok(None);
+        };
+        super::super::on_core(move || {
+            let Some(path) = core.tabs.as_deref() else {
+                return Ok(None);
+            };
+            let _editing = lock(&EDITING);
+            match file_owner(path) {
+                Ok(_) => Ok(Some(false)),
+                Err(Error::SheprdOpen) => Ok(Some(true)),
+                Err(error) => Err(error.into()),
+            }
+        })
+        .await
+    }
+
     /// Who changes the layout of the Herdr 2 tab `tab` holding `pane`;
     /// `None` when the pane is not Herdr 2's.
     pub(crate) fn core_keeper(&self, tab: &str, pane: &str) -> Result<Option<Keeper>> {
@@ -233,13 +281,6 @@ impl Hub {
         .await
     }
 
-    /// Renames a workspace Sheprd keeps while it is closed.
-    pub(crate) async fn rename_kept(&self, workspace: String, name: String) -> Result<()> {
-        let core = self.core.clone().ok_or(super::Error::Disconnected)?;
-        let op = Op::RenameWorkspace { workspace, name };
-        super::super::on_core(move || core.arrange_saved(0, "", &op).map(|_| ())).await
-    }
-
     /// Names one of the groups the daemon lists for Herdr 2: its unlisted
     /// terminals, or a phone's new workspace. `false` for any other.
     pub(crate) async fn rename_core_group(&self, workspace: &str, name: &str) -> Result<bool> {
@@ -254,14 +295,19 @@ impl Hub {
 }
 
 /// Changes the file at `path` by `change`, unless it changed meanwhile.
+#[cfg(test)]
 fn edit_file(
     path: &Path,
     change: impl FnOnce(&[u8]) -> std::result::Result<Vec<u8>, edit::Error>,
 ) -> std::result::Result<(), Error> {
     // Phones' edits run on the blocking pool side by side: one at a time,
     // or two could read the same file and the later write drop the other.
-    static EDITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _editing = lock(&EDITING);
+    let _owner = file_owner(path)?;
+    edit_owned_file(path, change)
+}
+
+fn file_owner(path: &Path) -> std::result::Result<std::fs::File, Error> {
     // Sheprd holds this from before it reads its tabs until it quits: one
     // starting or running now would overwrite the edit, so it is refused.
     let owner = std::fs::OpenOptions::new()
@@ -269,11 +315,28 @@ fn edit_file(
         .truncate(false)
         .write(true)
         .open(sheprd_session::saved::lock_path(path))?;
-    match owner.try_lock() {
-        Ok(()) => {}
-        Err(std::fs::TryLockError::WouldBlock) => return Err(Error::SheprdOpen),
-        Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
+    // The lock is the open file's, which a child another thread forks
+    // shares until it runs its program, as the daemon's `git` does: a lock
+    // just let go can read as held for that moment. Sheprd holds its own
+    // for as long as it runs, so a few short retries tell the two apart.
+    let mut retries = 0;
+    loop {
+        match owner.try_lock() {
+            Ok(()) => return Ok(owner),
+            Err(std::fs::TryLockError::WouldBlock) if retries < OWNER_RETRIES => {
+                retries += 1;
+                std::thread::sleep(OWNER_RETRY);
+            }
+            Err(std::fs::TryLockError::WouldBlock) => return Err(Error::SheprdOpen),
+            Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
+        }
     }
+}
+
+fn edit_owned_file(
+    path: &Path,
+    change: impl FnOnce(&[u8]) -> std::result::Result<Vec<u8>, edit::Error>,
+) -> std::result::Result<(), Error> {
     // The modified time catches anything else writing meanwhile.
     let modified =
         |path: &Path| -> std::io::Result<SystemTime> { std::fs::metadata(path)?.modified() };

@@ -8,7 +8,7 @@
 //! `std::sync::Mutex` and passes every time explicitly, in milliseconds
 //! since the Unix epoch, so the rules are tested without clocks or sockets.
 
-mod devices;
+pub(crate) mod devices;
 mod handoff;
 mod limits;
 pub(crate) mod links;
@@ -293,6 +293,12 @@ pub(crate) struct Auth {
     pair_limit: RateLimiter<IpAddr>,
     pairings: Pairings,
     presence: Presences,
+    /// What a nearby offer says about this computer's relays, when it
+    /// listens on any (`set_relay_offer`).
+    relay_offer: Option<crate::relay::Info>,
+    /// The token last sealed to a nearby phone, for the relays to open a
+    /// pairing dial with, until taken.
+    relay_pairing: Option<[u8; SECRET_LEN]>,
     /// Bumped whenever sessions end early, so open streams check again.
     revoked: watch::Sender<u64>,
     sessions: Sessions,
@@ -320,6 +326,8 @@ impl Auth {
             ),
             pairings: Pairings::default(),
             presence: Presences::default(),
+            relay_offer: None,
+            relay_pairing: None,
             revoked: watch::Sender::new(0),
             sessions: Sessions::default(),
         })
@@ -427,9 +435,24 @@ impl Auth {
             return Err(Error::NoPairing);
         }
         let token = random_bytes::<SECRET_LEN>()?;
-        let (revealed, code) = started.reveal(nonce, fingerprint, &token, origins)?;
+        let relay = self.relay_offer.as_ref();
+        let (revealed, code) = started.reveal(nonce, fingerprint, &token, origins, relay)?;
         self.pairings.set_nearby(&token, code, now_ms)?;
+        if relay.is_some() {
+            self.relay_pairing = Some(token);
+        }
         Ok(revealed)
+    }
+
+    /// Lets nearby offers say how to claim through this computer's relays.
+    pub(crate) fn set_relay_offer(&mut self, offer: crate::relay::Info) {
+        self.relay_offer = Some(offer);
+    }
+
+    /// The token last sealed to a nearby phone, once, for the relays to
+    /// let that phone dial in and claim from another network.
+    pub(crate) fn take_relay_pairing(&mut self) -> Option<[u8; SECRET_LEN]> {
+        self.relay_pairing.take()
     }
 
     /// A nonce for the paired phone whose daily hint is `hint` to sign.
@@ -457,6 +480,11 @@ impl Auth {
     /// Notes that `claim` came from an app installed from another computer.
     pub(crate) fn claimed_from(&mut self, claim: &ClaimId, origin: String) {
         self.pairings.claimed_from(claim, origin);
+    }
+
+    /// Keeps the relay keys the phone sent with `claim`.
+    pub(crate) fn claimed_relay(&mut self, claim: &ClaimId, keys: devices::RelayKeys) {
+        self.pairings.claimed_relay(claim, keys);
     }
 
     pub(crate) fn claim_status(&mut self, id: &ClaimId, now_ms: u64) -> Result<PairingState> {
@@ -666,6 +694,7 @@ impl Auth {
                 id: id.clone(),
                 name,
                 public_key,
+                relay: None,
             },
             now_ms,
             Some(via),

@@ -114,6 +114,7 @@ impl SheprdWindow {
         // A layout saved from Settings or the command line arrives here.
         changed |= self.chats.relayout(self.config.chat.layout);
         changed |= self.chats.rewidth(self.config.chat.max_width);
+        changed |= self.chats.recode(&self.config.chat);
         changed |= self.chats.relocale(crate::i18n::shown_locale());
         changed |= self.chats.poll(now);
         // Observed panes, whether a discovered agent or a `[chat.mirrors]`
@@ -709,6 +710,7 @@ impl SheprdWindow {
             return;
         }
         let host = match self.chats.pane(pane_id).map(|pane| &pane.target.route) {
+            Some(super::Route::Remote(target)) => target.clone(),
             Some(super::Route::Ssh(host)) => sheprd_client::ConnectTarget::Ssh {
                 target: host.clone(),
                 session: String::new(),

@@ -9,6 +9,9 @@ impl Localize for Error {
             // keep-sorted start
             Self::Busy => fl!("error-worktree-scripts-busy"),
             Self::Checkout => fl!("error-worktree-scripts-checkout"),
+            Self::Copy(error) => fl!("error-worktree-scripts-copy", error = error.localize()),
+            #[cfg(windows)]
+            Self::CopyUnsupported => fl!("error-worktree-scripts-copy-unsupported"),
             Self::Encoding(_) => fl!("error-worktree-scripts-encoding"),
             Self::NotGit => fl!("error-worktree-scripts-not-git"),
             Self::Nul => fl!("error-worktree-scripts-nul"),
@@ -19,6 +22,7 @@ impl Localize for Error {
             }
             Self::Request(error) => error.localize(),
             Self::Response => fl!("error-worktree-scripts-response"),
+            Self::SetupExpired => fl!("error-worktree-scripts-setup-expired"),
             Self::Size { limit } => fl!("error-worktree-scripts-size", limit = *limit),
             Self::UnsupportedHost => fl!("error-worktree-scripts-unsupported-host"),
             // keep-sorted end

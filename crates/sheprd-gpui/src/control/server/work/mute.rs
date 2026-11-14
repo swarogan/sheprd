@@ -1,10 +1,10 @@
 //! `worktree`: the mute of the caller's workspace. Mutes stay in this app;
 //! nothing reaches the daemon.
-use super::find;
+use super::{Source, find};
 use crate::{
     SheprdWindow,
     control::protocol::{
-        Caller, ErrorCode, Response,
+        ErrorCode, Response,
         work::{MuteInfo, Reply},
     },
     notification_mutes::{Daemon, Mutes, Scope},
@@ -12,57 +12,64 @@ use crate::{
 use gpui::{App, Context};
 use std::time::SystemTime;
 
-pub(super) fn status(view: &SheprdWindow, caller: &Caller, cx: &App) -> Response {
+pub(super) fn status<'a>(view: &SheprdWindow, caller: impl Into<Source<'a>>, cx: &App) -> Response {
     let found = match find(view, caller) {
         Ok(found) => found,
         Err(response) => return response,
     };
-    let herdr = match found.herdr("a workspace mute") {
-        Ok(herdr) => herdr,
-        Err(response) => return response,
-    };
     let endpoint = &view.endpoints[found.index];
-    let silenced = Mutes::of(cx)
-        .map(|mutes| mutes.silenced(&Daemon::of(endpoint), herdr.snapshot))
-        .unwrap_or_default();
+    let (muted, host_muted) = Mutes::of(cx).map_or((false, false), |mutes| {
+        if let Some(herdr) = &found.herdr {
+            let silenced = mutes.silenced(&Daemon::of(endpoint), herdr.snapshot);
+            (silenced.workspace(&found.workspace.id), silenced.host())
+        } else {
+            let scope = crate::browser::scope(endpoint);
+            (
+                mutes.kept(scope.as_str(), Scope::Workspace, &found.workspace.id),
+                mutes.host(crate::core_terminals::Host::of(&scope).endpoint()),
+            )
+        }
+    });
     Response::Work {
         reply: Reply::Mute {
             mute: MuteInfo {
                 host: endpoint.label.clone(),
-                workspace: herdr.workspace.label.clone(),
-                muted: silenced.workspace(&herdr.workspace.workspace_id),
-                host_muted: silenced.host(),
+                workspace: found.workspace.label.clone(),
+                muted,
+                host_muted,
             },
         },
     }
 }
 
-pub(super) fn set(
+pub(super) fn set<'a>(
     view: &SheprdWindow,
-    caller: &Caller,
+    caller: impl Into<Source<'a>>,
     muted: bool,
     cx: &mut Context<SheprdWindow>,
 ) -> Response {
+    let caller = caller.into();
     let found = match find(view, caller) {
         Ok(found) => found,
         Err(response) => return response,
     };
-    let herdr = match found.herdr("a workspace mute") {
-        Ok(herdr) => herdr,
-        Err(response) => return response,
-    };
     let daemon = Daemon::of(&view.endpoints[found.index]);
-    let id = &herdr.workspace.workspace_id;
-    let changed = Mutes::update(cx, |mutes| {
-        mutes.set(
-            &daemon,
-            herdr.snapshot,
-            Scope::Workspace,
-            id,
-            muted,
-            SystemTime::now(),
-        )
-    });
+    let id = &found.workspace.id;
+    let changed = if let Some(herdr) = &found.herdr {
+        Mutes::update(cx, |mutes| {
+            mutes.set(
+                &daemon,
+                herdr.snapshot,
+                Scope::Workspace,
+                id,
+                muted,
+                SystemTime::now(),
+            )
+        })
+    } else {
+        let scope = crate::browser::scope(&view.endpoints[found.index]);
+        crate::core_terminals::mutes::set_kept(cx, scope.as_str(), Scope::Workspace, id, muted)
+    };
     if changed {
         cx.notify();
     }

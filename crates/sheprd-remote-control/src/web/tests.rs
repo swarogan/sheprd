@@ -89,6 +89,7 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         privacy: Privacy::Generic,
         pull_requests,
         push: None,
+        relay: None,
         reports: Mutex::new(report_limit()),
         seen: Mutex::new(seen),
         shortcuts: Shortcuts::load(crate::app::shortcuts::file(dir)),

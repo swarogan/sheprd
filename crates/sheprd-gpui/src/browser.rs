@@ -50,6 +50,8 @@ mod popup;
 #[cfg(any(target_os = "macos", windows))]
 mod preview;
 mod px0;
+#[cfg(any(target_os = "macos", windows))]
+mod shown_pages;
 #[cfg(target_os = "macos")]
 mod snapshot;
 #[cfg(target_os = "macos")]
@@ -73,7 +75,7 @@ pub(crate) use annotate_view::Annotations;
 pub(crate) use chat_pages::chat_page_visible;
 pub(crate) use closed::ClosedHerdrTab;
 pub(crate) use editor::Editor;
-pub(crate) use feedback::{Batch, Feedback, FeedbackKey};
+pub(crate) use feedback::{Batch, Feedback, FeedbackKey, FeedbackLease};
 pub(crate) use feedback::{TAKE_BUDGET, json_size};
 pub(crate) use group_motion::Fold;
 #[cfg(test)]

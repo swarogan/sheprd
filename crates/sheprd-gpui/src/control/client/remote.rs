@@ -95,6 +95,14 @@ fn status_text(enabled: bool, status: Option<&Status>, error: Option<&str>) -> S
             None => format!("Address: {address}"),
         },
     ));
+    lines.extend(status.relays.iter().map(|(relay, state)| {
+        use sheprd_remote_control::control::RelayState;
+        match state {
+            RelayState::Connecting => format!("Relay: {relay} — connecting"),
+            RelayState::Listening => format!("Relay: {relay} — listening"),
+            RelayState::Failed { error } => format!("Relay: {relay} — failed: {error}"),
+        }
+    }));
     lines.join("\n")
 }
 

@@ -74,6 +74,7 @@ fn remote_replies_round_trip() {
                 chats: 2,
                 devices: 1,
                 connected: 1,
+                relays: Default::default(),
             })),
             error: None,
         },

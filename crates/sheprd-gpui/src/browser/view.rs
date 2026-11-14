@@ -378,6 +378,8 @@ impl SheprdWindow {
         self.observe_closed_herdr_tabs(cx);
         self.forget_closed_workspaces(cx);
         self.settle_groups(window, cx);
+        #[cfg(any(target_os = "macos", windows))]
+        self.ensure_shown_pages(window, cx);
         self.advance_close_run(window, cx);
         self.poll_undo_close(cx);
         self.ensure_code_page(window, cx);

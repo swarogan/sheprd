@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/sheprd-acp", "crates/sheprd-apns", "crates/sheprd-automate", "crates/sheprd-automation", "crates/sheprd-backend", "crates/sheprd-chat-protocol", "crates/sheprd-client", "crates/sheprd-commands", "crates/sheprd-control-protocol", "crates/sheprd-core-client", "crates/sheprd-credentials", "crates/sheprd-diagnostics", "crates/sheprd-github", "crates/sheprd-gpui", "crates/sheprd-launcher", "crates/sheprd-i18n", "crates/sheprd-luau", "crates/sheprd-mods", "crates/sheprd-nearby", "crates/sheprd-orchestrator", "crates/sheprd-protocol", "crates/sheprd-push-relay", "crates/sheprd-remote", "crates/sheprd-remote-control", "crates/sheprd-session", "crates/sheprd-terminal", "crates/sheprd-updater", "crates/sheprd-usage", "crates/sheprd-vcs"]
+members  = ["crates/embed-resource", "crates/sheprd-acp", "crates/sheprd-apns", "crates/sheprd-automate", "crates/sheprd-automation", "crates/sheprd-backend", "crates/sheprd-chat-protocol", "crates/sheprd-client", "crates/sheprd-commands", "crates/sheprd-control-protocol", "crates/sheprd-core-client", "crates/sheprd-credentials", "crates/sheprd-diagnostics", "crates/sheprd-github", "crates/sheprd-gpui", "crates/sheprd-launcher", "crates/sheprd-i18n", "crates/sheprd-luau", "crates/sheprd-mods", "crates/sheprd-nearby", "crates/sheprd-orchestrator", "crates/sheprd-protocol", "crates/sheprd-push-relay", "crates/sheprd-relay", "crates/sheprd-remote", "crates/sheprd-remote-control", "crates/sheprd-session", "crates/sheprd-terminal", "crates/sheprd-tunnel", "crates/sheprd-updater", "crates/sheprd-usage", "crates/sheprd-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -34,6 +34,7 @@ aes                  = "0.9.3"
 ammonia              = "4.2.1"
 cbc                  = { features = ["block-padding"], version = "0.2.1" }
 percent-encoding     = "2"
+process-wrap         = { version = "10.0.1", default-features = false, features = ["std", "job-object", "creation-flags"] }
 pbkdf2               = { default-features = false, features = ["hmac"], version = "0.13.0" }
 pulldown-cmark       = { default-features = false, features = ["html"], version = "0.13.6" }
 # The remote control pairing QR, drawn as quads; no image or SVG renderer.
@@ -43,6 +44,8 @@ ratex-layout         = "=0.1.15"
 ratex-parser         = "=0.1.15"
 ratex-render         = { features = ["embed-fonts"], version = "=0.1.15" }
 ratex-types          = "=0.1.15"
+# User-written link-handler patterns; already in the lockfile through other crates.
+regex                = "1.13"
 base64               = "0.23.1"
 async-channel        = "2"
 bincode              = { default-features = false, features = ["serde", "std"], version = "2" }
@@ -105,9 +108,11 @@ sheprd-mods           = { path = "crates/sheprd-mods" }
 sheprd-orchestrator   = { path = "crates/sheprd-orchestrator" }
 sheprd-protocol       = { path = "crates/sheprd-protocol" }
 sheprd-remote         = { default-features = false, path = "crates/sheprd-remote" }
+sheprd-relay          = { default-features = false, path = "crates/sheprd-relay" }
 sheprd-remote-control         = { default-features = false, path = "crates/sheprd-remote-control" }
 sheprd-session        = { path = "crates/sheprd-session" }
 sheprd-terminal       = { path = "crates/sheprd-terminal" }
+sheprd-tunnel         = { path = "crates/sheprd-tunnel" }
 sheprd-updater        = { path = "crates/sheprd-updater" }
 sheprd-usage          = { path = "crates/sheprd-usage" }
 sheprd-vcs            = { path = "crates/sheprd-vcs" }
@@ -168,6 +173,7 @@ secrecy              = { features = ["serde"], version = "=0.10.3" }
 security-framework   = "=3.7.0"
 serde                = { features = ["derive"], version = "1" }
 serde_json           = "1"
+snow                 = { default-features = false, features = ["default-resolver", "std", "use-chacha20poly1305", "use-curve25519", "use-getrandom", "use-sha2"], version = "0.10" }
 serde_ignored        = "0.1.14"
 sha1                 = "0.11.0"
 # sheprd-remote: P-256 verifies the signatures paired phones make with their
@@ -178,7 +184,9 @@ sha1                 = "0.11.0"
 aes-gcm              = { default-features = false, features = ["aes", "alloc"], version = "0.11" }
 hkdf                 = "0.13"
 hmac                 = "0.13"
+ml-kem               = { default-features = false, version = "0.3.4" }
 p256                 = { default-features = false, features = ["ecdh", "ecdsa", "pem", "std"], version = "0.14" }
+pgp                  = { default-features = false, version = "0.21" }
 sha2                 = "0.11.0"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
 skrifa               = { default-features = false, features = ["std"], version = "0.49" }
@@ -205,6 +213,8 @@ tower                = { default-features = false, features = ["util"], version 
 # `ws` feature already links this version.
 tokio-tungstenite    = { default-features = false, features = ["handshake"], version = "0.30" }
 tokio-rustls         = { default-features = false, features = ["ring", "tls12"], version = "0.26" }
+# The relay's QUIC transport: streams, connection migration, TLS 1.3.
+quinn                = { default-features = false, features = ["runtime-tokio", "rustls-ring"], version = "0.11" }
 # sheprd-remote-control's APNs sender for iOS Live Activities: APNs speaks only
 # HTTP/2, which ureq lacks. hyper's own HTTP/2 client (plus h2) over the
 # tokio-rustls above on the daemon's Tokio runtime is the smallest maintained
@@ -247,6 +257,7 @@ windows-sys          = { features = ["Win32_Foundation", "Win32_System_Pipes"], 
 # dependency, so it runs on the host.
 winresource          = "0.1.34"
 zbus                 = { default-features = false, version = "5.19" }
+x25519-dalek         = { default-features = false, features = ["static_secrets", "zeroize"], version = "2" }
 zeroize              = "=1.9.1"
 
 # Line tables keep file:line in backtraces and crash reports while cutting most

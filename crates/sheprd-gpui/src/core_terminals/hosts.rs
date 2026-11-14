@@ -47,6 +47,8 @@ impl Host {
 
 /// Another host's core and what it reports of its terminals.
 pub(super) struct Remote {
+    pub(super) work_requests: super::work_requests::Seen,
+    pub(super) checkouts: super::checkouts::Checkouts,
     pub(super) hub: Hub,
     pub(super) infos: Infos,
     /// The saved device the hub dials, to tell when it was edited.
@@ -59,6 +61,44 @@ pub(super) struct Remote {
 }
 
 impl CoreTerminals {
+    /// The route pinned by the hub that owns a clicked terminal. Never infer
+    /// this from whichever device is selected when a worker finishes.
+    pub(crate) fn link_target(&self, host: &Host) -> Option<&ConnectTarget> {
+        match host {
+            Host::Local => Some(&ConnectTarget::Local),
+            Host::Remote(scope) => self.remote_target(scope),
+        }
+    }
+    pub(crate) fn remote_target(&self, scope: &Scope) -> Option<&ConnectTarget> {
+        self.remote.get(scope).map(|remote| &remote.target)
+    }
+    /// Driven chat panes with their owning host; terminal IDs never cross cores.
+    pub(crate) fn routed_chat_terminals(&self) -> impl Iterator<Item = (&Host, &TerminalInfo)> {
+        self.tabs
+            .values()
+            .filter(|shown| shown.holds_chats())
+            .flat_map(move |shown| {
+                shown
+                    .panes
+                    .terminals()
+                    .into_iter()
+                    .filter_map(move |terminal| {
+                        self.infos_of(&shown.host)?
+                            .get(terminal)
+                            .map(|info| (&shown.host, info))
+                    })
+            })
+    }
+
+    pub(crate) fn chat_tab_on(&self, host: &Host, terminal: &TerminalId) -> Option<TabId> {
+        self.tabs
+            .iter()
+            .find(|(_, shown)| {
+                shown.host == *host && shown.holds_chats() && shown.panes.contains(terminal)
+            })
+            .map(|(tab, _)| *tab)
+    }
+
     /// The hub of `host`'s core, once the window has asked for it.
     pub(crate) fn hub_of(&self, host: &Host) -> Option<&Hub> {
         match host {
@@ -110,12 +150,6 @@ impl CoreTerminals {
         self.infos_of(&self.tabs.get(&tab)?.host)?.get(terminal)
     }
 
-    /// What this computer's core reports of `terminal`, whichever tab
-    /// shows it.
-    pub(crate) fn local_info(&self, terminal: &TerminalId) -> Option<&TerminalInfo> {
-        self.infos_of(&Host::Local)?.get(terminal)
-    }
-
     /// Whether `tab` types into its terminals, on any host: a tab rather
     /// than a watch-only mirror.
     pub(crate) fn types_into(&self, tab: TabId) -> bool {
@@ -162,12 +196,37 @@ impl CoreTerminals {
         self.remote.insert(
             scope,
             Remote {
+                work_requests: Default::default(),
+                checkouts: super::checkouts::Checkouts::default(),
                 hub,
                 infos: Infos::default(),
                 old_requests: None,
                 target,
             },
         );
+    }
+
+    /// Moves a fixture tab and its reported metadata to a saved host without
+    /// connecting to that host. Used by headless chat routing tests.
+    #[cfg(test)]
+    pub(crate) fn rehost_for_test(&mut self, tab: TabId, scope: Scope, target: ConnectTarget) {
+        let Some(shown) = self.tabs.get_mut(&tab) else {
+            return;
+        };
+        shown.host = Host::Remote(scope.clone());
+        let remote = self.remote.entry(scope).or_insert_with(|| Remote {
+            work_requests: Default::default(),
+            checkouts: super::checkouts::Checkouts::default(),
+            hub: Hub::remote(target.clone()),
+            infos: Infos::default(),
+            old_requests: None,
+            target,
+        });
+        for terminal in shown.panes.terminals() {
+            if let Some(info) = self.infos.get(terminal) {
+                remote.infos.insert(info.clone());
+            }
+        }
     }
 
     /// `host`'s hub, which a test drives directly.
@@ -195,8 +254,7 @@ impl CoreTerminals {
     }
 
     /// Shows `terminal` of `host`'s core in `tab`, as a restored tab would.
-    // Only the lifecycle tests, which need Unix sockets, use it.
-    #[cfg(all(test, unix))]
+    #[cfg(test)]
     pub(crate) fn show_on_host_for_test(&mut self, tab: TabId, host: Host, terminal: TerminalId) {
         let panes = super::panes::Panes::single(terminal);
         self.tabs
@@ -214,7 +272,7 @@ impl CoreTerminals {
         outcome: Result<TerminalInfo, sheprd_core_client::Error>,
     ) {
         let (send, receive) = std::sync::mpsc::sync_channel(1);
-        let _ = send.send(outcome);
+        let _ = send.send(super::start::Outcome::unwatched(outcome));
         self.starting = Some((purpose, host, receive));
     }
 
@@ -227,13 +285,15 @@ impl CoreTerminals {
 
     /// Reads what each core reports while any of its tabs is known, for
     /// split chrome and the sidebar's rows. True when what is known changed.
-    pub(super) fn poll_infos(&mut self, now: Instant) -> bool {
+    pub(super) fn poll_infos(&mut self, now: Instant, dispatching: bool) -> bool {
         let mut changed = false;
         for host in self.hosts() {
             // This computer's core is read while it answers, tabs or not:
             // a phone may start a terminal there for one of its workspaces
             // (`adopt`), and its stand-in shell runs agents too.
-            let listed = host == Host::Local || self.tabs.values().any(|shown| shown.host == host);
+            let listed = dispatching
+                || host == Host::Local
+                || self.tabs.values().any(|shown| shown.host == host);
             let backend = listed.then(|| self.backend_of(&host).cloned()).flatten();
             if let Some(infos) = self.infos_of_mut(&host) {
                 changed |= infos.poll(backend.as_ref(), now);
@@ -244,8 +304,8 @@ impl CoreTerminals {
 
     /// Drops another host's hub, its views, and a terminal wanted or
     /// starting there; the next ask for the host dials it anew. A terminal
-    /// that was starting keeps running on the machine it started on, but is
-    /// never placed in a tab, which would attach its ID on another machine.
+    /// that was starting is ended by its worker if its result cannot be
+    /// handed back, using the captured core rather than the replacement host.
     /// This computer's hub stays.
     pub(super) fn forget_host(&mut self, host: &Host) {
         let Host::Remote(scope) = host else {
@@ -271,11 +331,10 @@ impl CoreTerminals {
     }
 
     /// How many agents `host`'s core last reported working, for ranking
-    /// hosts by how busy they are. The list is only kept current while the
-    /// window has a tab of that core, so without one it counts none rather
-    /// than agents that may have stopped since.
+    /// hosts by how busy they are. Dispatch samples connected cores even
+    /// without open tabs; a disconnected core contributes no stale load.
     pub(crate) fn working(&self, host: &Host) -> u32 {
-        if !self.tabs.values().any(|shown| shown.host == *host) {
+        if !self.is_connected(host) {
             return 0;
         }
         self.infos_of(host).map_or(0, Infos::working)
@@ -297,7 +356,28 @@ impl SheprdWindow {
     /// what is typed until that core answers again and each terminal is
     /// attached anew; nothing is started or replayed.
     pub(super) fn poll_core_hubs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let mut changed = self.forget_stale_core_hosts();
+        let mut changed = self.forget_stale_core_hosts(cx);
+        if self.dispatch_sampling() {
+            let hosts: Vec<_> = self
+                .endpoints
+                .iter()
+                .filter(|endpoint| {
+                    endpoint.enabled
+                        && (crate::dispatch::scriptable(&endpoint.connection.target)
+                            || (self.dispatch_keeps(&endpoint.id)
+                                && crate::dispatch::scriptable_for(
+                                    &endpoint.connection.target,
+                                    sheprd_session::Keeper::App,
+                                )))
+                })
+                .map(|endpoint| Host::of(&crate::browser::scope(endpoint)))
+                .collect();
+            for host in hosts {
+                if let Some(hub) = self.core_hub(&host) {
+                    hub.connect(super::Start::Join);
+                }
+            }
+        }
         let scrollback = self.config.herdr_2_scrollback;
         for host in self.core_terminals.hosts() {
             let Some(hub) = self.core_terminals.hub_of_mut(&host) else {
@@ -413,6 +493,8 @@ impl SheprdWindow {
             self.core_terminals.remote.insert(
                 scope.clone(),
                 Remote {
+                    work_requests: Default::default(),
+                    checkouts: super::checkouts::Checkouts::default(),
                     hub: Hub::remote(target.clone()),
                     infos: Infos::default(),
                     old_requests: None,
@@ -424,7 +506,7 @@ impl SheprdWindow {
     }
 
     /// Where the saved device `scope` names connects now.
-    fn saved_target(&self, scope: &Scope) -> Option<&ConnectTarget> {
+    pub(crate) fn saved_target(&self, scope: &Scope) -> Option<&ConnectTarget> {
         self.endpoints
             .iter()
             .find(|endpoint| crate::browser::scope(endpoint) == *scope)
@@ -435,7 +517,7 @@ impl SheprdWindow {
     /// somewhere else, with its views and a terminal wanted there, so no new
     /// terminal starts on a machine the device no longer names. A host still
     /// saved gets a new hub the next time its tabs ask. True when any went.
-    fn forget_stale_core_hosts(&mut self) -> bool {
+    fn forget_stale_core_hosts(&mut self, cx: &mut gpui::App) -> bool {
         let stale: Vec<Scope> = self
             .core_terminals
             .remote
@@ -446,6 +528,8 @@ impl SheprdWindow {
         for scope in &stale {
             self.core_terminals
                 .forget_host(&Host::Remote(scope.clone()));
+            // Notes for the old machine's panes never reach the new one's.
+            crate::remote_browser::retire_feedback(scope, cx);
         }
         !stale.is_empty()
     }

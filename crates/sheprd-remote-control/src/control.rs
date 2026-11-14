@@ -357,6 +357,22 @@ pub struct Status {
     pub devices: usize,
     /// Devices with an open stream now.
     pub connected: usize,
+    /// Each relay this computer listens on, by endpoint; absent when it
+    /// listens on none, or the daemon is older.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub relays: std::collections::BTreeMap<String, RelayState>,
+}
+
+/// Where one relay stands.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "state")]
+pub enum RelayState {
+    Connecting,
+    Listening,
+    /// The last attempt failed; another follows.
+    Failed {
+        error: String,
+    },
 }
 
 /// What the pairing dialog shows: a QR of `url`, valid until `expires_in_ms`.

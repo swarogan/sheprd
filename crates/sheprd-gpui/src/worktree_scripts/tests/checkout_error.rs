@@ -1,17 +1,24 @@
 use super::*;
 
+/// The checkout is found through the kept workspace's host, so a folder Git
+/// cannot enter fails as that host's Git step, and still reads localized.
 #[test]
-fn a_failed_kept_checkout_lookup_uses_the_translatable_git_operation() {
+fn a_failed_kept_checkout_lookup_is_a_localized_host_git_failure() {
     let temp = tempfile::tempdir().unwrap();
     let missing = temp.path().join("missing");
-    let error =
-        super::super::kept_script_checkout(missing.to_str().unwrap(), &AtomicBool::new(false))
-            .unwrap_err();
-    let crate::Error::Vcs(sheprd_vcs::Error::Git(crate::git::Error::Failed { operation, .. })) =
-        &error
+    // The lookup runs Git on the workspace's host, here this computer.
+    let error = super::super::kept_script_checkout(
+        &sheprd_client::ConnectTarget::Local,
+        missing.to_str().unwrap(),
+        &AtomicBool::new(false),
+    )
+    .unwrap_err();
+    let crate::Error::Remote(sheprd_remote::Error::Work(sheprd_remote::work::Error::Script {
+        step: sheprd_remote::work::Step::List,
+        ..
+    })) = &error
     else {
-        panic!("expected a Git checkout lookup failure, got {error:?}");
+        panic!("expected a host Git checkout lookup failure, got {error:?}");
     };
-    assert_eq!(*operation, "find the checkout");
     crate::i18n::errors::tests::assert_localized(&[error]);
 }

@@ -40,6 +40,7 @@ mod icon_font;
 mod keybindings;
 mod language;
 mod line_height;
+mod link_handlers;
 mod loading;
 mod lock_access;
 mod menu_bar;

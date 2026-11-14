@@ -42,7 +42,7 @@ impl SheprdWindow {
     /// Gives every pane of the focused workspace's herdr-core tabs a view,
     /// once the hub is connected, and drops the views of closed tabs and
     /// panes.
-    pub(super) fn sync_core_views(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn sync_core_views(&mut self, cx: &mut Context<Self>) {
         let Some(store) = cx.try_global::<Store>() else {
             self.core_terminals.views.clear();
             self.core_terminals.tabs.clear();
@@ -190,15 +190,9 @@ impl SheprdWindow {
             let painter = self.painter.clone();
             let look = look.clone();
             let observe = role == Role::Observer;
-            let paste_target = match &host {
-                Host::Local => Some(sheprd_client::ConnectTarget::Local),
-                Host::Remote(scope) => self
-                    .core_terminals
-                    .remote
-                    .get(scope)
-                    .map(|remote| remote.target.clone()),
-            };
-            let to_window = super::asks::window_call(cx);
+            let target = self.core_terminals.link_target(&host).cloned();
+            let paste_target = target.clone();
+            let to_window = super::asks::window_call(cx, host.clone(), target);
             let view = cx.new(|cx| {
                 let mut view =
                     CoreTerminalView::new(terminal.clone(), link, look, painter, observe, cx)

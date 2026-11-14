@@ -31,7 +31,7 @@ render_existing = true
 
 ### Layouts
 
-The button in a chat's header steps through the layouts, **View > Agent Layout** picks one, and Settings > General offers them while ACP chats are on. What a chat does is the same in every layout. Timeline is the default.
+The button in a chat's header steps through the layouts, **View > Agent Layout** picks one, and Settings > Chat offers them while ACP chats are on. What a chat does is the same in every layout. Timeline is the default.
 
 | Layout | Value | How it draws |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ Once your prompt scrolls away, every layout pins it over the top of the conversa
 
 ### Width
 
-The default reading width is 800 logical pixels. In Settings > General, turn on **Full-width chat** or set **Chat width** with the slider; custom widths range from 320 to 4,000 and shrink to fit narrower windows.
+The default reading width is 800 logical pixels. In Settings > Chat, turn on **Full-width chat** or set **Chat width** with the slider; custom widths range from 320 to 4,000 and shrink to fit narrower windows.
 
 ```sh
 sheprd config set chat.max_width 0     # full width
@@ -149,7 +149,8 @@ Messages render Markdown and TeX: headings, lists, links, tables, Mermaid, code 
 
 - **Selecting.** Drag across text to select across messages, code, and tables. Tables copy as tab-separated cells, and formulas copy their TeX.
 - **Pictures.** A local image the agent links or a tool wrote shows in the chat, on SSH hosts too. A web picture shows as a card and loads only when you press **Load**, since loading it tells that server your address.
-- **Pages.** An `html` code block, or an HTML file a tool wrote on this machine, gets a **Show page** button. On macOS and Windows the page runs inside the message; on Linux the button opens your browser.
+- **Code blocks.** Each has **Wrap** and **Copy code** buttons. Settings > Chat sets whether blocks start wrapped (`chat.wrap_code`), with line numbers (`chat.code_line_numbers`), or with alternating line colors (`chat.code_stripes`); a block's own **Wrap** button still changes that block alone.
+- **Pages.** An `html` code block, or an HTML file a tool wrote on this machine, gets a **Show page** button. On macOS and Windows the page runs inside the message; on Linux the button opens your browser. **HTML blocks** in Settings > Chat (`chat.render_html`) starts an agent's `html` block as this card (`default`), with its page already loaded (`always`, macOS and Windows), or as code (`never`). **Show code** and **Render webpage** switch each block either way.
 - **Permissions and questions.** Chats answer permission requests and single-choice questions. Multi-question, multi-select, and free-text prompts are not supported by every agent.
 - **Cards.** A `herdr-ui` code block can render cards, choices, toggles, sliders, tables, and charts. Editing one only changes local state; nothing runs and no prompt is sent until you use an explicit action.
 

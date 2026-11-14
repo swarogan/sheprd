@@ -1,6 +1,9 @@
 use super::*;
 use serde_json::json;
 
+mod recovered;
+mod selection;
+
 const SCOPE: &str = "local:/test.sock";
 
 fn record(address: &str) -> Record {

@@ -69,6 +69,7 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
             let (mut code, mut table) = {
                 let links = Links::new(view, "fixture", cx);
                 let mut context = RichContext {
+                    pane_id: "fixture",
                     accents: None,
                     visuals: &visuals,
                     links,
@@ -122,7 +123,7 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                 }
                 for inline in [false, true] {
                     let mut panel =
-                        view.rich_math(math, "x", &visuals, inline, view.chat_text_size());
+                        view.rich_math(math, "x", &visuals, inline, view.chat_text_size(), cx);
                     assert_eq!(
                         panel.style().background,
                         Some(rgb(view.theme.background).into())
@@ -153,7 +154,7 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                 ink,
                 "other layouts retain theme ink"
             );
-            let mut math = view.rich_math(math, "x", &visuals, true, view.chat_text_size());
+            let mut math = view.rich_math(math, "x", &visuals, true, view.chat_text_size(), cx);
             assert!(
                 math.style().background.is_none(),
                 "other layouts need no panel"

@@ -1,6 +1,12 @@
 use super::*;
+mod fanout;
+mod owned_cleanup;
 use sheprd_client::ConnectTarget;
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf, process::Command};
+
+mod deadline;
+mod host_paths;
+mod uncertain_start;
 
 fn git(dir: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
@@ -71,8 +77,7 @@ impl Fixture {
             "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n{body}\n",
             shell_quote(&self.log().display().to_string())
         );
-        fs::write(&path, script).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_executable::write(&path, script, 0o755).unwrap();
     }
 
     fn calls(&self) -> Vec<String> {
@@ -340,7 +345,7 @@ fn porcelain_records_become_checkouts() {
 }
 
 #[test]
-fn a_shell_whose_agent_never_started_is_ended() {
+fn a_lost_start_acknowledgement_retains_the_terminal_for_recovery() {
     let fixture = Fixture::new();
     fixture.program(
         "herdr-core",
@@ -364,14 +369,12 @@ esac"#,
     assert!(
         matches!(
             error,
-            Error::Script {
-                step: Step::StartAgent,
-                ..
-            }
+            Error::Unprompted { ref started, .. }
+                if *started == Started::Herdr2 { terminal: "t4".into() }
         ),
         "{error:?}"
     );
-    assert_eq!(fixture.calls().last().unwrap(), "kill --json -- t4");
+    assert!(!fixture.calls().iter().any(|call| call.starts_with("kill ")));
 }
 
 #[test]

@@ -7,8 +7,10 @@
 //! and the `herdr` CLI on the host concerned (locally, over SSH, or through a
 //! cloud provider's authenticated command).
 
+pub mod arrival;
 pub mod carry;
 mod core;
+pub(crate) use core::is_shell;
 mod credentials;
 pub mod error;
 mod fresh;

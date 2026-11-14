@@ -35,6 +35,9 @@ impl Localize for app::Error {
             Self::Port => fl!("error-remote-control-port"),
             Self::ProgramMissing => fl!("error-remote-control-program-missing"),
             Self::Qr(_) => fl!("error-remote-control-qr"),
+            Self::Relay { relay, .. } => {
+                fl!("error-remote-control-relay", relay = relay.as_str())
+            }
             Self::Service {
                 program,
                 status,

@@ -15,6 +15,7 @@ pub(super) fn status(connected: usize) -> Status {
         chats: 1,
         devices: 2,
         connected,
+        relays: Default::default(),
     }
 }
 

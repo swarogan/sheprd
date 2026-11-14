@@ -4,6 +4,9 @@ skills/** text eol=lf
 # Shell scripts run on Unix hosts, including the ones compiled in and sent
 # over SSH from a Windows build, where a CR breaks the shebang and commands.
 *.sh text eol=lf
+# Python embedded in those scripts, such as the remote work shim's
+# here-document, travels with them and needs the same endings.
+crates/sheprd-gpui/src/remote_work/*.py text eol=lf
 
 # Conflicts are rebuilt by Cargo rather than resolved by hand; `just hooks`
 # configures the driver. Without it Git falls back to its ordinary merge.
@@ -12,3 +15,10 @@ Cargo.lock merge=cargo-lock
 # The daemon's Rust tests compare the native app's JSON fixtures byte for
 # byte with what they write, so a Windows checkout must not turn LF to CRLF.
 ios/SheprdRemoteCore/Tests/SheprdRemoteCoreTests/Fixtures/** text eol=lf
+
+# Signatures cover these files' exact bytes: a Windows checkout turning LF
+# into CRLF would make every signature fail. Checked out byte for byte.
+crates/sheprd-relay/src/tests/fixtures/** -text
+website/site/relays.json -text
+website/site/relays.json.asc -text
+website/site/relays.json.sig -text

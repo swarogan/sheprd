@@ -93,3 +93,40 @@ fn each_address_renews_only_when_its_own_certificate_needs_it() {
     assert_ne!(certificate(&resolver, "100.101.102.103"), tailscale);
     assert_eq!(certificate(&resolver, "10.1.2.3"), newer_lan);
 }
+
+#[test]
+fn a_single_address_bind_still_has_the_relay_sessions_loopback_certificate() {
+    let state = tempfile::tempdir().unwrap();
+    let authority = Authority::load_or_create(state.path()).unwrap();
+    let now = SystemTime::now();
+    let advertised = lan_names().bound_to(ip("192.168.1.20"));
+    // Bound to the LAN address alone, loopback is neither advertised nor,
+    // without relays, given a certificate.
+    assert!(!advertised.ips.contains(&ip("127.0.0.1")));
+    let certified = advertised.clone().with_relay_loopback();
+    assert_eq!(certified.ips, [ip("127.0.0.1"), ip("192.168.1.20")]);
+    assert_eq!(advertised.origins(7443), ["https://192.168.1.20:7443"]);
+
+    let resolver = Arc::new(Resolver::issue(&authority, certified.clone(), now).unwrap());
+    // What a relay session presents: no name sent, reached at loopback.
+    let presented = resolver.for_handshake(ip("127.0.0.1"), false);
+    verify(&authority, &presented, "127.0.0.1", now).unwrap();
+    let loopback = certificate(&resolver, "127.0.0.1");
+
+    // An address refresh keeps it, and the same one.
+    resolver.refresh(&authority, &certified, now + DAY).unwrap();
+    assert_eq!(certificate(&resolver, "127.0.0.1"), loopback);
+    // Without it, the session would fall back to a certificate the phone
+    // refuses for `127.0.0.1`.
+    let unrelayed = Resolver::issue(&authority, advertised, now).unwrap();
+    assert!(unrelayed.current_for(ip("127.0.0.1")).is_none());
+    assert!(
+        verify(
+            &authority,
+            &unrelayed.for_handshake(ip("127.0.0.1"), false),
+            "127.0.0.1",
+            now
+        )
+        .is_err()
+    );
+}

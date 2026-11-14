@@ -3,6 +3,8 @@
 
 error-worktree-scripts-busy = Another worktree script is still starting
 error-worktree-scripts-checkout = The daemon did not identify this workspace's checkout
+error-worktree-scripts-copy = Could not copy the files .worktreeinclude names: { $error }
+error-worktree-scripts-copy-unsupported = .worktreeinclude is not supported on Windows yet; its files were not copied
 error-worktree-scripts-encoding = .herdr/worktree.toml is not valid UTF-8
 error-worktree-scripts-not-git = This workspace is not a Git checkout Herdr knows yet
 error-worktree-scripts-nul = .herdr/worktree.toml scripts must not contain NUL bytes
@@ -11,6 +13,7 @@ error-worktree-scripts-parse = .herdr/worktree.toml: { $error }
 error-worktree-scripts-read = Could not read .herdr/worktree.toml: { $error }
 error-worktree-scripts-remote = Could not read .herdr/worktree.toml on the host: { $error }
 error-worktree-scripts-response = Unexpected daemon response while opening the script's tab
+error-worktree-scripts-setup-expired = The queued setup expired; run the setup script from the worktree menu
 # $limit is a number of bytes.
 error-worktree-scripts-size = .herdr/worktree.toml exceeds { $limit } bytes
 error-worktree-scripts-unsupported-host = Worktree scripts cannot be read from a WSL distribution yet

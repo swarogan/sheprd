@@ -76,7 +76,7 @@ pub use accent::Accent;
 pub use agent_skill::{AgentSkillConfig, SkillInstall};
 pub use agents_placement::AgentsPlacement;
 pub use backdrop::{Backdrop, Material};
-pub use chat::{ChatLauncher, ChatLayoutMode};
+pub use chat::{ChatLauncher, ChatLayoutMode, HtmlRender};
 pub use cloud::CloudConfig;
 pub(crate) use code::CodeEdit;
 pub use code::{CodeConfig, CodeMode};
@@ -247,6 +247,8 @@ pub struct Config {
     /// The language the app shows: `system`, or a BCP 47 tag (docs/i18n.md).
     pub language: sheprd_i18n::Language,
     pub layout: Layout,
+    pub(crate) link_handlers: crate::link_handlers::Handlers,
+    pub(crate) link_plugins: Vec<crate::link_handlers::Plugin>,
     /// Configured families, sorted, that font resolution found no installed
     /// family for; `diagnostic` reports them.
     pub(crate) missing_fonts: Vec<String>,
@@ -423,6 +425,8 @@ impl Default for Config {
             keybindings: Keymap::default(),
             language: sheprd_i18n::Language::default(),
             layout: Layout::default(),
+            link_handlers: crate::link_handlers::Handlers::default(),
+            link_plugins: Vec::new(),
             missing_fonts: Vec::new(),
             missing_weight: None,
             mods: crate::mods::Config::default(),
@@ -519,6 +523,8 @@ struct Settings {
     keybindings: BTreeMap<String, Binding>,
     language: Option<sheprd_i18n::Language>,
     layout: Layout,
+    link_handlers: Vec<crate::link_handlers::Handler>,
+    link_plugins: Vec<crate::link_handlers::Plugin>,
     mods: crate::mods::Config,
     notifications: NotificationSettings,
     open_files_in: FileTarget,
@@ -904,6 +910,9 @@ impl Config {
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;
+        config.link_handlers = crate::link_handlers::Handlers::compile(settings.link_handlers)?;
+        crate::link_handlers::validate_plugins(&settings.link_plugins)?;
+        config.link_plugins = settings.link_plugins;
         config.code = settings.code;
         settings.px0.check()?;
         config.px0 = settings.px0;

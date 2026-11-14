@@ -34,6 +34,12 @@ pub enum Error {
     ProgramMissing,
     #[error("The pairing link does not fit in a QR code")]
     Qr(#[source] qrcode::types::QrError),
+    #[error("remote.relays has {relay}, which is not a relay address")]
+    Relay {
+        relay: String,
+        #[source]
+        source: sheprd_relay::endpoint::Error,
+    },
     #[error("{program} failed ({status}): {stderr}")]
     Service {
         program: &'static str,

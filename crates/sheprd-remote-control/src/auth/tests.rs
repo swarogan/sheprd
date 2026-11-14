@@ -8,6 +8,7 @@ mod inputs;
 mod limits;
 mod links;
 mod nearby;
+mod nearby_relay;
 mod nearby_vectors;
 mod pairing;
 mod presence;
@@ -50,6 +51,7 @@ fn new_device(seed: u8, name: &str) -> NewDevice {
         id: DeviceId(format!("device-{seed}")),
         name: name.to_owned(),
         public_key: PublicKey::parse(&public_key(&signing_key(seed))).unwrap(),
+        relay: None,
     }
 }
 

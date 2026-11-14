@@ -780,17 +780,7 @@ impl SheprdWindow {
             self.ensure_editor_page(editor, window, cx);
         } else {
             #[cfg(any(target_os = "macos", windows))]
-            match self.browser.pages.ensure(&tab, window, cx) {
-                Ok(()) => {
-                    self.browser.failed.remove(&id);
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Cannot create a browser page");
-                    self.browser
-                        .failed
-                        .insert(id, crate::i18n::Localize::localize(&error).into());
-                }
-            }
+            self.create_page(&tab, window, cx);
         }
         self.sync_address(group, Some(&tab), true, window, cx);
         if tab.location.is_none() && !tab.place.is_editor() {

@@ -1,0 +1,29 @@
+[package]
+description            = "The end-to-end tunnel inside a relay stream: hybrid post-quantum Noise, padded records, and rekeying"
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-tunnel"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[features]
+# An AsyncRead + AsyncWrite tunnel over any Tokio stream, for the daemon.
+tokio = ["dep:tokio"]
+
+[dependencies]
+getrandom.workspace = true
+hkdf.workspace      = true
+ml-kem.workspace    = true
+sha2.workspace      = true
+snow.workspace      = true
+thiserror.workspace = true
+x25519-dalek.workspace = true
+tokio               = { features = ["io-util", "rt"], optional = true, workspace = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio                = { features = ["io-util", "macros", "rt"], workspace = true }

@@ -21,6 +21,7 @@ mod log;
 mod nearby;
 mod origins;
 mod pace;
+mod relay;
 mod render;
 mod shortcuts;
 mod stream;
@@ -103,6 +104,8 @@ pub(crate) struct State {
     pub(crate) pull_requests:
         tokio::sync::watch::Sender<Arc<crate::control::pull_requests::PullRequests>>,
     pub(crate) push: Option<Sender>,
+    /// The relays this computer listens on, when any are set.
+    pub(crate) relay: Option<Arc<crate::relay::Relays>>,
     /// How often each address may write a phone's error to the log.
     pub(crate) reports: Mutex<auth::RateLimiter<std::net::IpAddr>>,
     /// Origins served before, which an installed app may still send.
@@ -215,6 +218,7 @@ pub(crate) fn router(state: Shared) -> Router {
             post(api::subscribe_push).delete(api::unsubscribe_push),
         )
         .route("/api/push/key", get(api::push_key))
+        .route("/api/relay", get(relay::info).post(relay::enroll))
         .route(
             "/api/apns",
             post(api::register_apns).layer(DefaultBodyLimit::max(16 * 1024)),

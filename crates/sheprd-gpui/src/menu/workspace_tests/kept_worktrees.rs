@@ -41,6 +41,9 @@ fn window<'a>(
         view.update(cx, |view, cx| {
             view.live.snapshot = None;
             view.live.missing_installation = true;
+            // This computer, which fan-out's host fence can name; the
+            // layout fixture's custom socket has no host.
+            view.endpoints[0].connection.target = sheprd_client::ConnectTarget::Local;
             view.core_terminals.seed_checkout_for_test(
                 folder,
                 linked.map(|linked| Identity {
@@ -112,12 +115,28 @@ fn the_new_worktree_dialog_reads_the_kept_folder(cx: &mut TestAppContext) {
             assert_eq!(view.kept_checkout().as_deref(), Some(LINKED));
             assert!(view.menu.worktree.is_some());
             assert!(view.menu.dispatch.is_none(), "no other host makes them");
-            // Read through Git's names, with no daemon to ask.
-            let input = view
-                .menu_target_input(&crate::pull_request::Origin::Local)
+            // Read through Git's names, with no daemon to ask. On this
+            // computer the lookup goes by the shared repository key, the
+            // same input the sidebar prefetch caches; another host keeps
+            // the checkout so a sibling checkout cannot borrow its answer.
+            // The fixture's POSIX paths are not absolute Windows paths.
+            #[cfg(unix)]
+            {
+                let local = view
+                    .menu_target_input(&crate::pull_request::Origin::Local)
+                    .unwrap();
+                assert_eq!(local.checkout, None);
+                assert_eq!(
+                    local.repo_key.as_deref(),
+                    Some(Path::new(MAIN).join(".git").to_str().unwrap())
+                );
+                assert_eq!(local.branch, "feature");
+            }
+            let remote = view
+                .menu_target_input(&crate::pull_request::Origin::Ssh("box".into()))
                 .unwrap();
-            assert_eq!(input.checkout.as_deref(), Some(LINKED));
-            assert_eq!(input.branch, "feature");
+            assert_eq!(remote.checkout.as_deref(), Some(LINKED));
+            assert_eq!(remote.branch, "feature");
         })
     });
 }
@@ -159,7 +178,10 @@ fn a_made_checkout_lands_in_a_kept_workspace(cx: &mut TestAppContext) {
             view.menu.creation = Some("kept-1".into());
             view.kept_worktree_done.push(KeptDone::Checkout {
                 request: "kept-1".into(),
-                landing: Box::new(KeptLanding::shell(Some("lane"))),
+                landing: Box::new(KeptLanding::shell(
+                    Some("lane"),
+                    view.endpoints[0].connection.target.clone(),
+                )),
                 result: Ok((
                     Ask::Create {
                         branch: "lane".into(),
@@ -197,7 +219,10 @@ fn a_refused_checkout_keeps_the_dialog_open(cx: &mut TestAppContext) {
             view.menu.creation = Some("kept-2".into());
             view.kept_worktree_done.push(KeptDone::Checkout {
                 request: "kept-2".into(),
-                landing: Box::new(KeptLanding::shell(None)),
+                landing: Box::new(KeptLanding::shell(
+                    None,
+                    view.endpoints[0].connection.target.clone(),
+                )),
                 result: Err(crate::Error::StaleWorkspace),
             });
             view.poll_kept_worktree(window, cx);
@@ -229,6 +254,7 @@ fn deleting_a_kept_checkout_names_its_folder_and_closes_it(cx: &mut TestAppConte
             assert_eq!(deletion.path.as_deref(), Some(LINKED));
             deletion.pending = Some("kept-3".into());
             view.kept_worktree_done.push(KeptDone::Removed {
+                target: view.endpoints[0].connection.target.clone(),
                 scope: crate::browser::scope(&view.endpoints[0]),
                 request: "kept-3".into(),
                 workspace: id.clone(),
@@ -261,6 +287,7 @@ fn a_kept_checkout_with_changes_asks_to_discard_them(cx: &mut TestAppContext) {
                 ..Deletion::new(None, false)
             });
             view.kept_worktree_done.push(KeptDone::Removed {
+                target: view.endpoints[0].connection.target.clone(),
                 scope: crate::browser::scope(&view.endpoints[0]),
                 request: "kept-4".into(),
                 workspace: id.clone(),
@@ -285,7 +312,10 @@ fn work_finishing_together_all_lands(cx: &mut TestAppContext) {
             for (request, path) in [("kept-5", NEW), ("kept-6", other)] {
                 view.kept_worktree_done.push(KeptDone::Checkout {
                     request: request.into(),
-                    landing: Box::new(KeptLanding::shell(None)),
+                    landing: Box::new(KeptLanding::shell(
+                        None,
+                        view.endpoints[0].connection.target.clone(),
+                    )),
                     result: Ok((Ask::Open { path: path.into() }, path.into())),
                 });
             }
@@ -299,36 +329,74 @@ fn work_finishing_together_all_lands(cx: &mut TestAppContext) {
     });
 }
 
+/// Git runs on the host that keeps the workspace. A menu left open on this
+/// computer's workspace while the window moves to an SSH host offers no Git,
+/// so a folder here never reaches the other host's; a workspace that host
+/// keeps offers its worktree rows, run there.
 #[gpui::test]
-fn another_hosts_kept_workspace_offers_no_local_git(cx: &mut TestAppContext) {
-    let (view, cx, id) = window(cx, LINKED, Some(true));
-    cx.update(|window, cx| {
+fn another_hosts_kept_workspace_runs_its_git_on_that_host(cx: &mut TestAppContext) {
+    let (view, cx, here) = window(cx, LINKED, Some(true));
+    assert!(rows(&view, cx, &here).contains(&WorkspaceAction::NewWorktree));
+    let target = sheprd_client::ConnectTarget::Ssh {
+        target: "box".into(),
+        session: "work".into(),
+    };
+    let folder = "/home/me/app-feature";
+    let there = cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            view.open_workspace_menu(&id, gpui::Point::default(), window, cx);
-            // Shown as if kept on an SSH host: its folder is that host's,
-            // which Git on this computer must never touch.
             view.endpoints.push(crate::endpoint::Endpoint::new(
                 "ssh:box".into(),
                 "Box".into(),
-                sheprd_client::ConnectTarget::Ssh {
-                    target: "box".into(),
-                    session: "work".into(),
-                },
+                target.clone(),
                 true,
             ));
             view.selected_endpoint = view.endpoints.len() - 1;
-            assert!(view.kept_checkout().is_none());
-            let rows: Vec<_> = view
+            assert_eq!(view.kept_checkout(), None);
+            let offered: Vec<_> = view
                 .workspace_items()
                 .into_iter()
                 .map(|(action, _)| action)
                 .collect();
-            assert!(!rows.contains(&WorkspaceMenuAction::Dialog(WorkspaceAction::NewWorktree)));
-            assert!(!rows.contains(&WorkspaceMenuAction::Dialog(
+            assert!(!offered.contains(&WorkspaceMenuAction::Dialog(WorkspaceAction::NewWorktree)));
+            assert!(!offered.contains(&WorkspaceMenuAction::Dialog(
                 WorkspaceAction::DeleteWorktree
             )));
+            let scope = crate::browser::scope(&view.endpoints[view.selected_endpoint]);
+            view.core_terminals.set_remote_hub_for_test(
+                scope.clone(),
+                target.clone(),
+                crate::core_terminals::Hub::with_join(|_| {
+                    Err(crate::core_terminals::Error::NotBundled)
+                }),
+            );
+            view.core_terminals.seed_remote_checkout_for_test(
+                &scope,
+                folder,
+                Some(Identity {
+                    branch: Some("feature".into()),
+                    key: "/home/me/app/.git".into(),
+                    label: "app".into(),
+                    linked: true,
+                }),
+            );
+            view.dismiss_menu(window, cx);
+            let location =
+                Location::core_terminal(Panes::single(TerminalId::new("t2").unwrap()), false);
+            view.open_kept_workspace(None, Path::new(folder), location, window, cx)
+                .unwrap()
         })
     });
+    let offered = rows(&view, cx, &there);
+    assert!(offered.contains(&WorkspaceAction::NewWorktree));
+    assert!(offered.contains(&WorkspaceAction::DeleteWorktree));
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.kept_checkout().as_deref(), Some(folder));
+    });
+    assert!(
+        !sheprd_remote::work::host_for_kept(&target)
+            .unwrap()
+            .is_local()
+    );
 }
 
 #[gpui::test]

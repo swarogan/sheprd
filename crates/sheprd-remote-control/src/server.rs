@@ -64,11 +64,13 @@ pub(crate) fn registrations_for_tests(
 pub async fn run(options: Options) -> Result<()> {
     std::fs::create_dir_all(&options.state_dir)?;
     let bind = options.bind;
+    let relayed = !options.relays.is_empty();
     let (authority, resolver, names) = match &options.certificate {
         Certificate::Own => {
             let names = Names::current().bound_to(bind);
             let authority = Authority::load_or_create(&options.state_dir)?;
-            let resolver = Resolver::issue(&authority, names.clone(), SystemTime::now())?;
+            let resolver =
+                Resolver::issue(&authority, certified(&names, relayed), SystemTime::now())?;
             (Some(authority), resolver, names)
         }
         Certificate::Files { cert, key } => {
@@ -104,6 +106,14 @@ pub async fn run(options: Options) -> Result<()> {
     )?;
     let (pull_requests, _) = watch::channel(Arc::new(Default::default()));
     let load = crate::load::start();
+    let relay = if options.relays.is_empty() {
+        None
+    } else {
+        Some(Arc::new(crate::relay::Relays::load(
+            &options.state_dir,
+            options.relays.clone(),
+        )?))
+    };
     let state = Arc::new(State {
         apns,
         apps,
@@ -125,6 +135,7 @@ pub async fn run(options: Options) -> Result<()> {
         privacy: options.privacy,
         pull_requests,
         push,
+        relay,
         reports: Mutex::new(web::report_limit()),
         seen: Mutex::new(seen),
         shortcuts: web::Shortcuts::load(crate::app::shortcuts::file(&options.state_dir)),
@@ -155,7 +166,12 @@ pub async fn run(options: Options) -> Result<()> {
     // A user's certificate lists fixed names; only the daemon's own follows
     // the computer's addresses.
     if state.authority.is_some() {
-        tokio::spawn(watch_addresses(state.clone(), resolver.clone(), bind));
+        tokio::spawn(watch_addresses(
+            state.clone(),
+            resolver.clone(),
+            bind,
+            relayed,
+        ));
     }
     tokio::spawn(expire(state.clone(), options.device_idle));
     // On macOS a second mDNS responder beside mDNSResponder is invisible
@@ -165,7 +181,23 @@ pub async fn run(options: Options) -> Result<()> {
     if options.bonjour && !cfg!(target_os = "macos") {
         tokio::spawn(bonjour::advertise(state.clone(), stopped.clone()));
     }
-    let app = web::router(state).into_make_service_with_connect_info::<web::Peer>();
+    let router = web::router(state.clone());
+    if let Some(relay) = &state.relay {
+        // Nearby offers say how to claim through the relays too.
+        state.auth().set_relay_offer(relay.info());
+        // The phone reaches a relay session at `https://127.0.0.1:PORT`
+        // through its loopback proxy: the certificate for that address,
+        // which `certified` has issued whatever the bind address.
+        let mut tls = (*config).clone();
+        tls.cert_resolver = resolver.at(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+        let served = crate::relay::Served {
+            router: router.clone(),
+            state: state.clone(),
+            tls: Arc::new(tls),
+        };
+        relay.start(served, stopped.clone());
+    }
+    let app = router.into_make_service_with_connect_info::<web::Peer>();
     let mut shutdown = stopped.clone();
     let serve = axum::serve(listener::TlsListener::new(tcp, config, resolver), app)
         .with_graceful_shutdown(async move {
@@ -194,8 +226,20 @@ async fn until_stopped(
     }
 }
 
+/// The names certificates are issued for: the ones advertised and, when
+/// relays are configured, loopback, where every relay session is served.
+/// A daemon bound to one address would otherwise have no certificate for
+/// the address the phone's relay proxy is reached at.
+fn certified(advertised: &Names, relayed: bool) -> Names {
+    if relayed {
+        advertised.clone().with_relay_loopback()
+    } else {
+        advertised.clone()
+    }
+}
+
 /// Adds certificates for new addresses and renews existing ones independently.
-async fn watch_addresses(state: Arc<State>, resolver: Arc<Resolver>, bind: IpAddr) {
+async fn watch_addresses(state: Arc<State>, resolver: Arc<Resolver>, bind: IpAddr, relayed: bool) {
     let mut ticker = tokio::time::interval(ADDRESS_CHECK);
     loop {
         ticker.tick().await;
@@ -204,7 +248,7 @@ async fn watch_addresses(state: Arc<State>, resolver: Arc<Resolver>, bind: IpAdd
             continue;
         };
         let (refresh_state, refresh_resolver, refresh_names) =
-            (state.clone(), resolver.clone(), names.clone());
+            (state.clone(), resolver.clone(), certified(&names, relayed));
         let refreshed = tokio::task::spawn_blocking(move || match &refresh_state.authority {
             Some(authority) => refresh_resolver
                 .refresh(authority, &refresh_names, SystemTime::now())

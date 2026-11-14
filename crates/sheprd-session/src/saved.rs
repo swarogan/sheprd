@@ -156,6 +156,8 @@ struct SavedTab {
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum CoreLocation {
     CoreTerminal {
+        #[serde(default)]
+        active: Option<sheprd_backend::TerminalId>,
         /// Names the user gave panes, by terminal, shown over their titles.
         #[serde(default, deserialize_with = "pane_names")]
         names: BTreeMap<String, String>,
@@ -202,6 +204,40 @@ pub struct CoreTab<'a> {
 }
 
 impl SavedTabs {
+    /// Apply a core's durable recovery aliases to this host's saved layout.
+    /// The owning app persists its own rewritten file; other readers replay
+    /// the aliases from core labels after a restart without writing that file.
+    pub fn remap(
+        &mut self,
+        scope: &str,
+        replacements: &BTreeMap<sheprd_backend::TerminalId, sheprd_backend::TerminalId>,
+    ) {
+        for tab in self.tabs.iter_mut().filter(|tab| tab.scope == scope) {
+            let Some(CoreLocation::CoreTerminal {
+                active,
+                panes,
+                names,
+                zoomed,
+                ..
+            }) = &mut tab.location
+            else {
+                continue;
+            };
+            for (old, new) in replacements {
+                if panes.replace(old, new.clone()) {
+                    if let Some(name) = names.remove(old.as_str()) {
+                        names.insert(new.as_str().to_owned(), name);
+                    }
+                    if zoomed.as_ref() == Some(old) {
+                        *zoomed = Some(new.clone());
+                    }
+                    if active.as_ref() == Some(old) {
+                        *active = Some(new.clone());
+                    }
+                }
+            }
+        }
+    }
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.len() > MAX_SAVED_BYTES {
             return Err(Error::Large);
@@ -260,6 +296,15 @@ impl SavedTabs {
         match self.location(scope, id)? {
             CoreLocation::CoreTerminal { panes, zoomed, .. } => {
                 zoomed.as_ref().filter(|zoomed| panes.contains(zoomed))
+            }
+        }
+    }
+
+    /// The selected pane, if it still belongs to this tab.
+    pub fn tab_active(&self, scope: &str, id: u64) -> Option<&sheprd_backend::TerminalId> {
+        match self.location(scope, id)? {
+            CoreLocation::CoreTerminal { panes, active, .. } => {
+                active.as_ref().filter(|active| panes.contains(active))
             }
         }
     }

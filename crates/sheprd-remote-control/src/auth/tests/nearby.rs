@@ -29,6 +29,8 @@ pub(super) struct Finished {
     pub(super) code: String,
     pub(super) token: String,
     pub(super) origins: Vec<String>,
+    /// The relays the offer named, when the computer listens on any.
+    pub(super) relay: Option<serde_json::Value>,
 }
 
 impl Phone {
@@ -90,18 +92,23 @@ impl Phone {
             code: code(&transcript),
             token: contents["token"].as_str()?.to_owned(),
             origins: serde_json::from_value(contents["origins"].clone()).ok()?,
+            relay: contents.get("relay").cloned(),
         })
     }
 }
 
 /// An auth state with a pairing dialog open.
-fn open(dir: &Path) -> (Auth, Offer) {
+pub(super) fn open(dir: &Path) -> (Auth, Offer) {
     let mut auth = auth(dir);
     let offer = auth.mint(T0, &origins(), FP).unwrap();
     (auth, offer)
 }
 
-fn exchange(auth: &mut Auth, phone: &Phone, now_ms: u64) -> (NearbyStarted, NearbyRevealed) {
+pub(super) fn exchange(
+    auth: &mut Auth,
+    phone: &Phone,
+    now_ms: u64,
+) -> (NearbyStarted, NearbyRevealed) {
     let started = auth
         .nearby_start(None, &phone.public_key(), "Studio", FP, now_ms)
         .unwrap();

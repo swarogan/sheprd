@@ -35,6 +35,7 @@ mod gitlab_merge_requests;
 mod gitlab_oauth;
 mod gitlab_recent;
 // The private credential file these save to is Unix-only.
+mod durable_hosts;
 #[cfg(unix)]
 mod gitlab_renewal;
 mod gitlab_saved_turns;
@@ -145,6 +146,9 @@ fn run(id: &str, owner: Owner) -> Run {
 
 fn session(run_id: &str) -> HerdrSession {
     HerdrSession {
+        checkout_token: None,
+        adopted: None,
+        target: None,
         run_id: run_id.into(),
         host: None,
         session: None,

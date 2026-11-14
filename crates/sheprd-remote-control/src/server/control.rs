@@ -112,10 +112,18 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             allow,
             code,
             hosts,
-        } => state
-            .auth()
-            .answer_with_hosts(&id, allow, &code, &hosts, now)
-            .map(Response::Pairing),
+        } => {
+            let answered = state
+                .auth()
+                .answer_with_hosts(&id, allow, &code, &hosts, now)
+                .map(Response::Pairing);
+            // An approved phone that sent relay keys reaches this computer
+            // through them at once.
+            if let (Ok(_), Some(relay)) = (&answered, &state.relay) {
+                relay.devices_changed();
+            }
+            answered
+        }
         Request::CancelPairing { id } => state.auth().cancel(&id).map(|()| Response::Done),
         // Sheprd relays these from a phone over Bluetooth; the code the
         // phone shows is what authenticates it, as over the network.
@@ -125,10 +133,12 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             .map(Response::NearbyStarted),
         Request::NearbyReveal { session, nonce } => {
             let origins = state.origins();
-            state
+            let revealed = state
                 .auth()
                 .nearby_reveal(&session, &nonce, &state.fingerprint, &origins, now)
-                .map(Response::NearbyRevealed)
+                .map(Response::NearbyRevealed);
+            crate::relay::open_pairing(state);
+            revealed
         }
         Request::PresenceChallenge { hint } => presence_challenge(state, &hint, now),
         Request::PresenceProve { nonce, signature } => {
@@ -347,5 +357,10 @@ fn status(state: &State) -> Status {
         chats: layout.chats().count(),
         devices: state.auth().devices().len(),
         connected: state.connected().len(),
+        relays: state
+            .relay
+            .as_ref()
+            .map(|relay| relay.status())
+            .unwrap_or_default(),
     }
 }

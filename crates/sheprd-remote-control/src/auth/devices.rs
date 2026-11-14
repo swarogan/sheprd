@@ -46,6 +46,33 @@ pub(crate) struct DeviceRecord {
     /// answered.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) links: Vec<Link>,
+    /// The device's keys for reaching this computer through relays, once
+    /// it sent them (`POST /api/relay`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) relay: Option<RelayKeys>,
+}
+
+/// A device's keys for relays, as it sent them, base64url: its tunnel
+/// static key (X25519), which the end-to-end handshake proves, and its
+/// dial key (P-256, SEC1 compressed), which the relay lets through.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct RelayKeys {
+    pub(crate) dial: String,
+    pub(crate) tunnel: String,
+}
+
+impl RelayKeys {
+    /// The tunnel key, when it is one.
+    pub(crate) fn tunnel_key(&self) -> Option<[u8; 32]> {
+        super::decode_fixed::<32>(&self.tunnel).ok()
+    }
+
+    /// The dial key, when it is a P-256 point.
+    pub(crate) fn dial_key(&self) -> Option<[u8; 33]> {
+        let key = super::decode_fixed::<33>(&self.dial).ok()?;
+        p256::PublicKey::from_sec1_bytes(&key).ok()?;
+        Some(key)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,6 +161,7 @@ impl Devices {
             apns: None,
             via,
             links,
+            relay: device.relay,
         });
         self.save_or_undo(|devices| {
             devices.records.pop();
@@ -217,6 +245,22 @@ impl Devices {
     /// Gives a device a new key, as its Home Screen app takes over from the
     /// browser. The browser's push subscription goes with the old key.
     /// Blocking.
+    /// Stores `keys` as the device's relay keys; whether it is paired.
+    /// Blocking.
+    pub(crate) fn set_relay(&mut self, id: &DeviceId, keys: RelayKeys) -> Result<bool> {
+        let Some(record) = self.records.iter_mut().find(|record| &record.id == id) else {
+            return Ok(false);
+        };
+        let before = record.relay.replace(keys);
+        let index = self.records.iter().position(|record| &record.id == id);
+        self.save_or_undo(|devices| {
+            if let Some(record) = index.and_then(|index| devices.records.get_mut(index)) {
+                record.relay = before;
+            }
+        })?;
+        Ok(true)
+    }
+
     pub(crate) fn rekey(&mut self, id: &DeviceId, public_key: PublicKey) -> Result<()> {
         let record = self.record_mut(id)?;
         let old = (
@@ -338,7 +382,7 @@ fn store_error(operation: StoreOperation, path: &Path, source: io::Error) -> Err
 /// Replaces `path` with `content` through a temporary file in the same
 /// directory, created 0600 on Unix. Windows has no mode bits; the file
 /// inherits the private state directory's ACL.
-pub(super) fn write_private(path: &Path, content: &[u8]) -> Result<()> {
+pub(crate) fn write_private(path: &Path, content: &[u8]) -> Result<()> {
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(1);
     let parent = path.parent().unwrap_or(Path::new("."));
     let name = path.file_name().unwrap_or_default().to_string_lossy();

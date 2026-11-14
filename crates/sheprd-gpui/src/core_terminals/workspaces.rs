@@ -17,6 +17,13 @@ use gpui::{prelude::*, *};
 use sheprd_backend::Spawn;
 use std::path::{Path, PathBuf};
 
+enum WorkspaceTerminals {
+    // keep-sorted start
+    AlreadyEnded,
+    End,
+    // keep-sorted end
+}
+
 impl SheprdWindow {
     /// The kept workspace in front of the selected host, if one is: the one
     /// the user last chose, or with no Herdr 1 installed, the first.
@@ -197,8 +204,11 @@ impl SheprdWindow {
             .map(|workspace| workspace.id.clone())
     }
 
+    // Tests only: production keeps and closes by the lane's own scope.
+    #[cfg(test)]
     /// This computer's scope, whose workspaces the app keeps, whichever
-    /// host is shown.
+    /// host is shown. Runs and lanes close and open through their own host.
+    #[cfg(test)]
     pub(crate) fn local_kept_scope(&self) -> Option<Scope> {
         self.core_host().map(|index| scope(&self.endpoints[index]))
     }
@@ -212,8 +222,11 @@ impl SheprdWindow {
             .map(|workspace| workspace.id.clone())
     }
 
+    // Tests only: production keeps and closes by the lane's own scope.
+    #[cfg(test)]
     /// Closes the workspace this computer keeps at `cwd`, without showing
     /// this computer; whether there was one.
+    #[cfg(test)]
     pub(crate) fn close_local_kept_folder(
         &mut self,
         cwd: &Path,
@@ -230,12 +243,15 @@ impl SheprdWindow {
         true
     }
 
+    // Tests only: production keeps and closes by the lane's own scope.
+    #[cfg(test)]
     /// Keeps a new workspace on this computer for a checkout at `cwd` whose
     /// first tab shows `location`, leaving whatever is in front, and which
     /// host is shown, as they are, as Herdr 1 opens a fan-out lane's
     /// workspace without focusing it. Answers its ID, or `None`, with a
     /// flash, when it could not be kept or its tab not opened, which ends
     /// the terminals `location` drives.
+    #[cfg(test)]
     pub(crate) fn open_kept_workspace_behind(
         &mut self,
         label: &str,
@@ -301,7 +317,7 @@ impl SheprdWindow {
     }
 
     /// Keeps a new workspace for `scope`, named for `label`, else its folder.
-    fn keep_workspace_in(
+    pub(crate) fn keep_workspace_in(
         &mut self,
         scope: &Scope,
         label: Option<&str>,
@@ -357,14 +373,39 @@ impl SheprdWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.drop_kept_workspace_in(scope, id, WorkspaceTerminals::End, window, cx);
+    }
+
+    /// Drop presentation after a worker already verified the owned programs
+    /// ended. Do not send another kill using potentially stale addresses.
+    pub(crate) fn forget_removed_kept_workspace_in(
+        &mut self,
+        scope: &Scope,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.drop_kept_workspace_in(scope, id, WorkspaceTerminals::AlreadyEnded, window, cx);
+    }
+
+    fn drop_kept_workspace_in(
+        &mut self,
+        scope: &Scope,
+        id: &str,
+        terminals: WorkspaceTerminals,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let host = Host::of(scope);
         let tabs = Store::update(cx, |store| store.forget_kept(scope, id));
         let closed: Vec<String> = tabs.iter().map(|tab| tab.id.to_string()).collect();
         crate::notification_mutes::Mutes::update(cx, |mutes| {
             mutes.forget_kept(scope.as_str(), id, &closed)
         });
-        for location in tabs.iter().filter_map(|tab| tab.location.as_ref()) {
-            self.end_location(&host, location);
+        if matches!(terminals, WorkspaceTerminals::End) {
+            for location in tabs.iter().filter_map(|tab| tab.location.as_ref()) {
+                self.end_location(&host, location);
+            }
         }
         self.forget_browser_tabs(|gone| tabs.iter().any(|tab| tab.id == gone));
         if self

@@ -66,5 +66,6 @@ pub(super) async fn reveal(
         )?)
     })
     .await?;
+    crate::relay::open_pairing(&state);
     Ok(Json(revealed))
 }

@@ -33,10 +33,13 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
     /// When `tags` were last edited, in milliseconds since the epoch, as
     /// `updated_ms` on the computer: 0 for tags never edited.
     public var tagsUpdatedMs: UInt64
+    /// How to reach the computer through its relays, once it said and this
+    /// phone sent its keys; nil while it listens on none.
+    public var relay: RelayRecord?
 
     public var id: String { device }
 
-    enum CodingKeys: String, CodingKey { case device, name, origins, fingerprint, keyKind, keyData, presence, via, tags, tagsUpdatedMs }
+    enum CodingKeys: String, CodingKey { case device, name, origins, fingerprint, keyKind, keyData, presence, via, tags, tagsUpdatedMs, relay }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -55,6 +58,9 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
         // Tags saved before they synced are older than any edit made on the
         // computer, but newer than none, so they reach it once.
         tagsUpdatedMs = try c.decodeIfPresent(UInt64.self, forKey: .tagsUpdatedMs) ?? (tags.isEmpty ? 0 : 1)
+        // Records saved before relays existed have none. A relay record the
+        // app cannot read is dropped and made again, not the computer.
+        relay = (try? c.decodeIfPresent(RelayRecord.self, forKey: .relay)) ?? nil
     }
 
     public init(
@@ -67,7 +73,8 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
         presence: Bool = false,
         via: Fingerprint? = nil,
         tags: [String] = [],
-        tagsUpdatedMs: UInt64 = 0
+        tagsUpdatedMs: UInt64 = 0,
+        relay: RelayRecord? = nil
     ) {
         self.device = device
         self.name = name
@@ -79,6 +86,7 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
         self.via = via
         self.tags = tags
         self.tagsUpdatedMs = tagsUpdatedMs
+        self.relay = relay
     }
 
     /// The addresses to try, the pairing address first, without repeats.

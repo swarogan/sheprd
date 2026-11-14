@@ -163,6 +163,30 @@ response per connection, as length-prefixed JSON frames
 `default-features = false`, which leaves out the server and Tokio, and calls
 `control::request` from a background thread.
 
+## Relays
+
+With `[remote] relays = ["https://relay.example.org"]` (`--relay URL`), the
+daemon listens on each relay over QUIC (`relay`), so a paired phone reaches
+it from any network (`docs/relay-plan.md`). Its route key and tunnel keys
+live in `STATE_DIR/relay/` (0600). A signed-in phone reads
+`GET /api/relay` (the route, the relays, and the tunnel identity to pin)
+and sends its own keys with `POST /api/relay` (`{dial, tunnel}`, base64url),
+over a path it already trusts. Each listener names the dial keys of devices
+that sent them, again whenever one does or a device is revoked; each dial
+runs the end-to-end tunnel (`sheprd-tunnel`) admitting only a paired
+device's tunnel key, then serves the same router over it with hyper, the
+device's own private address standing in for a peer address. Inside, the
+phone still signs in with its device key and a bearer token. The relay's
+QUIC pin is read from its `/v1/info` over HTTPS. `sheprd remote status`
+shows each relay's state.
+
+Bluetooth pairing works from another network: the sealed nearby offer
+also carries `relay` (the same fields as `GET /api/relay`), revealing it
+opens a one-dial pairing key on each relay derived from the offer's
+token, and a dial with that key runs the tunnel's pairing handshake, so
+the phone can claim with no shared network. A claim may carry
+`relay: {dial, tunnel}`, stored with the device on Allow.
+
 ## Pairing and authentication
 
 `auth` (server only) holds the pairing the desktop dialog opens, the paired

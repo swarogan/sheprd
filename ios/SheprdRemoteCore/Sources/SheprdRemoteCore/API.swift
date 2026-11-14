@@ -7,15 +7,19 @@ public enum API {
         public let token: String
         public let name: String
         public let publicKey: String
+        /// This phone's keys for the computer's relays, stored with the
+        /// device when the desktop approves; nil while it has none.
+        public let relay: RelayKeys?
 
-        public init(token: String, name: String, publicKey: String) {
+        public init(token: String, name: String, publicKey: String, relay: RelayKeys? = nil) {
             self.token = token
             self.name = name
             self.publicKey = publicKey
+            self.relay = relay
         }
 
         enum CodingKeys: String, CodingKey {
-            case token, name
+            case token, name, relay
             case publicKey = "public_key"
         }
     }

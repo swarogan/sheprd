@@ -154,6 +154,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
             notifications: Privacy::Excerpt,
             port: 9443,
             presence: true,
+            relays: Vec::new(),
         }
     );
     Config::save_preference_path(

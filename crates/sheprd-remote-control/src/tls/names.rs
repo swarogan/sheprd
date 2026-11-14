@@ -143,6 +143,18 @@ impl Names {
         self
     }
 
+    /// These names and IPv4 loopback, whatever address the server is bound
+    /// to: a relay session never arrives on the bound socket. The phone
+    /// reaches it at `https://127.0.0.1:PORT` through its own loopback
+    /// proxy, and checks the certificate against that address. For the
+    /// certificates issued, not for the origins advertised.
+    pub(crate) fn with_relay_loopback(mut self) -> Self {
+        self.ips.push(IpAddr::V4(Ipv4Addr::LOCALHOST));
+        self.ips.sort_unstable();
+        self.ips.dedup();
+        self
+    }
+
     /// Adds a DNS name, such as the Tailscale MagicDNS name, keeping the
     /// list sorted. A name outside [`LOCAL_DOMAINS`] would make the leaf
     /// fail verification, so it is ignored.

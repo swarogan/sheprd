@@ -97,6 +97,16 @@ final class Fleet {
     @ObservationIgnored private var termViewers: [PaneKey: Int] = [:]
     /// One client per computer, kept while its address and CA stay.
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
+    /// Each computer's relay proxy while its link runs (`RelayProxy`).
+    @ObservationIgnored private var proxies: [String: RelayProxy] = [:]
+    /// Each running proxy's origin, raced after the computer's own
+    /// addresses, so a direct path wins when there is one.
+    @ObservationIgnored private var relayOrigins: [String: String] = [:]
+    /// Computers whose relay keys are being checked or sent.
+    @ObservationIgnored private var enrolling: Set<String> = []
+    /// A computer's relay record changed, or it stopped listening on
+    /// relays (nil): the app keeps it with the computer.
+    var onRelay: ((String, RelayRecord?) -> Void)?
     /// Calls that got no answer, for the computer's log once it is back.
     @ObservationIgnored private var unreported: [String: UnreportedFailures] = [:]
     /// Addresses named in a report, which the daemon cuts at 600 characters.
@@ -128,11 +138,16 @@ final class Fleet {
                 // Addresses learned since (over Bluetooth, say) go to the
                 // running link too, which otherwise keeps the old ones.
                 if known.computer.origins != computer.origins, let link = links[computer.device] {
-                    let origins = computer.origins
+                    let origins = self.origins(computer)
                     Task {
                         await link.updateOrigins(origins)
                         await link.networkChanged()
                     }
+                }
+                // New relay keys, or none: the proxy follows.
+                if known.computer.relay != computer.relay, links[computer.device] != nil {
+                    stopRelay(computer.device)
+                    startRelay(computer)
                 }
                 known.computer = computer
                 return known
@@ -578,10 +593,11 @@ final class Fleet {
         guard links[computer.device] == nil else { return }
         let link = ComputerLink(
             fingerprint: computer.fingerprint.hex,
-            origins: computer.origins,
+            origins: origins(computer),
             io: LiveSocket.io(for: computer, sessions: sessions)
         )
         links[computer.device] = link
+        startRelay(computer)
         let device = computer.device
         let watching = chats.filter { $0.key.device == device }.map { ($0.key.pane, $0.value.cursor) }
         let terminals = terms.filter { $0.key.device == device }.map { ($0.key.pane, $0.value.size) }
@@ -596,7 +612,72 @@ final class Fleet {
         }
     }
 
+    // MARK: Relays
+
+    /// The addresses a computer's link races: its own, then its relay's.
+    private func origins(_ computer: Computer) -> [String] {
+        computer.origins + (relayOrigins[computer.device].map { [$0] } ?? [])
+    }
+
+    /// Starts the computer's relay proxy, when it has relays, and adds its
+    /// origin to the running link once it listens.
+    private func startRelay(_ computer: Computer) {
+        guard let relay = computer.relay, proxies[computer.device] == nil,
+              let proxy = try? RelayProxy(open: { try await relay.open() })
+        else { return }
+        let device = computer.device
+        proxies[device] = proxy
+        Task {
+            guard let port = try? await proxy.start() else { return }
+            guard proxies[device] === proxy, let link = links[device],
+                  let computer = machines.first(where: { $0.id == device })?.computer
+            else {
+                proxy.stop()
+                return
+            }
+            relayOrigins[device] = "https://127.0.0.1:\(port)"
+            await link.updateOrigins(origins(computer))
+            await link.networkChanged()
+        }
+    }
+
+    private func stopRelay(_ device: String) {
+        proxies.removeValue(forKey: device)?.stop()
+        relayOrigins[device] = nil
+    }
+
+    /// Asks the computer, while it answers directly, how to reach it
+    /// through its relays, and sends this phone's keys when they are new.
+    private func enrollRelay(_ device: String) {
+        guard !enrolling.contains(device) else { return }
+        enrolling.insert(device)
+        let known = machines.first { $0.id == device }?.computer.relay
+        Task {
+            defer { enrolling.remove(device) }
+            let answer: API.RelayInfo?
+            do {
+                answer = try await call(device) { client, token in try await client.relayInfo(bearer: token) }
+            } catch {
+                return
+            }
+            guard let info = answer else {
+                if known != nil { onRelay?(device, nil) }
+                return
+            }
+            if let known, known.matches(info) { return }
+            guard let record = RelayRecord.make(from: info), let keys = record.enrollment else { return }
+            do {
+                try await call(device) { client, token in try await client.enrollRelay(keys, bearer: token) }
+                log.notice("sent relay keys to \(device, privacy: .public)")
+                onRelay?(device, record)
+            } catch {
+                log.error("could not send relay keys: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     private func stopLink(_ device: String) {
+        stopRelay(device)
         clients[device] = nil
         readers.removeValue(forKey: device)?.cancel()
         if let link = links.removeValue(forKey: device) { Task { await link.stop() } }
@@ -616,6 +697,11 @@ final class Fleet {
             if case .online = status {
                 onOnline?(machines[index].computer)
                 reportFailures(of: device)
+            }
+            // Over a path it already trusts, the phone learns the
+            // computer's relays and sends its keys for them.
+            if case let .online(origin) = status, origin != relayOrigins[device] {
+                enrollRelay(device)
             }
         case let .unreachable(failures):
             // Kept for the computer's log, which shows only silence for
