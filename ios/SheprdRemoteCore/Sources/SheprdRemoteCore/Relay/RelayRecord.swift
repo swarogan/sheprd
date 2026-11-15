@@ -83,24 +83,34 @@ public struct RelayRecord: Codable, Hashable, Sendable {
         throw last
     }
 
+    /// The relays to dial the computer on, in order: the ones it named,
+    /// then those of `saved` it did not. Its route and pinned identity
+    /// are the same on every relay, so a saved relay it does not listen on
+    /// only answers that it is offline.
+    public func candidates(saved: [RelayEndpoint]) -> [RelayEndpoint] {
+        relays + saved.filter { !relays.contains($0) }
+    }
+
     /// Opens a session to the computer through the first relay that
-    /// answers.
-    public func open(session: URLSession = .shared) async throws -> RelaySession {
+    /// answers, of its own and then of `saved`. A relay that says nothing
+    /// holds the next one back for `RelayRace.stagger` only, so a computer
+    /// that moved off a dead relay is still reached through a saved one.
+    public func open(saved: [RelayEndpoint] = [], session: URLSession = .shared) async throws -> RelaySession {
         let dial = try P256.Signing.PrivateKey(rawRepresentation: dialKey)
         let tunnel = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: tunnelKey)
         let listener = try Tunnel.Identity(bytes: identity)
-        var last: Error = RelaySession.Failure.closed
-        for relay in relays {
-            do {
-                return try await RelaySession.open(
+        let route = route
+        return try await RelayRace.first(
+            of: candidates(saved: saved),
+            none: RelaySession.Failure.closed,
+            open: { relay in
+                try await RelaySession.open(
                     endpoint: relay, route: route, dialKey: dial,
                     tunnelKey: tunnel, listener: listener, session: session
                 )
-            } catch {
-                last = error
-            }
-        }
-        throw last
+            },
+            discard: { await $0.close() }
+        )
     }
 }
 

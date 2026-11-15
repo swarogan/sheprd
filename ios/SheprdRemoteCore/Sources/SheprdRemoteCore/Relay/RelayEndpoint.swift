@@ -56,6 +56,11 @@ public struct RelayEndpoint: Hashable, Codable, Sendable, CustomStringConvertibl
         "\(secure ? "https" : "http")://\(authority)\(prefix)"
     }
 
+    /// Where the relay says what it is: `GET /v1/info`.
+    public var info: URL? {
+        URL(string: "\(description)/v1/info")
+    }
+
     /// The WebSocket that dials `route`.
     public func dial(route: Data) -> URL? {
         URL(string: "\(secure ? "wss" : "ws")://\(authority)\(prefix)/v1/dial/\(Base64URL.encode(route))")

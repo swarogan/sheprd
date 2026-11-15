@@ -25,6 +25,12 @@ use gpui::{prelude::*, *};
 use sheprd_remote_control::control::{Device, DeviceId};
 use std::path::PathBuf;
 
+mod relays;
+
+pub(in crate::settings_window) use relays::Offered;
+#[cfg(test)]
+pub(in crate::settings_window) use relays::{Standing, public_title};
+
 /// The page's state while it shows.
 #[derive(Default)]
 pub(in crate::settings_window) struct RemoteSettings {
@@ -38,6 +44,12 @@ pub(in crate::settings_window) struct RemoteSettings {
     key: Option<Entity<SearchInput>>,
     /// The files typed are not absolute paths, so they were not saved.
     invalid: bool,
+    /// Where a relay's address is typed before Add.
+    relay: Option<Entity<SearchInput>>,
+    /// What was typed is not a relay's address, so it was not added.
+    relay_invalid: bool,
+    /// Sheprd's own relays, read once the page shows.
+    pub(in crate::settings_window) offered: Offered,
 }
 
 /// Opens Settings at Remote control, as the status bar's phone does.
@@ -143,17 +155,32 @@ impl SettingsWindow {
         if self.remote.key.is_none() {
             self.remote.key = Some(field(key, "/path/to/private-key.pem", cx));
         }
+        if self.remote.relay.is_none() {
+            self.remote.relay = Some(field(String::new(), relays::PLACEHOLDER, cx));
+        }
         self.sync_remote_fields(cx);
+        // A list kept from an earlier visit may have expired since; it is
+        // then read again like one that failed.
+        self.expire_public_relays(crate::remote::public_relays::now(), cx);
+        // Tests offer a list of their own; they never reach the network.
+        #[cfg(not(test))]
+        if matches!(self.remote.offered, Offered::Unknown | Offered::Failed(_)) {
+            self.load_public_relays(crate::remote::public_relays::fetch, cx);
+        }
     }
 
     /// The page went away.
     pub(in crate::settings_window) fn close_remote_control(&mut self) {
         self.remote.lease = None;
         self.remote.revoking = None;
+        self.remote.relay_invalid = false;
     }
 
     pub(in crate::settings_window) fn sync_remote_fields(&mut self, cx: &mut Context<Self>) {
-        for input in [&self.remote.cert, &self.remote.key].into_iter().flatten() {
+        for input in [&self.remote.cert, &self.remote.key, &self.remote.relay]
+            .into_iter()
+            .flatten()
+        {
             input.update(cx, |input, cx| {
                 input.set_appearance(self.config.terminal.clone(), self.theme.clone(), cx);
             });
@@ -363,6 +390,7 @@ impl SettingsWindow {
                 )),
             )
             .when(files, |page| page.child(self.remote_files(cx)))
+            .child(self.remote_relays(&health, cx))
             .child(ui::section(
                 theme,
                 &fl!("settings-remote-section-notifications"),

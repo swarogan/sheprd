@@ -633,6 +633,11 @@ impl Settings {
     pub(crate) fn status_color(&self, status: AgentStatus, light: bool) -> u32 {
         self.colors(light).status(status)
     }
+
+    /// Whether the effective Herdr theme takes its colors from a terminal.
+    pub(crate) fn terminal_theme(&self, light: bool) -> bool {
+        self.colors(light).terminal
+    }
 }
 
 fn set(document: &mut DocumentMut, keys: &[&'static str], mut value: Value) -> Result<(), Error> {

@@ -294,8 +294,8 @@ pub(crate) struct Indicators {
 }
 
 impl Indicators {
-    /// Herdr's settings supply only the status colors; its indicator style
-    /// is the terminal client's, and this app draws `icons` instead.
+    /// Herdr supplies status colors unless its theme follows the terminal;
+    /// then the marks take their colors from this app's theme.
     pub(crate) fn new(
         settings: Option<&Settings>,
         icons: StatusIcons,
@@ -316,7 +316,20 @@ impl Indicators {
             .map(|status| {
                 settings.map_or_else(
                     || status_style(status, theme).2,
-                    |settings| theme.ink(settings.status_color(status, light)),
+                    |settings| {
+                        let color = if settings.terminal_theme(light) {
+                            match status {
+                                AgentStatus::Unknown => theme.muted,
+                                AgentStatus::Idle => theme.palette[2],
+                                AgentStatus::Working => theme.palette[3],
+                                AgentStatus::Done => theme.palette[6],
+                                AgentStatus::Blocked => theme.palette[1],
+                            }
+                        } else {
+                            settings.status_color(status, light)
+                        };
+                        theme.ink(color)
+                    },
                 )
             }),
             fade: 1f32.to_bits(),

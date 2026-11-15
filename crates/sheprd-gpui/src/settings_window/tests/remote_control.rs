@@ -19,7 +19,7 @@ use crate::{
 use sheprd_remote_control::control::{self, Device, DeviceId, Request, Response, Status};
 use std::path::Path;
 
-fn status() -> Status {
+pub(super) fn status() -> Status {
     Status {
         boot_id: String::new(),
         address_details: Default::default(),
@@ -73,11 +73,13 @@ fn daemon(_: &Path, request: &Request) -> Result<Response, control::Error> {
     Ok(Response::Done)
 }
 
-type Edits = Arc<Mutex<Vec<Preference>>>;
+pub(super) type Edits = Arc<Mutex<Vec<Preference>>>;
 
 /// The page with remote control on, the daemon running with two devices,
 /// and every save recorded.
-fn page(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestContext, Edits) {
+pub(super) fn page(
+    cx: &mut TestAppContext,
+) -> (Entity<SettingsWindow>, &mut VisualTestContext, Edits) {
     let (view, cx) = cx.add_window_view(skill_fixture);
     let config = RemoteConfig {
         enabled: true,
@@ -101,11 +103,11 @@ fn page(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestCont
     (view, cx, edits)
 }
 
-fn draw(cx: &mut VisualTestContext) {
+pub(super) fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
 }
 
-fn click(cx: &mut VisualTestContext, selector: &'static str) {
+pub(super) fn click(cx: &mut VisualTestContext, selector: &'static str) {
     let point = cx.debug_bounds(selector).unwrap().center();
     cx.simulate_click(point, Default::default());
     cx.run_until_parked();

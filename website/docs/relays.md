@@ -9,13 +9,32 @@ platforms: macOS, Linux, Windows
 
 A relay joins your phone, or another Sheprd, to your computer when they have no direct path: different networks, no Tailscale, a hotel Wi-Fi in between. Everything that crosses it is end-to-end encrypted, so a relay sees only ciphertext, timing, and sizes; it can never read your chats or terminals, and it keeps nothing on disk.
 
-> **Coming soon.** You can run a relay today. Sheprd, `sheprd-remote-control`, and the iPhone app gain relay support in a coming release; until then they keep reaching your computer [directly or over Tailscale](remote-control.md).
+Relays are optional. Without one, phones keep reaching your computer [directly or over Tailscale](remote-control.md).
 
 ## Sheprd's relays and yours
 
 Sheprd lists its own relays at [sheprd.org/relays.json](https://sheprd.org/relays.json). That list is empty for now: **no Sheprd relays are available for now**, so to use a relay, run your own. One small instance serves all your computers and phones, and you can run as many as you like, in different regions.
 
 Your computers will then use the relays you name, and only those: with a private relay, Sheprd's relays are never contacted.
+
+## Use your relay
+
+In Sheprd, open **Settings > Remote control > Relays**, type your relay's address, such as `https://relay.example.org`, and choose **Add**. The daemon restarts and each relay's row shows a dot and a line for how it stands: green while it is listening, red with the reason when it failed. `sheprd remote status` reports the same.
+
+The same section lists Sheprd's own relays once there are some, each with an **Add** button. Sheprd takes that list only when it is signed, and says who validated it.
+
+Or name them in the config file:
+
+```toml
+[remote]
+relays = ["https://relay.example.org"]
+```
+
+A paired phone learns of a new relay the next time it reaches the computer directly, and uses it after that whenever it has no direct path.
+
+On the iPhone, **Settings > Relays** lists the relays it keeps, each with a dot for whether it answers. The relays your computers named are filled in and kept. To reach a computer that moved to a relay while the phone was away, type that relay's address there and choose **Add Relay**: the phone then tries it for every computer it is paired with. A computer not paired yet is still paired nearby or on its network first.
+
+The computer listens on a relay over QUIC, so name a relay on a droplet or your own host. A relay deployed in one click to App Platform offers no QUIC, and shows as failed.
 
 ## Deploy in one click
 
@@ -33,7 +52,7 @@ With [`doctl`](https://docs.digitalocean.com/reference/doctl/) signed in, from a
 deploy/relay/create-droplet.sh fra1
 ```
 
-Each region named gets a small droplet with only ports 22, 80, and 443 open, and a relay serving both QUIC and WebSockets at `https://IP-WITH-DASHES.sslip.io`, with a Let's Encrypt certificate and no DNS to set up. The dashboard's access token is in `/root/sheprd-relay-login.txt` on the droplet. Set `RELAY_DOMAIN_SUFFIX` to use your own names.
+Each region named gets a small droplet with only ports 22, 80, and 443 open, and a relay serving both QUIC and WebSockets at `https://IP-WITH-DASHES.sslip.io`, with a Let's Encrypt certificate and no DNS to set up. The script ends by printing each relay's address, ready to add in Settings. The dashboard's access token is in `/root/sheprd-relay-login.txt` on the droplet. Set `RELAY_DOMAIN_SUFFIX` to use your own names.
 
 ## Any host with Docker
 

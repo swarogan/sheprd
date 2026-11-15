@@ -238,6 +238,8 @@ pub enum Edit {
     Notifications(Privacy),
     Port(u16),
     Presence(bool),
+    /// The whole list, as Settings shows it after adding or removing one.
+    Relays(Vec<String>),
 }
 
 impl Edit {
@@ -271,6 +273,33 @@ impl Edit {
             Self::Port(0) => return Err(Error::Port),
             Self::Port(port) => ("port", i64::from(port).into()),
             Self::Presence(on) => ("presence", on.into()),
+            Self::Relays(relays) => {
+                // Written as the daemon names them, each once, so the
+                // list matches the relays its status reports.
+                let mut listed = toml_edit::Array::new();
+                let mut seen = Vec::new();
+                for relay in relays {
+                    let address = relay_address(&relay)?;
+                    if !seen.contains(&address) {
+                        listed.push(address.as_str());
+                        seen.push(address);
+                    }
+                }
+                ("relays", toml_edit::Value::Array(listed))
+            }
         })
     }
+}
+
+/// A relay's address as the daemon names it in its status and saves it:
+/// what was typed, trimmed, without the trailing slash of an empty path.
+/// Refuses what is not a relay address, as [`RemoteConfig::check`] does.
+pub fn relay_address(text: &str) -> Result<String, Error> {
+    let text = text.trim();
+    sheprd_relay::Endpoint::parse(text)
+        .map(|endpoint| endpoint.to_string())
+        .map_err(|source| Error::Relay {
+            relay: text.to_owned(),
+            source,
+        })
 }

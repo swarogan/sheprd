@@ -74,6 +74,8 @@ pub(in crate::settings_window) struct Row {
     tag: Option<Source>,
     disabled: Option<SharedString>,
     controls: Vec<AnyElement>,
+    /// The color of a status dot before the title.
+    dot: Option<u32>,
 }
 
 pub(in crate::settings_window) fn row(
@@ -89,12 +91,19 @@ pub(in crate::settings_window) fn row(
         tag: None,
         disabled: None,
         controls: Vec::new(),
+        dot: None,
     }
 }
 
 impl Row {
     pub(in crate::settings_window) fn description(mut self, text: impl Into<SharedString>) -> Self {
         self.description = Some(text.into());
+        self
+    }
+    /// A status dot before the title, in `color`. The description says the
+    /// same in words: the color alone never carries the state.
+    pub(in crate::settings_window) fn dot(mut self, color: u32) -> Self {
+        self.dot = Some(color);
         self
     }
     pub(in crate::settings_window) fn tag(mut self, source: Source) -> Self {
@@ -143,6 +152,7 @@ impl Row {
         let title_id = format!("{id}-title");
         let desc_id = format!("{id}-description");
         let tag_id = format!("{id}-tag");
+        let dot_id = format!("{id}-dot");
         let dimmed = self.disabled.is_some();
         let tracked = id.clone();
         let reason_id = format!("{id}-reason");
@@ -178,6 +188,14 @@ impl Row {
                             .gap(px(6.))
                             .text_size(px(12.))
                             .font_weight(FontWeight::MEDIUM)
+                            .children(self.dot.map(|color| {
+                                div()
+                                    .debug_selector(move || dot_id.clone())
+                                    .flex_none()
+                                    .size(px(8.))
+                                    .rounded_full()
+                                    .bg(rgb(color))
+                            }))
                             .child(self.title)
                             .children(self.tag.map(|source| {
                                 tag(theme, source).debug_selector(move || tag_id.clone())

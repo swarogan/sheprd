@@ -67,7 +67,7 @@ macro_rules! overrides {
         }
         impl Overrides {
             fn apply(&self, colors: &mut Palette) {
-                $(if let Some(value) = &self.$name { colors.0[$index] = parse_color(value); })+
+                $(if let Some(value) = &self.$name { colors.colors[$index] = parse_color(value); })+
             }
         }
     };
@@ -158,7 +158,10 @@ const PALETTES: [[u32; 18]; 18] = [
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Palette([u32; 19]);
+pub(super) struct Palette {
+    colors: [u32; 19],
+    pub(super) terminal: bool,
+}
 
 impl ThemeConfig {
     pub(super) fn resolve(&self, manual: &str, legacy: Option<&str>, light: bool) -> Palette {
@@ -190,13 +193,16 @@ impl ThemeConfig {
         let index = canonical(name)
             .and_then(|name| THEME_NAMES.iter().position(|candidate| *candidate == name))
             .unwrap_or(fallback);
-        let mut colors = Palette([RESET; 19]);
-        colors.0[..18].copy_from_slice(&PALETTES[index]);
+        let mut colors = Palette {
+            colors: [RESET; 19],
+            terminal: THEME_NAMES[index] == "terminal",
+        };
+        colors.colors[..18].copy_from_slice(&PALETTES[index]);
         self.custom.common.apply(&mut colors);
         if self.custom.common.accent.is_none()
             && let Some(legacy) = legacy
         {
-            colors.0[0] = parse_color(legacy);
+            colors.colors[0] = parse_color(legacy);
         }
         if self.auto_switch {
             if light {
@@ -212,10 +218,10 @@ impl ThemeConfig {
 
 impl Palette {
     fn rgb(&self, index: usize, fallback: u32) -> u32 {
-        if self.0[index] == RESET {
+        if self.colors[index] == RESET {
             fallback
         } else {
-            self.0[index]
+            self.colors[index]
         }
     }
 
@@ -237,7 +243,7 @@ impl Palette {
         // GPUI has no host-terminal "Reset" color. Resolve reset backgrounds to
         // its opaque default. Herdr paints `sidebar_bg` on the sidebar alone.
         theme.background = self.rgb(6, theme.background);
-        theme.sidebar = (self.0[18] != RESET).then_some(self.0[18]);
+        theme.sidebar = (self.colors[18] != RESET).then_some(self.colors[18]);
         theme.surface = self.rgb(1, theme.background);
         theme.active = self.rgb(2, theme.background);
         theme.muted = self.rgb(7, theme.muted);

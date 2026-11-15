@@ -255,6 +255,8 @@ pub enum Error {
     #[error(transparent)]
     Processes(#[from] crate::processes::Error),
     #[error(transparent)]
+    PublicRelays(#[from] crate::remote::public_relays::Error),
+    #[error(transparent)]
     Px0(#[from] crate::px0::Error),
     #[error("XDG_CONFIG_HOME must be an absolute path")]
     RelativeConfigRoot,

@@ -52,8 +52,10 @@ pub(crate) struct Card {
 }
 
 /// What `nvidia-smi` is asked for, one card per line, in MiB.
-const NVIDIA_QUERY: &str =
-    "--query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits";
+const NVIDIA_ARGS: &[&str] = &[
+    "--query-gpu=utilization.gpu,memory.used,memory.total",
+    "--format=csv,noheader,nounits",
+];
 
 /// Prints a `gpu-amd` line per AMD card and a `gpu-nvidia` line per NVIDIA
 /// card. `timeout` keeps a wedged driver from stalling the whole sample.
@@ -131,20 +133,26 @@ const TOOL_TIMEOUT: Duration = Duration::from_secs(3);
 /// Apple GPU; a longer answer closes the pipe and the tool is given up on.
 pub(super) const TOOL_LIMIT: usize = 1024 * 1024;
 
-/// This machine's cards. A tool that is missing or overruns once is not run
-/// again for this worker, so a machine without a GPU spends nothing on it.
+/// This machine's cards, read with the same tools a remote host runs.
 pub(super) struct Local {
-    nvidia: bool,
+    nvidia: Probe<'static>,
     #[cfg(target_os = "macos")]
-    ioreg: bool,
+    ioreg: Probe<'static>,
 }
 
 impl Local {
     pub fn open() -> Self {
         Self {
-            nvidia: !cfg!(target_os = "macos"),
+            // A Mac has no NVIDIA driver to ask.
+            nvidia: Probe {
+                installed: !cfg!(target_os = "macos"),
+                ..Probe::new("nvidia-smi", NVIDIA_ARGS)
+            },
             #[cfg(target_os = "macos")]
-            ioreg: true,
+            ioreg: Probe::new(
+                "ioreg",
+                &["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
+            ),
         }
     }
 
@@ -153,24 +161,50 @@ impl Local {
         let mut cards = Vec::new();
         #[cfg(target_os = "linux")]
         cards.extend(amd_cards());
-        if self.nvidia {
-            match tool("nvidia-smi", NVIDIA_QUERY.split(' '), TOOL_TIMEOUT) {
-                Some(text) => cards.extend(text.lines().filter_map(nvidia)),
-                None => self.nvidia = false,
-            }
+        if let Some(text) = self.nvidia.read(TOOL_TIMEOUT) {
+            cards.extend(text.lines().filter_map(nvidia));
         }
         #[cfg(target_os = "macos")]
-        if self.ioreg {
-            match tool(
-                "ioreg",
-                ["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
-                TOOL_TIMEOUT,
-            ) {
-                Some(text) => cards.extend(apple_cards(&text)),
-                None => self.ioreg = false,
-            }
+        if let Some(text) = self.ioreg.read(TOOL_TIMEOUT) {
+            cards.extend(apple_cards(&text));
         }
         Gpu::combine(cards)
+    }
+}
+
+/// One local tool, and whether it is still worth running. A tool that is not
+/// installed is not run again for this worker, so a machine without a GPU
+/// spends nothing on it. Any other failure, such as a slow answer while the
+/// machine is busy, only loses that sample: the tool runs again on the next,
+/// as a remote host's command does.
+pub(super) struct Probe<'a> {
+    program: &'a str,
+    args: &'a [&'a str],
+    installed: bool,
+}
+
+impl<'a> Probe<'a> {
+    pub(super) const fn new(program: &'a str, args: &'a [&'a str]) -> Self {
+        Self {
+            program,
+            args,
+            installed: true,
+        }
+    }
+
+    /// The tool's answer for this sample, or None.
+    pub(super) fn read(&mut self, timeout: Duration) -> Option<String> {
+        if !self.installed {
+            return None;
+        }
+        match tool(self.program, self.args.iter().copied(), timeout) {
+            Ok(text) => Some(text),
+            Err(Unanswered::Missing) => {
+                self.installed = false;
+                None
+            }
+            Err(Unanswered::Failed) => None,
+        }
     }
 }
 
@@ -216,8 +250,17 @@ fn amd_cards() -> Vec<Card> {
         .collect()
 }
 
-/// What `program` printed, or None when it could not start, failed, printed
-/// more than [`TOOL_LIMIT`], or was still running after `timeout`. A reader
+/// Why a local tool gave no answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Unanswered {
+    /// Not installed: running it again cannot help.
+    Missing,
+    /// It started but failed, printed more than [`TOOL_LIMIT`], or was still
+    /// running after its timeout; the next sample may fare better.
+    Failed,
+}
+
+/// What `program` printed, or why it printed nothing usable. A reader
 /// thread drains its output while this one waits, so a long answer cannot
 /// fill the pipe and stall it; the deadline covers the process, not only its
 /// output, so a tool that closes stdout and keeps running is still ended.
@@ -225,8 +268,13 @@ pub(super) fn tool<'a>(
     program: &str,
     args: impl IntoIterator<Item = &'a str>,
     timeout: Duration,
-) -> Option<String> {
-    use std::{io::Read, process::Stdio, sync::mpsc, time::Instant};
+) -> Result<String, Unanswered> {
+    use std::{
+        io::{ErrorKind, Read},
+        process::Stdio,
+        sync::mpsc,
+        time::Instant,
+    };
     let deadline = Instant::now() + timeout;
     let mut child = sheprd_client::new_command(program)
         .args(args)
@@ -234,7 +282,11 @@ pub(super) fn tool<'a>(
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .ok()?;
+        .map_err(|error| match error.kind() {
+            ErrorKind::NotFound => Unanswered::Missing,
+            // Such as too many processes at once: a busy moment, not a gap.
+            _ => Unanswered::Failed,
+        })?;
     let stdout = child.stdout.take();
     let (sender, read) = mpsc::sync_channel(1);
     let reader = std::thread::Builder::new()
@@ -272,4 +324,5 @@ pub(super) fn tool<'a>(
         }
     };
     text.filter(|_| status.is_some_and(|status| status.success()))
+        .ok_or(Unanswered::Failed)
 }

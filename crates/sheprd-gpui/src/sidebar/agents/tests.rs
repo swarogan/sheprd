@@ -47,6 +47,48 @@ fn shared_palette_props_keep_the_set_and_follow_chrome_contrast() -> anyhow::Res
 }
 
 #[test]
+fn terminal_theme_uses_the_app_palette_only_for_the_selected_appearance() -> anyhow::Result<()> {
+    use crate::{config::Theme, herdr_settings::Settings};
+    use anyhow::Context as _;
+
+    let settings = Settings::parse_text(
+        "[theme]\nname='terminal'\nauto_switch=true\ndark_name='terminal'\nlight_name='nord'\n[theme.custom]\nyellow='#123456'\n",
+    )?;
+    let theme = Theme::builtin("Catppuccin Macchiato").context("builtin theme")?;
+    let dark = Indicators::new(Some(&settings), StatusIcons::Wave, true, false, &theme);
+    for (status, color) in [
+        (AgentStatus::Unknown, theme.muted),
+        (AgentStatus::Idle, theme.palette[2]),
+        (AgentStatus::Working, theme.palette[3]),
+        (AgentStatus::Done, theme.palette[6]),
+        (AgentStatus::Blocked, theme.palette[1]),
+    ] {
+        assert_eq!(dark.color(status), theme.ink(color));
+    }
+    let light = Indicators::new(Some(&settings), StatusIcons::Wave, true, true, &theme);
+    assert_eq!(
+        light.color(AgentStatus::Working),
+        theme.ink(settings.status_color(AgentStatus::Working, true))
+    );
+    assert_ne!(
+        dark.color(AgentStatus::Working),
+        light.color(AgentStatus::Working)
+    );
+
+    let other = Theme::builtin("Nord").context("builtin theme")?;
+    let changed = Indicators::new(Some(&settings), StatusIcons::Wave, true, false, &other);
+    assert_eq!(
+        changed.color(AgentStatus::Working),
+        other.ink(other.palette[3])
+    );
+    assert_ne!(
+        changed.color(AgentStatus::Working),
+        dark.color(AgentStatus::Working)
+    );
+    Ok(())
+}
+
+#[test]
 fn prepared_custom_palette_keeps_each_authoritative_status_color() {
     let indicators = Indicators {
         icons: StatusIcons::Dots,

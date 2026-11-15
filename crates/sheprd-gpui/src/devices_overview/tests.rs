@@ -7,6 +7,7 @@ mod history;
 mod model;
 mod narrow_layout;
 mod page;
+mod theme;
 
 use crate::{
     SheprdWindow,

@@ -154,6 +154,10 @@ mod wsl_tests;
 #[path = "script_tests/descendants.rs"]
 mod descendants_tests;
 
+#[cfg(all(test, any(unix, windows)))]
+#[path = "script_tests/late_input.rs"]
+mod late_input_tests;
+
 /// Streams a script child's pipes under the output and idle bounds. On Unix
 /// the child leads its own process group, so stopping it reaches its
 /// descendants too. On Windows the child is `wsl.exe` or `ssh`, and killing it
@@ -183,13 +187,35 @@ mod runner {
 
     // The job owns descendants even if the original command already exited.
     // A safe wrapper assigns the suspended child before it can fork.
+    //
+    // process-wrap's `JobObjectChild::try_wait` takes one message off the
+    // job's completion port per call, and its `wait` (and `kill`, which
+    // waits) then blocks without a bound for one more. A job of one process
+    // posts three: polling every few milliseconds while a pipe worker
+    // finishes can take the last, and the wait after the loop never returns.
+    // So the guard polls and reaps the process itself, and ends the job with
+    // `start_kill` alone.
     #[cfg(windows)]
     struct ChildGuard(Box<dyn process_wrap::std::ChildWrapper>);
 
     #[cfg(windows)]
+    impl ChildGuard {
+        fn try_wait(&mut self) -> io::Result<Option<std::process::ExitStatus>> {
+            self.0.inner_mut().try_wait()
+        }
+
+        /// Ends every process in the job, then reaps the child. A child that
+        /// already exited keeps its own status.
+        fn stop(&mut self) -> io::Result<std::process::ExitStatus> {
+            let _ = self.0.start_kill();
+            self.0.inner_mut().wait()
+        }
+    }
+
+    #[cfg(windows)]
     impl Drop for ChildGuard {
         fn drop(&mut self) {
-            let _ = self.0.kill();
+            let _ = self.stop();
         }
     }
 
@@ -359,7 +385,11 @@ mod runner {
                 if progress.idle() >= limits.idle {
                     break Some(Error::ScriptTimeout);
                 }
-                match child.0.try_wait() {
+                #[cfg(unix)]
+                let exited = child.0.try_wait();
+                #[cfg(windows)]
+                let exited = child.try_wait();
+                match exited {
                     Ok(Some(_))
                         if feeder.is_finished()
                             && drainer.is_finished()
@@ -372,17 +402,20 @@ mod runner {
                 }
                 thread::sleep(POLL);
             };
+            #[cfg(unix)]
             if stopped.is_some() || failed.load(Ordering::Acquire) {
-                #[cfg(unix)]
                 let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
                 let _ = child.0.kill();
             }
-            // JobObject::wait waits for descendants too. Even a descendant
-            // that closed its pipes must not strand a finished one-shot job.
+            #[cfg(unix)]
+            let status = child.0.wait();
+            // Ending the job always, even after a clean exit, ends any
+            // descendant still holding a pipe, so a finished one-shot job is
+            // never stranded behind it.
             #[cfg(windows)]
-            let _ = child.0.kill();
+            let status = child.stop();
             // Pipes close once the child is gone, so every worker terminates.
-            let status = child.0.wait().map_err(Error::ScriptIo)?;
+            let status = status.map_err(Error::ScriptIo)?;
             let fed = feeder.join().map_err(|_| Error::ScriptWorker)?;
             let drained = drainer.join().map_err(|_| Error::ScriptWorker)?;
             let stderr = stderr.join().map_err(|_| Error::ScriptWorker)?;

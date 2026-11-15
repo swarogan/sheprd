@@ -1071,8 +1071,9 @@ by the next error too. The app does not change permissions automatically.
 Existing native theme selections remain overrides. Choose **Follow Herdr** to
 use the shared theme, all 18 upstream palettes, custom colors, and automatic
 light/dark selection. Selecting a shared theme disables upstream auto-switching,
-as in the TUI. Status indicators always use the shared status colors,
-independent of a native terminal theme override, drawn with the set picked on
+as in the TUI. Status indicators use the shared status colors; when Herdr's
+effective theme is `terminal`, they use the app theme's colors instead. They
+are drawn with the set picked on
 **Settings > Appearance > Indicators** and saved as `status_icons` in
 `config-gpui.local.toml`. This app draws only its own sets and ignores Herdr's
 `ui.status_indicators`, which the TUI keeps for itself; unset means **Dots**.

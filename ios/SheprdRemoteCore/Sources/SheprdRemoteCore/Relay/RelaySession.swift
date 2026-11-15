@@ -62,6 +62,24 @@ public actor RelaySession {
         let socket = session.webSocketTask(with: url)
         socket.maximumMessageSize = 2 * Tunnel.Transport.maxData + 1_024
         socket.resume()
+        // A socket waiting on the relay does not hear its task cancelled;
+        // cancelling the socket fails that wait.
+        return try await withTaskCancellationHandler {
+            try await handshake(socket, endpoint: endpoint, route: route, dialKey: dialKey, tunnel: tunnel)
+        } onCancel: {
+            socket.cancel(with: .goingAway, reason: nil)
+        }
+    }
+
+    /// The dial and the tunnel handshake over a started `socket`, which is
+    /// cancelled when either fails.
+    private static func handshake(
+        _ socket: URLSessionWebSocketTask,
+        endpoint: RelayEndpoint,
+        route: Data,
+        dialKey: P256.Signing.PrivateKey,
+        tunnel: Handshake
+    ) async throws -> RelaySession {
         do {
             guard case let .string(challengeText) = try await socket.receive(),
                   let challenge = try? JSONDecoder().decode(Challenge.self, from: Data(challengeText.utf8)),

@@ -52,6 +52,7 @@ mod pane_move;
 mod port_forward;
 mod processes;
 mod protocol;
+mod public_relays;
 mod px0;
 mod remote;
 mod remote_control;
