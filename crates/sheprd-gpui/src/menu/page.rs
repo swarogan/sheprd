@@ -144,7 +144,18 @@ impl Page {
             Self::Tab | Self::RenameTab | Self::CoreMenu | Self::CoreMove | Self::RenameCore
         )
     }
+
+    /// A forge or tracker account page, drawn in the wide account panel.
+    pub(crate) fn is_account(self) -> bool {
+        matches!(
+            self,
+            Self::GitHub | Self::GitLab | Self::Gitea | Self::Jira | Self::AzureDevOps
+        )
+    }
 }
+
+/// The account pages' width: their header holds five provider tabs and Close.
+pub(in crate::menu) const ACCOUNT_WIDTH: f32 = 660.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WorkspaceAction {

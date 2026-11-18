@@ -16,9 +16,6 @@ use gpui::{prelude::*, *};
 #[cfg(any(windows, test, feature = "integration-test"))]
 const COVER_MARGIN: f32 = 8.;
 
-/// The account pages' width: their header holds five provider tabs and Close.
-pub(in crate::menu) const ACCOUNT_WIDTH: f32 = 660.;
-
 impl SheprdWindow {
     pub(crate) fn show_install_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.open_menu(window, cx) {
@@ -506,18 +503,14 @@ impl SheprdWindow {
                         | Page::Palette
                         | Page::CodeSearch
                         | Page::AppUpdate
-                        | Page::GitHub
-                        | Page::GitLab
-                        | Page::Gitea
-                        | Page::Jira
-                        | Page::AzureDevOps
                         | Page::AddDevice
                         | Page::AddNearby
                         | Page::AddWsl
                         | Page::Usage(_)
                         | Page::RenameDevice
                         | Page::ForwardPort
-                ) && !self.cloud_dialog_open(),
+                ) && !page.is_account()
+                    && !self.cloud_dialog_open(),
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
                     // so the panel's own inset would cut those rules short.
@@ -562,22 +555,16 @@ impl SheprdWindow {
                         .min(px(crate::remote::MENU_WIDTH)))
                     .shadow_lg()
             })
-            .when(
-                matches!(
-                    page,
-                    Page::GitHub | Page::GitLab | Page::Gitea | Page::Jira | Page::AzureDevOps
-                ),
-                |panel| {
-                    panel
-                        .w((viewport.width - px(32.))
-                            .max(px(0.))
-                            .min(px(ACCOUNT_WIDTH)))
-                        .flex()
-                        .flex_col()
-                        .overflow_hidden()
-                        .shadow_lg()
-                },
-            )
+            .when(page.is_account(), |panel| {
+                panel
+                    .w((viewport.width - px(32.))
+                        .max(px(0.))
+                        .min(px(super::page::ACCOUNT_WIDTH)))
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    .shadow_lg()
+            })
             .when(
                 matches!(
                     page,

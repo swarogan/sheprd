@@ -178,7 +178,7 @@ fn connected_panel_is_content_sized_with_only_header_close(cx: &mut TestAppConte
             window.draw(cx).clear(cx);
         });
         let panel = cx.debug_bounds("menu-panel").unwrap();
-        assert!(panel.size.width <= gpui::px(crate::menu::chrome::ACCOUNT_WIDTH));
+        assert!(panel.size.width <= gpui::px(crate::menu::page::ACCOUNT_WIDTH));
         assert!(panel.size.height <= gpui::px(230.));
         assert!(cx.debug_bounds("github-status").is_none());
         assert!(cx.debug_bounds("github-close").is_none());
