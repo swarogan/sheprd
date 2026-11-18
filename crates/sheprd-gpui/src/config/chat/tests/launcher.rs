@@ -1,10 +1,10 @@
 use super::*;
 
 #[test]
-fn the_launcher_defaults_to_plus_and_is_read_and_saved_by_name() {
+fn the_launcher_defaults_to_one_agent_button_and_is_read_and_saved_by_name() {
     assert_eq!(
         crate::config::Config::parse("").unwrap().chat.launcher,
-        ChatLauncher::Plus
+        ChatLauncher::Agent
     );
     for &launcher in ChatLauncher::ALL {
         let text = format!("[chat]\nlauncher = \"{}\"\n", launcher.name());

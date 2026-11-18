@@ -72,6 +72,7 @@ async fn a_phone_pairs_with_the_desktops_approval_and_signs_in() {
             allow: true,
             code,
             hosts: Vec::new(),
+            share_github: true,
         },
     );
 
@@ -166,6 +167,7 @@ async fn registered_live_activity_tokens_are_read_without_deadlock() {
             allow: true,
             code: claim.code,
             hosts: Vec::new(),
+            share_github: true,
         },
     );
     let device = state.auth().devices().list(|_| false)[0].id.clone();

@@ -1,6 +1,7 @@
 import CoreBluetooth
 import Foundation
 import SheprdRemoteCore
+import SheprdNearby
 import Observation
 
 /// Computers whose pairing dialog is open nearby, found over Bluetooth:

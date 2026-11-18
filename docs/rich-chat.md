@@ -61,6 +61,45 @@ The Terminal layout still renders chat. The terminal button and
 `sheprd chat show` restores the chat view. These commands change presentation
 without starting or stopping the agent. See the [CLI guide](cli.md#existing-agent-rendering).
 
+## Choosing the agent
+
+The tab strip's **Agent** button (`[chat] launcher = "agent"`, the default)
+starts a chat with the agent you used last, unless plan usage says it is
+short: when its plan has hit a limit, is 80% used, or is half used and on
+pace to run out before it resets, the button starts the installed agent with
+the most room instead, and its tooltip says why. Usage comes from the status
+bar's last reading of the selected host, matched by name (Claude, Codex,
+Copilot, Gemini, OpenCode, Pi); every window counts, so a weekly limit
+running out matters even when a session window is fuller. An agent without
+a reading, or whose limits have reset since, counts as having room, and one
+tight plan never replaces another. With usage turned off
+(`[usage] show = false`), the agent you used last is always kept. Starting another agent this
+way does not change your preference: the next chat goes back to the agent
+you used once its plan has room. `sheprd usage pick` shows the same choice
+and each agent's room. The composer's first button names the running agent
+and opens a menu of the others installed on the same machine. Picking one
+stops the running agent and starts the chosen one in the same folder;
+anything you typed while the first agent was still starting waits for the
+new one. Once the conversation has started, it stays: the agent taking over
+gets it with your next prompt, quoted ahead of what you write (the first
+prompt, the latest exchange, and as much of the rest as fits in about 16,000
+tokens), and a line in the chat says how much it got. Switching back to an
+agent continues its own earlier session, and it gets only what happened
+since. An agent cannot be switched while it is working. The in-pane view
+offers the same choice as the first row of **Ctrl+O**.
+
+Until the first prompt, a line over the composer says why the chat started
+with another agent than the one you used last. Whenever the running agent's
+plan is short and another's is not, the line offers to switch to it in one
+click, which hands that agent the conversation. The
+model stays the agent's own default; pick it from the composer as before.
+
+Chats on an SSH host keep the agent they start with, because the host's own
+`sheprd-acp` may predate switching. So do chats run by an older `sheprd-acp`
+found on this machine's `PATH`: Sheprd asks for the choice only when the
+program's `--help` offers `--choose`. The other launcher placements put a
+button per agent in the strip instead, and those chats can switch too.
+
 ## Chats in Herdr 2 panes
 
 In a Herdr 2 (herdr-core) tab, starting a chat from the tab strip's launcher
@@ -400,6 +439,10 @@ Every rail section folds to one line. While anything runs, **Plan** and
 change totals; once nothing runs they open again. Clicking a section's header
 overrides that for as long as the chat is open.
 
+Drag the rail's left edge to resize it, up to half the chat's width; a
+double-click on the edge goes back to the default. Every chat in the window
+shares the width, and it is kept with the window's other panel widths.
+
 When the rail is hidden or the pane is too narrow for it, click the row above
 the composer for a table instead: what each one is, how long it has run or ran,
 and whether it is running, done, failed, or stopped.
@@ -509,10 +552,93 @@ selected values to the composer for review; `mode: "send"` uses the normal
 prompt flow. Rendering or editing a native card cannot run code, submit a
 prompt or answer a permission request. Existing CLI sessions and read-only mirrors cannot submit widget actions.
 
+### Text size and effects
+
+An agent can set words larger or smaller within a line, and play an effect as
+a phone's messages do. Markdown directives keep the source readable where it is
+not drawn, such as terminal views and the phone:
+
+```markdown
+Tests pass and :huge[the PR is merged]. :small[CI took 4 min.]
+
+:::slam
+Found it: the resize bug was a stale cell width.
+:::
+
+::confetti
+All 214 tests pass.
+```
+
+- `:small[…]`, `:big[…]`, `:huge[…]`, and `:giant[…]` are the only sizes:
+  0.85, 1.35, 2, and 3 times the prose. A span ends with its paragraph, nests
+  up to eight deep, and keeps bold, italics, and links inside it. Code and
+  unknown names stay as written.
+- `:::slam`, `:::loud`, `:::gentle`, and `:::ink`, closed by `:::`, play on the
+  Markdown between them. Invisible ink (`ink`) hides its text under moving
+  specks until the pointer is over it. A message holds at most eight; one
+  still streaming reaches the end of the message.
+- A line `::balloons`, `::celebration`, `::confetti`, `::echo`,
+  `::fireworks`, `::lasers`, `::love`, `::spotlight`, or `::zap` plays over
+  the chat's own pane for three to five seconds. In `zap`, the message's first
+  letters line up as a swaying formation and three pixel ships shoot them
+  down, each bursting into pixels. Effects stay in the chat's pane, never over
+  the terminals, tabs, or sidebar, and never take the pointer. A message plays its first; another
+  arriving while one plays is dropped, not queued.
+
+Only an agent's replies play effects; a user's message shows its directives as
+text. Each effect plays once, as its message arrives: a transcript loaded,
+reopened, or received again after reconnecting shows each message at rest,
+with a **Replay** link under it. With the system's reduce motion setting on,
+nothing moves, and invisible ink still hides until hovered. The agent learns
+the syntax from the note Sheprd sends with the first prompt on a desktop
+(`desktop.md` and `remote.md` in `crates/sheprd-acp/prompts`).
+
 The catalog is application-specific, not an A2UI implementation or MCP Apps
 host. Embedded HTML pages use the platform webview; see the
 [Linux browser plan](linux-browser-plan.md). Rich chat does not provide hosted
 ChatGPT services such as account history, voice/video chat or hosted tools.
+
+## What the agent is told
+
+`Command::Prompt` carries an optional `Origin`: the device (`desktop`,
+`terminal`, `phone_app`, `phone_web`) and the connection (`local`, `remote`,
+`lan`, `tailscale`, `relay`). The client that relays a prompt sets it: the
+app from the chat's route, the program's own view as `terminal`/`local`, and
+the remote control daemon from the request, its relay marker, the peer
+address, the name dialed (`*.ts.net`), and whether the User-Agent is a
+browser's. The daemon replaces any origin a phone sends.
+
+`sheprd-acp` (`context.rs`) sends the agent a `<sheprd>` text block ahead of
+the prompt's own: the user's instructions, `herdr/chat-prompts/instructions.md`
+from the configuration root (or the older `herdr/chat-system-prompt.md`),
+at most 16 KiB, with the first prompt, and a
+description of the origin whenever the device, or whether the person can
+open paths there, differs from the last one told. A queued prompt keeps its
+origin. The note's opening tag names both and a checksum of its body
+(`<sheprd device="phone_app" paths="elsewhere" sum="…">`), and the
+instructions sit in an `<instructions>` block. A restored chat (Claude and
+Codex logs, or an ACP agent's `session/load` replay) and a mirrored log hide
+the notes whose checksum matches, leaving text the person typed that only
+looks like one, and learn what the agent last heard: the instructions go
+again only when they differ from the last ones sent, and the origin only on
+another device or a change between this machine and SSH. Where the person cannot open paths on the
+agent's machine, the note asks the agent to link pictures as Markdown images,
+which [linked pictures](#messages-and-controls) attach to the chat, and to
+render HTML mockups to screenshots. The transcript shows only the person's
+words. An older program ignores the field, and an older client sends none.
+
+The note's texts are templates (`context/prompts.rs`): the built-in ones in
+`crates/sheprd-acp/prompts`, compiled in, each replaced by a non-empty file
+of the same name in `herdr/chat-prompts/`. One template per place
+(`desktop`, `terminal`, `remote`, `phone`, chosen by `Kind::of`) avoids
+conditionals: `{{ name }}` substitution (`context/template.rs`) is one pass
+over known names, a value is never read as a template, and an unknown name
+stays as written, as Moltis fills its webhook templates. Files are read once
+when the program starts, on the machine the agent runs on; one that is too
+large, not UTF-8, or names an unknown placeholder becomes a warning notice in
+the chat. The `<sheprd>` wrapper, its checksum, and the `<instructions>`
+block stay Sheprd's, so a replaced template cannot break hiding notes or
+deciding what to tell again. Templates are escaped like instructions, opening `<instructions>` tags included. Instructions are kept as written and filled in when sent, so a switch of agent (`Context::switched`) changes `{{ agent }}` and sends them again; the intro is filled in with the prompt's origin, or the last one a client gave. Files are read through a capped reader. Only a missing `instructions.md` falls back to the older file.
 
 ## Existing CLI sessions
 

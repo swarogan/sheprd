@@ -16,6 +16,9 @@ public enum AgentSort: String, CaseIterable, Identifiable, Sendable {
         public var group: String
         public var groupTitle: String
 
+        /// An unknown status lists as idle.
+        var shownStatus: Home.AgentStatus { status == .unknown ? .idle : status }
+
         public init(status: Home.AgentStatus, date: Date?, title: String, group: String, groupTitle: String) {
             self.status = status
             self.date = date
@@ -30,7 +33,14 @@ public enum AgentSort: String, CaseIterable, Identifiable, Sendable {
         public var id: String
         public var title: String
         public var items: [Item]
+        /// The status every row shares, in the priority order only, which
+        /// its header shows as a colored dot.
+        public var status: Home.AgentStatus?
     }
+
+    /// The statuses the priority order lists, in order.
+    private static let priorityTitles: [(Home.AgentStatus, String)] =
+        [(.blocked, "Needs you"), (.done, "Done"), (.working, "Working"), (.idle, "Idle")]
 
     /// `items` in this order. Every section lists the newest first, then
     /// the undated by title.
@@ -47,10 +57,9 @@ public enum AgentSort: String, CaseIterable, Identifiable, Sendable {
         case .recent:
             return rows.isEmpty ? [] : [Section(id: "recent", title: "Recent", items: rows.map(\.item))]
         case .priority:
-            let titled: [(Home.AgentStatus, String)] = [(.blocked, "Needs you"), (.done, "Done"), (.working, "Working"), (.idle, "Idle")]
-            return titled.compactMap { status, title in
-                let matching = rows.filter { ($0.facts.status == .unknown ? .idle : $0.facts.status) == status }
-                return matching.isEmpty ? nil : Section(id: status.rawValue, title: title, items: matching.map(\.item))
+            return Self.priorityTitles.compactMap { status, title in
+                let matching = rows.filter { $0.facts.shownStatus == status }
+                return matching.isEmpty ? nil : Section(id: status.rawValue, title: title, items: matching.map(\.item), status: status)
             }
         case .workspace:
             // Groups keep the order of `items`, the computers' own.

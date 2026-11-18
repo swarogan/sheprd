@@ -12,10 +12,11 @@ use sheprd_chat_protocol::Agent;
 
 const CLAUDE: &str = "chat-launch-claude";
 const CODEX: &str = "chat-launch-codex";
+pub(super) const AGENT: &str = "chat-launch-agent";
 
 /// A window on this user's local daemon that can start chats, with Claude
 /// and Codex installed, its launcher placed as `launcher` says.
-fn strip(
+pub(super) fn strip(
     cx: &mut TestAppContext,
     launcher: ChatLauncher,
 ) -> (Entity<SheprdWindow>, &mut VisualTestContext, MockPeer) {
@@ -41,7 +42,7 @@ fn strip(
     (view, cx, peer)
 }
 
-fn draw(cx: &mut VisualTestContext) {
+pub(super) fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
 }
 
@@ -81,10 +82,8 @@ fn dealing(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> Option<bo
 }
 
 #[gpui::test]
-fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
-    cx: &mut TestAppContext,
-) {
-    let (view, cx, _peer) = strip(cx, ChatLauncher::default());
+fn the_plus_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(cx: &mut TestAppContext) {
+    let (view, cx, _peer) = strip(cx, ChatLauncher::Plus);
     assert!(shown(cx, "new-tab"));
     assert!(
         !shown(cx, CLAUDE),
@@ -124,7 +123,7 @@ fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
 /// tabs fill it, the deck deals to the left of "+", over the tabs.
 #[gpui::test]
 fn the_deck_deals_left_where_the_window_ends(cx: &mut TestAppContext) {
-    let (view, cx, _peer) = strip(cx, ChatLauncher::default());
+    let (view, cx, _peer) = strip(cx, ChatLauncher::Plus);
     let plus = cx.debug_bounds("new-tab").unwrap();
     deal(&view, cx, Toward::Left);
     let claude = cx.debug_bounds(CLAUDE).unwrap();
@@ -159,7 +158,7 @@ fn the_deck_deals_right_only_while_every_card_fits_there() {
 /// start a chat. Moving from "+" onto a card keeps the deck dealt.
 #[gpui::test]
 fn the_deck_keeps_plus_in_place_and_stays_dealt_over_its_cards(cx: &mut TestAppContext) {
-    let (view, cx, _peer) = strip(cx, ChatLauncher::default());
+    let (view, cx, _peer) = strip(cx, ChatLauncher::Plus);
     cx.simulate_resize(size(px(420.), px(600.)));
     draw(cx);
     let before = cx.debug_bounds("new-tab").unwrap();
@@ -299,6 +298,33 @@ fn a_click_starts_that_agents_chat_in_the_strips_group(cx: &mut TestAppContext) 
         assert_eq!(view.chats.last_started, Some(Agent::Codex));
         assert_eq!(view.expected_new_tab_group(), Some(group));
         assert!(view.flash.is_none(), "{:?}", view.flash);
+    });
+    let request = peer.request();
+    assert_eq!(request["method"], "tab.create");
+    assert_eq!(request["params"]["label"], "Codex");
+}
+
+#[gpui::test]
+fn the_default_agent_button_starts_the_agent_last_started(cx: &mut TestAppContext) {
+    let (view, cx, mut peer) = strip(cx, ChatLauncher::default());
+    assert!(shown(cx, "new-tab"));
+    assert!(shown(cx, AGENT));
+    assert!(
+        !shown(cx, CLAUDE) && !shown(cx, CODEX),
+        "one button, no agents"
+    );
+    let plus = cx.debug_bounds("new-tab").unwrap();
+    let agent = cx.debug_bounds(AGENT).unwrap();
+    assert!(plus.right() <= agent.left(), "right after +");
+
+    view.update(cx, |view, _| view.chats.last_started = Some(Agent::Codex));
+    draw(cx);
+    let group = view.read_with(cx, |view, _| view.group_slots()[0].id);
+    let agent = cx.debug_bounds(AGENT).unwrap().center();
+    cx.simulate_click(agent, Modifiers::none());
+    view.read_with(cx, |view, _| {
+        assert!(view.chat_starting());
+        assert_eq!(view.expected_new_tab_group(), Some(group));
     });
     let request = peer.request();
     assert_eq!(request["method"], "tab.create");

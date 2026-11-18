@@ -30,7 +30,7 @@ fn note_sits_under_the_selection_inside_the_terminal_padding(cx: &mut TestAppCon
         )
     });
     assert_eq!(cells.left(), terminal.left() + px(16.));
-    assert_eq!(cells.top(), terminal.top() + px(4.));
+    assert_eq!(cells.bottom(), terminal.bottom() - px(12.));
     // The selection is row 1, so its bottom edge is two rows down the cells.
     let selection_bottom = cells.top() + px(2. * cell_height);
     assert!((card.top() - selection_bottom - px(6.)).abs() < px(1.));

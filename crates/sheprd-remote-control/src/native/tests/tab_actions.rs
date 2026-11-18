@@ -6,6 +6,8 @@ use model::{Home, Sources, TabAction};
 
 fn home(layout: &Layout) -> Home {
     Home::project(Sources {
+        checkouts: &Default::default(),
+        recognized: &Default::default(),
         computer: "Studio",
         fingerprint: "FP",
         layout,

@@ -60,7 +60,9 @@ enum Handshake {
 
 #[derive(Debug)]
 pub(super) struct Bridge {
-    asks: HashMap<i64, permission::Ask>,
+    /// Permission requests waiting for the session, with the tool call
+    /// each is about.
+    asks: HashMap<i64, (String, permission::Ask)>,
     background: Background,
     calls: HashMap<String, Call>,
     controls: HashMap<String, Control>,
@@ -132,11 +134,15 @@ impl Translator for Bridge {
                 let wire::RequestId::Number(id) = id else {
                     return Vec::new();
                 };
-                self.asks
-                    .remove(&id)
-                    .map(|ask| Out::Harness(ask.answer(&result)))
-                    .into_iter()
-                    .collect()
+                let Some((tool_use, ask)) = self.asks.remove(&id) else {
+                    return Vec::new();
+                };
+                match ask.answer(&result) {
+                    permission::Answered::Reply(reply) => vec![Out::Harness(reply)],
+                    permission::Answered::Next(options, ask) => {
+                        vec![self.request_permission(tool_use, None, options, ask)]
+                    }
+                }
             }
             Inbound::Notification { .. } | Inbound::Closed(_) => Vec::new(),
         }
@@ -390,27 +396,37 @@ impl Bridge {
             .get("tool_use_id")
             .and_then(Value::as_str)
             .unwrap_or(control);
-        let name = request
-            .get("tool_name")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
         let input = request.get("input").cloned().unwrap_or(Value::Null);
         let (options, ask) = permission::ask(control.to_owned(), request);
-        self.next_request += 1;
-        self.asks.insert(self.next_request, ask);
+        vec![self.request_permission(tool_use.to_owned(), Some(input), options, ask)]
+    }
+
+    /// Asks the session `ask` about `tool_use`, with the call's input when
+    /// it is first seen.
+    fn request_permission(
+        &mut self,
+        tool_use: String,
+        input: Option<Value>,
+        options: Vec<wire::PermissionOption>,
+        ask: permission::Ask,
+    ) -> Out {
+        let meta = ask.meta();
         let fields = wire::ToolCallUpdateFields::new()
-            .title(Some(tools::title(name, &input)))
-            .raw_input(Some(input));
+            .title(Some(ask.title().to_owned()))
+            .raw_input(input);
         let params = wire::RequestPermissionRequest::new(
             self.session.clone(),
-            wire::ToolCallUpdate::new(tool_use.to_owned(), fields),
+            wire::ToolCallUpdate::new(tool_use.clone(), fields),
             options,
-        );
-        vec![Out::Session(Inbound::Request {
+        )
+        .meta(meta);
+        self.next_request += 1;
+        self.asks.insert(self.next_request, (tool_use, ask));
+        Out::Session(Inbound::Request {
             id: wire::RequestId::Number(self.next_request),
             method: "session/request_permission".to_owned(),
             params: serde_json::to_value(params).unwrap_or(Value::Null),
-        })]
+        })
     }
 
     fn system(&mut self, message: &Value) -> Vec<Out> {

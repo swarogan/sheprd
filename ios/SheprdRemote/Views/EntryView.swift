@@ -16,9 +16,9 @@ struct EntryView: View {
             MarkdownView(text: text)
         case let .thought(text):
             Text(text).font(.callout.italic()).foregroundStyle(.secondary).lineLimit(4)
-        case let .image(_, image):
+        case let .image(author, image):
             if let data = Data(base64Encoded: image.data), let picture = UIImage(data: data) {
-                ChatPicture(image: picture)
+                ChatPicture(picture: GalleryPicture(TranscriptPicture(id: entry.id, author: author, image: image)), image: picture)
             }
         case let .tool(tool):
             ToolRow(tool: tool)

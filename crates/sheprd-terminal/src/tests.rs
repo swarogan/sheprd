@@ -11,6 +11,7 @@ mod links;
 mod scroll;
 mod size;
 mod style;
+mod tear;
 mod text;
 
 use super::*;

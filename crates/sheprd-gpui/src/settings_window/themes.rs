@@ -269,6 +269,29 @@ fn filter_names<'a>(names: impl IntoIterator<Item = &'a str>, query: &str) -> Ve
 }
 
 impl SettingsWindow {
+    fn theme_card_draft(&self, choice: &Choice) -> bool {
+        self.theme_intent.as_ref().is_some_and(|intent| {
+            intent.choice.scope == choice.scope
+                && match choice.scope {
+                    Scope::App => {
+                        ThemeName::side(&intent.choice.name, self.themes.editing_light)
+                            == choice.name
+                    }
+                    Scope::Herdr => intent.choice.name == choice.name,
+                }
+        })
+    }
+
+    fn theme_card_saved(&self, choice: &Choice) -> bool {
+        match choice.scope {
+            Scope::App => choice.name == self.edited_theme(),
+            Scope::Herdr => self
+                .shared
+                .as_ref()
+                .is_some_and(|shared| shared.theme_name == choice.name),
+        }
+    }
+
     fn theme_operation(
         &self,
         intent: &ThemeIntent,
@@ -678,7 +701,24 @@ impl SettingsWindow {
         if !ghostty && !herdr {
             return;
         }
-        let selected = self.themes.choice();
+        let selected = match (ghostty, herdr) {
+            (true, false) => Some(Choice {
+                scope: Scope::App,
+                name: ThemeName::side(self.drafted_theme(), self.themes.editing_light).to_owned(),
+            }),
+            (false, true) => self
+                .theme_intent
+                .as_ref()
+                .filter(|intent| intent.choice.scope == Scope::Herdr)
+                .map(|intent| intent.choice.clone())
+                .or_else(|| {
+                    self.shared.as_ref().map(|shared| Choice {
+                        scope: Scope::Herdr,
+                        name: shared.theme_name.clone(),
+                    })
+                }),
+            _ => self.themes.choice(),
+        };
         self.themes.ghostty_enabled = ghostty;
         self.themes.herdr_enabled = herdr;
         self.themes.filter(selected.as_ref());

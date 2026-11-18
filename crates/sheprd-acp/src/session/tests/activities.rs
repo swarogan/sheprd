@@ -15,6 +15,7 @@ fn what_still_runs_when_the_agent_exits_is_marked_stopped() {
     assert!(activity.is_running());
     let receiver = harness.subscribe(1, false, None);
     harness.input(Input::AgentExited {
+        harness: HarnessId::default(),
         code: Some(0),
         stderr: Vec::new(),
     });

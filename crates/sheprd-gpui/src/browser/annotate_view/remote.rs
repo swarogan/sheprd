@@ -98,7 +98,9 @@ fn upload(
     cancelled: &AtomicBool,
     save: impl FnOnce(&[Option<Arc<Image>>]) -> crate::Result<Vec<Option<PathBuf>>>,
 ) -> crate::Result<Uploaded> {
-    upload_with(host, images, cancelled, save, files::upload)
+    upload_with(host, images, cancelled, save, |host, paths, cancelled| {
+        files::upload(host, paths, cancelled, |_, _| {})
+    })
 }
 
 fn upload_with(

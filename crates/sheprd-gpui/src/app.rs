@@ -171,7 +171,10 @@ pub(crate) fn install_services(personal: bool, cx: &mut App) {
         crate::px0::Launcher::install(cx);
         // Nor do they install or ask the remote control service.
         crate::remote::Supervisor::install(cx);
+        // Machines added over Bluetooth are reached through their relays.
+        crate::remote::nearby::desktop::install(cx);
         crate::device_tags::DeviceTags::install(cx);
+        crate::relay_sharing::RelaySharing::install(cx);
         crate::text_shortcuts::Store::install(cx);
         #[cfg(feature = "cloud")]
         crate::cloud::install_idle_checks(cx);

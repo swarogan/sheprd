@@ -1,5 +1,7 @@
 import Foundation
 import SheprdRemoteCore
+import SheprdNearby
+import SheprdRelay
 
 /// One pairing, from the scanned QR to an approved, stored computer: claim
 /// the token with a new device key, show the matching code, and wait for

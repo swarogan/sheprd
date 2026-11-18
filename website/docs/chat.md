@@ -156,6 +156,42 @@ Messages render Markdown and TeX: headings, lists, links, tables, Mermaid, code 
 
 When you scroll up, the conversation stays put and a round button appears, saying **New output below** once more arrives.
 
+## What the agent is told
+
+Besides your words, a chat tells the agent two things it cannot see, in a note ahead of your message that the chat itself does not show:
+
+- **Your instructions.** Instructions for every chat go in `~/.config/herdr/chat-prompts/instructions.md` (under `XDG_CONFIG_HOME` when set, `%APPDATA%` on Windows), on the machine the agent runs on. The first message of each chat sends them, once: a chat restored after a restart does not send them again unless you edited the file. The file may hold up to 16 KiB; an empty file means no instructions. An older `~/.config/herdr/chat-system-prompt.md` is still read only when `instructions.md` does not exist.
+- **Where you are typing.** The desktop app on the agent's machine or on another computer over SSH, the terminal pane's own chat view, or Sheprd's iPhone and iPad app or web app, along with how the phone reached the computer: the local network, Tailscale, or Sheprd's relay. The note goes again only when you switch devices, so moving from your desk to your phone and back mid-chat tells the agent each time, while a phone changing networks does not. Opening the same chat from the desktop app on another computer over SSH also counts, since paths are no longer yours to open.
+
+Where you cannot open files on the agent's machine, as on a phone, the agent is asked to put pictures in the chat instead of giving a path: it saves a screenshot or a mockup as an image and links it, which attaches the picture to the message. HTML mockups are rendered to screenshots first.
+
+### Changing what the agent is told
+
+Every part of the note is a template you can replace. Copy the built-in file from [`crates/sheprd-acp/prompts`](https://github.com/sheprd-labs/sheprd/tree/main/crates/sheprd-acp/prompts) into `~/.config/herdr/chat-prompts/` on the machine the agent runs on and edit it; chats started afterwards use it, and an empty file brings the built-in text back.
+
+| File | Sent when you are typing |
+| --- | --- |
+| `intro.md` | Always first: says the note comes from Sheprd |
+| `desktop.md` | In the desktop app on the agent's computer |
+| `terminal.md` | In the chat view of the agent's terminal pane |
+| `remote.md` | Anywhere else that cannot open the agent's files, such as the desktop app over SSH |
+| `phone.md` | In the iPhone and iPad app or the phone web app |
+
+`{{ name }}` is replaced by a value:
+
+| Name | Value |
+| --- | --- |
+| `where` | Where you are typing, such as `on their phone or tablet, in Sheprd's iPhone and iPad app, connected to this computer over Tailscale` |
+| `device` | The app, such as `Sheprd's desktop app` |
+| `connection` | `this computer`, `SSH`, `the local network`, `Tailscale`, or `Sheprd's encrypted relay` |
+| `agent` | The agent's name, such as `Claude` |
+| `cwd` | The folder the agent works in |
+| `os` | The agent's operating system: `macos`, `linux`, or `windows` |
+| `max_pictures` | How many pictures one message attaches |
+| `max_image_mb` | The largest picture, in MB |
+
+`instructions.md` may use all but `where`, `device`, and `connection`, since it goes once wherever you are; it is filled in when sent, so `{{ agent }}` follows a switch to another agent. Before any client has said where you are, the place names read as an unknown Sheprd client. A name Sheprd does not know is sent as written, and the chat shows a warning, as it does for a file larger than 16 KiB or not UTF-8 text, which is then skipped for the built-in one.
+
 ## Existing CLI sessions
 
 With `render_existing = true`, Sheprd shows running Codex and Claude CLI conversations as a chat above their original terminal input, without restarting or replacing the agent. Typing, approvals, slash commands, and image paste stay with the CLI. Drag the divider above **Agent input · same session** to size the input, or choose **Compact input**.

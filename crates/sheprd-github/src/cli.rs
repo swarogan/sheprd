@@ -30,6 +30,21 @@ pub fn token() -> Result<SecretString> {
     run(&mut command)
 }
 
+/// The GitHub CLI's token for `host`, such as an Enterprise Server or
+/// GHE.com host, from `gh`'s own saved sign-in rather than an
+/// `GH_ENTERPRISE_TOKEN` in the environment. Blocks on a subprocess, under
+/// the same bounds as [`token`]; `host` must already be a checked host name,
+/// never one taken from a remote URL unread. The credential stays in memory
+/// and is never logged.
+pub fn token_for(host: &str) -> Result<SecretString> {
+    let mut command = sheprd_client::new_command("gh");
+    sheprd_client::login_env::apply(&mut command);
+    command
+        .env_remove("GH_ENTERPRISE_TOKEN")
+        .env_remove("GITHUB_ENTERPRISE_TOKEN");
+    run_for(&mut command, host)
+}
+
 /// The GitHub CLI's account, read with its token.
 pub(super) fn profile() -> Result<Profile> {
     verify(token()?)
@@ -48,7 +63,12 @@ pub(super) fn verify(token: SecretString) -> Result<Profile> {
 /// with PR lookups: a deadline, capped output, no prompt, and no
 /// `GH_TOKEN` / `GITHUB_TOKEN`, so the answer is `gh`'s own saved sign-in.
 pub(super) fn run(command: &mut Command) -> Result<SecretString> {
-    command.args(["auth", "token", "--hostname", "github.com"]);
+    run_for(command, "github.com")
+}
+
+/// [`run`] for `host`.
+fn run_for(command: &mut Command, host: &str) -> Result<SecretString> {
+    command.args(["auth", "token", "--hostname", host]);
     let (ok, output) =
         pull_request::run_bytes(command, Instant::now() + TIMEOUT, &|| false, OUTPUT_LIMIT)
             .map_err(process_error)?;

@@ -99,6 +99,8 @@ pub(crate) struct Landing {
     target: ConnectTarget,
     /// The pull request or issue note the new checkout gets.
     note: Option<crate::menu::worktree_source::Note>,
+    /// A reused checkout's pull result, shown once its workspace opens.
+    notice: Option<String>,
     /// The setup script a new checkout runs once its workspace is kept, as
     /// Herdr 1 runs one in a new worktree's tab; its folder is set once Git
     /// made it.
@@ -118,16 +120,38 @@ impl Landing {
             endpoint: crate::endpoint::LOCAL.into(),
             target,
             note: None,
+            notice: None,
             setup: None,
+        }
+    }
+
+    pub(crate) fn reused(endpoint: &str, target: ConnectTarget, pulled: crate::Result<()>) -> Self {
+        Self {
+            endpoint: endpoint.to_owned(),
+            notice: Some(super::reuse::pull_notice(pulled)),
+            ..Self::shell(None, target)
         }
     }
 }
 
+struct CarriedOut {
+    ask: Ask,
+    path: String,
+    pulled: Option<crate::Result<()>>,
+}
+
 /// `checkout`, made or opened as `ask` says. Blocking.
-fn carry_out(target: &ConnectTarget, checkout: &str, ask: &Ask) -> crate::Result<String> {
+fn carry_out(
+    target: &ConnectTarget,
+    checkout: &str,
+    ask: Ask,
+    remote: Option<(String, String)>,
+) -> crate::Result<CarriedOut> {
     let host = work::host_for_kept(target)?;
-    match ask {
-        Ask::Open { path } => Ok(work::open(&host, checkout, path, &AtomicBool::new(false))?),
+    let cancelled = AtomicBool::new(false);
+    let mut pulled = None;
+    let path = match &ask {
+        Ask::Open { path } => work::open(&host, checkout, path, &cancelled)?,
         Ask::Create {
             branch,
             base,
@@ -141,9 +165,47 @@ fn carry_out(target: &ConnectTarget, checkout: &str, ask: &Ask) -> crate::Result
                 base,
                 label: label.as_deref(),
             };
-            Ok(work::create(&host, &repository, &new, &AtomicBool::new(false))?.path)
+            match work::create(&host, &repository, &new, &cancelled) {
+                Ok(created) => created.path,
+                Err(error) => {
+                    let existing =
+                        work::list(&host, checkout, &cancelled)
+                            .ok()
+                            .and_then(|entries| {
+                                entries.into_iter().find(|entry| {
+                                    !entry.bare
+                                        && !entry.prunable
+                                        && !entry.detached
+                                        && entry.branch.as_deref() == Some(branch.as_str())
+                                })
+                            });
+                    let Some(existing) = existing else {
+                        return Err(error.into());
+                    };
+                    pulled = Some(
+                        work::pull_existing(
+                            &host,
+                            checkout,
+                            &existing.path,
+                            branch,
+                            remote
+                                .as_ref()
+                                .map(|(remote, reference)| (remote.as_str(), reference.as_str())),
+                            &cancelled,
+                        )
+                        .map_err(crate::Error::from),
+                    );
+                    existing.path
+                }
+            }
         }
-    }
+    };
+    let ask = if pulled.is_some() {
+        Ask::Open { path: path.clone() }
+    } else {
+        ask
+    };
+    Ok(CarriedOut { ask, path, pulled })
 }
 
 impl SheprdWindow {
@@ -251,7 +313,7 @@ impl SheprdWindow {
         self.menu.creation = Some(request.clone());
         self.menu.error = None;
         // What lands it is read now: the dialog may close before Git is done.
-        let landing = Landing {
+        let mut landing = Landing {
             label: match &ask {
                 Ask::Create { label, .. } => label.clone().or_else(|| self.worktree_name(cx)),
                 Ask::Open { .. } => None,
@@ -278,18 +340,31 @@ impl SheprdWindow {
             note: matches!(ask, Ask::Create { .. })
                 .then(|| self.worktree_note())
                 .flatten(),
+            notice: None,
             setup: matches!(ask, Ask::Create { .. })
                 .then(|| self.kept_setup_launch())
                 .flatten()
                 .map(Box::new),
         };
+        let remote = super::reuse::pull_remote(
+            self.menu
+                .worktree
+                .as_ref()
+                .and_then(|source| source.pending.as_ref()),
+        );
         let target = landing.target.clone();
         let work = cx
             .background_executor()
-            .spawn(async move { carry_out(&target, &checkout, &ask).map(|path| (ask, path)) });
+            .spawn(async move { carry_out(&target, &checkout, ask, remote) });
         cx.spawn(async move |this, cx| {
             let result = work.await;
             let _ = this.update(cx, |this, cx| {
+                let result = result.map(|done| {
+                    if let Some(pulled) = done.pulled {
+                        landing.notice = Some(super::reuse::pull_notice(pulled));
+                    }
+                    (done.ask, done.path)
+                });
                 this.kept_worktree_done.push(KeptDone::Checkout {
                     request,
                     landing: Box::new(landing),
@@ -364,6 +439,29 @@ impl SheprdWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Pulling an existing checkout may finish after its host was left.
+        // Preserve its result as feedback without reopening it on another host.
+        if matches!(ask, Ask::Open { .. })
+            && landing.notice.is_some()
+            && self.endpoints[self.selected_endpoint].id != landing.endpoint
+        {
+            if let Some(notice) = landing.notice {
+                let host = self
+                    .endpoints
+                    .iter()
+                    .find(|endpoint| endpoint.id == landing.endpoint)
+                    .map_or(landing.endpoint.as_str(), |endpoint| {
+                        endpoint.label.as_str()
+                    });
+                let body = fl!(
+                    "worktree-source-background-result",
+                    host = host,
+                    result = notice
+                );
+                self.local_transfer_notice(&fl!("worktree-source-already-exists"), body, cx);
+            }
+            return;
+        }
         // An endpoint ID can be edited to point elsewhere while Git runs.
         // Never land the old host's path or terminal on its replacement.
         if !self.select_worktree_host(&landing.endpoint, &landing.target, cx) {
@@ -392,7 +490,13 @@ impl SheprdWindow {
         if let Some(group) = &landing.group {
             self.collapsed_repos_mut().remove(group);
         }
-        self.land_kept(landing.chosen, landing.label, path.into(), window, cx);
+        let chosen = matches!(ask, Ask::Create { .. })
+            .then_some(landing.chosen)
+            .flatten();
+        self.land_kept(chosen, landing.label, path.into(), window, cx);
+        if let Some(notice) = landing.notice {
+            self.local_transfer_notice(&fl!("worktree-source-already-exists"), notice, cx);
+        }
     }
 
     /// A script of the kept workspace the menu is for, run in a tab of the
@@ -556,27 +660,10 @@ impl SheprdWindow {
         let scope = crate::browser::scope(&self.endpoints[index]);
         let target = self.endpoints[index].connection.target.clone();
         let expected = target.clone();
-        let identity = self.sessions(index).core.as_ref().and_then(|session| {
-            let workspace = session.workspace(&workspace)?;
-            let tree = workspace.worktree.as_ref().filter(|tree| tree.linked)?;
-            Some((tree.key.clone(), workspace.branch.clone()))
-        });
+        let identity = self.kept_checkout_identity(index, &workspace);
         let removed = cx.background_executor().spawn(async move {
-            let host = work::host_for_kept(&target)?;
             let cancelled = AtomicBool::new(false);
-            // A directory can be replaced while a dialog or archive is
-            // open. Its old workspace never authorizes the replacement.
-            let (key, branch) = identity.ok_or(crate::Error::StaleWorkspace)?;
-            let current = work::identity(&host, &path, &cancelled)?;
-            if !current.linked || current.key != key || current.branch != branch {
-                return Err(crate::Error::StaleWorkspace);
-            }
-            if let Some(candidate) = merged {
-                crate::merged_cleanup::verify_kept_removal_on(
-                    &target, &candidate, &path, &cancelled,
-                )?;
-            }
-            work::remove(&host, &path, force, &cancelled).map_err(crate::Error::from)
+            remove_kept_checkout_on(&target, identity, &path, force, merged.as_ref(), &cancelled)
         });
         cx.spawn(async move |this, cx| {
             let result = removed.await;
@@ -593,6 +680,21 @@ impl SheprdWindow {
         })
         .detach();
         cx.notify();
+    }
+
+    /// The repository and branch of the linked checkout of the kept
+    /// `workspace` on endpoint `index`, which a removal checks the folder
+    /// still is; `None` when it is not a linked checkout.
+    pub(crate) fn kept_checkout_identity(
+        &self,
+        index: usize,
+        workspace: &str,
+    ) -> Option<(String, Option<String>)> {
+        self.sessions(index).core.as_ref().and_then(|session| {
+            let workspace = session.workspace(workspace)?;
+            let tree = workspace.worktree.as_ref().filter(|tree| tree.linked)?;
+            Some((tree.key.clone(), workspace.branch.clone()))
+        })
     }
 
     /// Closes a removed checkout's workspace, or reports why it stayed in
@@ -632,6 +734,31 @@ impl SheprdWindow {
             }
         }
     }
+}
+
+/// Removes the kept linked checkout at `path` on `target` when it is still
+/// the repository and branch `identity` says. Blocking: call only on the
+/// background executor.
+pub(crate) fn remove_kept_checkout_on(
+    target: &ConnectTarget,
+    identity: Option<(String, Option<String>)>,
+    path: &str,
+    force: bool,
+    merged: Option<&crate::merged_cleanup::Candidate>,
+    cancelled: &AtomicBool,
+) -> crate::Result<()> {
+    let host = work::host_for_kept(target)?;
+    // A directory can be replaced while a dialog or archive is open. Its
+    // old workspace never authorizes the replacement.
+    let (key, branch) = identity.ok_or(crate::Error::StaleWorkspace)?;
+    let current = work::identity(&host, path, cancelled)?;
+    if !current.linked || current.key != key || current.branch != branch {
+        return Err(crate::Error::StaleWorkspace);
+    }
+    if let Some(candidate) = merged {
+        crate::merged_cleanup::verify_kept_removal_on(target, candidate, path, cancelled)?;
+    }
+    work::remove(&host, path, force, cancelled).map_err(crate::Error::from)
 }
 
 impl From<work::Checkout> for Entry {

@@ -1,5 +1,6 @@
 import Foundation
 import SheprdRemoteCore
+import SheprdTerminal
 import Observation
 
 /// Which computer and pane a view is about.
@@ -29,6 +30,16 @@ final class ChatStore {
         transcript = cached?.transcript
         cursor = cached?.cursor
     }
+
+    #if DEBUG
+    /// A chat no computer sends, current as it is (`-sampleChat YES`).
+    init(key: PaneKey, sample: Transcript) {
+        self.key = key
+        transcript = sample
+        connected = true
+        stale = false
+    }
+    #endif
 
     func apply(_ event: LiveEvent) {
         switch event {
@@ -194,19 +205,27 @@ final class TermStore {
     }
 }
 
-/// The computers collapsed in the Workspaces tab, kept on this phone and
-/// shared by its windows.
+/// The computers collapsed in the Workspaces tab and the sections
+/// collapsed on Home, kept on this phone and shared by its windows.
 @MainActor
 @Observable
 final class CollapsedStore {
     private static let key = "collapsedComputers"
 
+    private static let homeKey = "collapsedHomeSections"
+
     var computers: CollapsedComputers {
         didSet { UserDefaults.standard.set(computers.devices.sorted(), forKey: Self.key) }
     }
 
+    /// Home's sections fold as computers do, by `ChatList.key(_:sort:)`.
+    var home: CollapsedComputers {
+        didSet { UserDefaults.standard.set(home.devices.sorted(), forKey: Self.homeKey) }
+    }
+
     init() {
         computers = CollapsedComputers(UserDefaults.standard.stringArray(forKey: Self.key) ?? [])
+        home = CollapsedComputers(UserDefaults.standard.stringArray(forKey: Self.homeKey) ?? [])
     }
 }
 
@@ -236,20 +255,39 @@ final class TermKeyStore {
     }
 }
 
-/// The tag the Workspaces tab shows computers of, kept on this phone and
-/// shared by its windows. Read it through `ComputerTags.active`: the tag may
-/// have left every computer since.
+/// The tag and computer Home, the iPad sidebar, and Workspaces show agents
+/// and workspaces of (`AgentFilterMenu`, `TagFilterMenu`), kept on this
+/// phone and shared by its windows. Read them through `ComputerTags.active`
+/// or `shown`: the tag may have left every computer since, and the computer
+/// been forgotten.
 @MainActor
 @Observable
 final class TagFilterStore {
     private static let key = "computerTagFilter"
+    private static let deviceKey = "computerDeviceFilter"
 
     var tag: String? {
         didSet { UserDefaults.standard.set(tag, forKey: Self.key) }
     }
 
+    var device: String? {
+        didSet { UserDefaults.standard.set(device, forKey: Self.deviceKey) }
+    }
+
     init() {
         tag = UserDefaults.standard.string(forKey: Self.key)
+        device = UserDefaults.standard.string(forKey: Self.deviceKey)
+    }
+
+    /// Filters by `tag`, dropping a chosen computer that lacks it.
+    func choose(tag: String?, among computers: [Computer]) {
+        self.tag = tag
+        if ComputerTags.active(device: device, tag: tag, among: computers) == nil { device = nil }
+    }
+
+    /// The devices the filter leaves among `computers`.
+    func shown(among computers: [Computer]) -> Set<String> {
+        ComputerTags.shown(tag: tag, device: device, among: computers)
     }
 }
 

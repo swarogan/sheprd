@@ -6,7 +6,7 @@
 
 use crate::hub;
 use crate::web::{
-    ApiError, Device, NEW_CHAT_WAIT, Shared, check_new_workspace, folders, parse_agent,
+    ApiError, Device, NEW_CHAT_WAIT, Shared, TypedFrom, check_new_workspace, folders, parse_agent,
 };
 use axum::{
     Json,
@@ -14,7 +14,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sheprd_chat_protocol::{
-    Agent, Command, MAX_PROMPT_SIZE, OptionKind, OptionValue, Rejection, Transcript,
+    Agent, Command, MAX_PROMPT_SIZE, OptionKind, OptionValue, Origin, Rejection, Transcript,
 };
 use std::{
     future::Future,
@@ -250,6 +250,7 @@ pub(super) fn offered(installed: Option<Vec<Agent>>) -> Vec<Agent> {
 pub(crate) async fn create_workspace(
     State(state): State<Shared>,
     _device: Device,
+    TypedFrom(origin): TypedFrom,
     Json(request): Json<NewWorkspace>,
 ) -> Result<Json<CreatedWorkspace>, ApiError> {
     check_prompt(&request.prompt)?;
@@ -264,7 +265,7 @@ pub(crate) async fn create_workspace(
             request.session.as_deref(),
         )
         .await?;
-    let opened = open(&state, created.pane, request.start, request.prompt).await;
+    let opened = open(&state, created.pane, request.start, request.prompt, origin).await;
     Ok(Json(CreatedWorkspace {
         pane: opened.pane,
         prompted: opened.prompted,
@@ -277,13 +278,14 @@ pub(crate) async fn create_workspace(
 pub(crate) async fn start_chat(
     State(state): State<Shared>,
     _device: Device,
+    TypedFrom(origin): TypedFrom,
     Path(workspace): Path<String>,
     Json(request): Json<NewChat>,
 ) -> Result<Json<CreatedChat>, ApiError> {
     check_prompt(&request.prompt)?;
     let agent = parse_agent(&request.agent)?;
     let pane = state.hub.start_chat(&workspace, agent, None).await?;
-    let opened = open(&state, pane, request.start, request.prompt).await;
+    let opened = open(&state, pane, request.start, request.prompt, origin).await;
     Ok(Json(CreatedChat {
         pane: opened.pane,
         prompted: opened.prompted,
@@ -333,7 +335,13 @@ struct Opened {
 /// workspace or chat exists either way, and the phone opens it to try
 /// again. A prompt is held back unless the chat shows it took `start`, so
 /// it cannot run in a mode the person did not pick.
-async fn open(state: &Shared, pane: String, start: Option<Start>, prompt: String) -> Opened {
+async fn open(
+    state: &Shared,
+    pane: String,
+    start: Option<Start>,
+    prompt: String,
+    origin: Origin,
+) -> Opened {
     if !state.hub.chat_ready(&pane, NEW_CHAT_WAIT).await {
         return Opened {
             pane: None,
@@ -372,6 +380,7 @@ async fn open(state: &Shared, pane: String, start: Option<Start>, prompt: String
             Command::Prompt {
                 text: prompt,
                 attachments: Vec::new(),
+                origin: Some(origin),
             },
         )
         .await;

@@ -28,6 +28,7 @@ error-chat-version = the chat program speaks protocol version { $version }
 # $agent is an agent's name, such as Claude Code.
 error-chat-start-agent-missing = { $agent } is not installed on this host
 error-chat-start-disabled = ACP chats are off in Settings
+error-chat-start-line = the chat's command cannot be typed into a shell
 error-chat-start-no-workspace = no workspace is focused
 error-chat-start-not-connected = Sheprd is not connected
 error-chat-start-not-local = this pane has no supported chat route
@@ -94,10 +95,13 @@ error-chat-rejection-not-working = no turn is running
 error-chat-rejection-unknown-permission = that permission request was already answered
 error-chat-rejection-unknown-activity = that work has already ended or cannot be stopped
 error-chat-rejection-unknown-option = that is not one of the request's options
+error-chat-rejection-invalid-answer = the answer is empty, too long, or has more choices than the question takes
 error-chat-rejection-unknown-mode = the agent has no such mode
 error-chat-rejection-unknown-setting = the agent has no such setting, or it does not take that value
 error-chat-rejection-unknown-queued = that prompt is no longer queued
 error-chat-rejection-agent-unavailable = the program could not deliver the command to the agent
+error-chat-rejection-agent-fixed = the chat's agent cannot change while it is working
+error-chat-rejection-agent-missing = that agent is not installed where the chat runs
 # $count is the most files one prompt takes.
 error-chat-rejection-too-many-attachments = a prompt takes at most { $count } files
 error-chat-rejection-queue-full = too many prompts are waiting; wait for the turn to end

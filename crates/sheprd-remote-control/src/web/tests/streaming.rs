@@ -114,6 +114,7 @@ async fn an_answer_streams_to_the_phone_as_it_is_written() {
                 endpoint,
                 agent: Some("claude".into()),
                 title: "Chat".into(),
+                named: true,
                 status: AgentStatus::Working,
             }],
             terminals: Vec::new(),

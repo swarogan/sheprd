@@ -12,6 +12,10 @@ sidebar-label = Sidebar
 sidebar-workspaces-label = Workspaces
 sidebar-devices-label = Devices
 sidebar-agents-label = Agents
+# The heading's button that folds every host, or unfolds them all when
+# they all are; its tooltip and its name for screen readers.
+sidebar-collapse-all-hosts = Collapse all hosts
+sidebar-expand-all-hosts = Expand all hosts
 # Shown in place of the agents list when it is empty.
 sidebar-no-agents = no agents
 sidebar-no-matching-agents = no matching agents

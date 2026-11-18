@@ -49,6 +49,7 @@ fn remote_core_prompts_permission_answers_and_cancel_use_the_attached_chat(
     let (view, mut stream, _program, cx) = attached_on(cx, target);
     let commands = [
         Command::Prompt {
+            origin: None,
             text: "remote prompt".into(),
             attachments: Vec::new(),
         },

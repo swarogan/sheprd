@@ -667,5 +667,8 @@ mod curved;
 /// What an unnamed tab shows with `[tab_labels] agent_title` on.
 mod agent_title;
 
+/// The Agent button follows plan usage.
+mod usage_pick;
+
 /// Where the agent buttons draw, and what a click on one starts.
 mod launcher;

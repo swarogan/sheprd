@@ -43,6 +43,7 @@ fn a_read_only_transcript_cannot_queue_commands() {
     for command in [
         Command::Cancel,
         Command::Prompt {
+            origin: None,
             text: "Continue".into(),
             attachments: Vec::new(),
         },
@@ -166,6 +167,7 @@ fn commands_wait_for_their_acknowledgement() {
     let mut session = live(cursor(1, 0), Vec::new());
     let ClientMessage::Command { id, .. } = session
         .submit(Command::Prompt {
+            origin: None,
             text: "hi".into(),
             attachments: Vec::new(),
         })
@@ -207,6 +209,7 @@ fn an_outage_alone_never_drops_a_prompt() {
     session.lost(&Error::Closed);
     session
         .submit(Command::Prompt {
+            origin: None,
             text: "while away".into(),
             attachments: Vec::new(),
         })

@@ -19,6 +19,8 @@ fn home_with(agent: Option<&str>, summary: Option<&str>) -> Home {
         .into_iter()
         .collect();
     Home::project(Sources {
+        checkouts: &Default::default(),
+        recognized: &Default::default(),
         computer: "Studio",
         fingerprint: "FP",
         layout: &layout,

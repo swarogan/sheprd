@@ -3,6 +3,7 @@ use super::*;
 use core::prelude::v1::test;
 
 mod scrolling;
+mod source_selection;
 
 #[test]
 fn shared_scope_editability_matches_platform_support() {

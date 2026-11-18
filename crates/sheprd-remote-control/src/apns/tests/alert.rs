@@ -82,6 +82,7 @@ fn question() -> Notification {
                 option("never", PermissionKind::RejectAlways, "Never"),
                 option("fifth", PermissionKind::Other, "Fifth"),
             ],
+            question: None,
             title: "Run `git push origin fix/mise`?".to_owned(),
         }),
         tag: "chat-w1:p2".to_owned(),

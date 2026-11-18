@@ -96,15 +96,22 @@ fn a_hosts_address_carries_its_page_name() {
         Timing::default(),
     )
     .unwrap();
-    let mut address = None;
-    for _ in 0..500 {
-        address = server.report().address;
-        if address.is_some() {
-            break;
+    // The worker publishes the address only after asking the system resolver
+    // for the page name, which took over a minute on loaded macOS runners.
+    let deadline = Instant::now() + Duration::from_secs(180);
+    let address = loop {
+        let report = server.report();
+        if let Some(address) = report.address {
+            break address;
         }
+        assert!(
+            !matches!(report.status, Status::Failed { .. }),
+            "{:?}",
+            report.status
+        );
+        assert!(Instant::now() < deadline, "no address was published");
         thread::sleep(Duration::from_millis(10));
-    }
-    let address = address.unwrap();
+    };
     assert_eq!(address.url.host(), page_host("dev@build"));
     assert!(
         address.url.as_str().starts_with(&format!(

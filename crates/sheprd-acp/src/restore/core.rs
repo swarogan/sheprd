@@ -144,6 +144,14 @@ pub(super) fn opened(keeper: &super::Keeper, session: &str) -> anyhow::Result<()
     Ok(())
 }
 
+pub(super) fn switching(keeper: &super::Keeper) -> sheprd_core_client::Result<()> {
+    chat_recovery::switching(
+        &connect(keeper.socket.clone())?,
+        &keeper.endpoint,
+        &keeper.pane,
+    )
+}
+
 pub(super) fn closed(keeper: &super::Keeper) -> anyhow::Result<()> {
     chat_recovery::closed(&connect(keeper.socket.clone())?, &keeper.endpoint)?;
     Ok(())
@@ -213,6 +221,8 @@ pub(crate) fn run(endpoint: EndpointId) -> anyhow::Result<()> {
                 args: Vec::new(),
             },
             attach: true,
+            // Restoring continues a session, which no other agent could.
+            choose: false,
             cwd: Some(record.cwd),
             headless: false,
             load: Some(record.session),
@@ -231,7 +241,7 @@ struct Started {
     started: String,
 }
 
-fn started_path(dir: &Path, endpoint: &EndpointId) -> PathBuf {
+pub(super) fn started_path(dir: &Path, endpoint: &EndpointId) -> PathBuf {
     dir.join(format!("{endpoint}.agent"))
 }
 

@@ -117,6 +117,7 @@ impl SheprdWindow {
         changed |= self.chats.recode(&self.config.chat);
         changed |= self.chats.relocale(crate::i18n::shown_locale());
         changed |= self.chats.poll(now);
+        self.settle_chat_modes(cx);
         // Observed panes, whether a discovered agent or a `[chat.mirrors]`
         // entry, take their status from the daemon; live chats ignore it.
         for pane in self.chats.panes_mut() {
@@ -401,6 +402,7 @@ impl SheprdWindow {
 
     /// Sends `command` to the chat over `pane_id`; a failure shows in the view.
     pub(super) fn chat_send(&mut self, pane_id: &str, command: Command, cx: &mut Context<Self>) {
+        self.remember_chat_mode(pane_id, &command, cx);
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
         };
@@ -721,91 +723,10 @@ impl SheprdWindow {
         self.upload_chat_files(pane_id, host, paths, window, cx);
     }
 
-    /// Copies files to `host` off the UI thread, then attaches the copies.
-    fn upload_chat_files(
-        &mut self,
-        pane_id: &str,
-        host: sheprd_client::ConnectTarget,
-        paths: Vec<std::path::PathBuf>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(pane) = self.chats.pane_mut(pane_id) else {
-            return;
-        };
-        if paths.is_empty() {
-            return;
-        }
-        if paths
-            .len()
-            .saturating_add(pane.attachments.len())
-            .saturating_add(pane.uploading)
-            > MAX_ATTACHMENTS
-        {
-            pane.error = Some(fl!("chat-files-too-many", count = MAX_ATTACHMENTS));
-            self.redraw_terminal(cx);
-            return;
-        }
-        let target = pane.target.clone();
-        pane.uploading += paths.len();
-        let count = paths.len();
-        let upload_host = host.clone();
-        let upload = cx.background_spawn(async move {
-            let cancelled = std::sync::atomic::AtomicBool::new(false);
-            crate::core_terminals::files::upload(&upload_host, &paths, &cancelled)
-        });
-        let pane_id = pane_id.to_owned();
-        let executor = cx.background_executor().clone();
-        cx.spawn_in(window, async move |this, cx| {
-            let uploaded = upload.await;
-            let accepted = this
-                .update_in(cx, |this, window, cx| {
-                    let Some(pane) = this.chats.pane_mut(&pane_id) else {
-                        return false;
-                    };
-                    if pane.target != target {
-                        return false;
-                    }
-                    pane.uploading = pane.uploading.saturating_sub(count);
-                    match &uploaded {
-                        Ok(remote) => {
-                            if pane.input() != ChatInput::Composer
-                                || remote.len().saturating_add(pane.attachments.len())
-                                    > MAX_ATTACHMENTS
-                            {
-                                return false;
-                            }
-                            let remote = remote.iter().map(std::path::PathBuf::from).collect();
-                            this.add_chat_files(&pane_id, remote, window, cx);
-                            true
-                        }
-                        Err(error) => {
-                            pane.error =
-                                Some(fl!("chat-files-not-attached", error = error.localize()));
-                            this.redraw_terminal(cx);
-                            false
-                        }
-                    }
-                })
-                .unwrap_or(false);
-            if !accepted && let Ok(paths) = uploaded {
-                executor
-                    .spawn(async move {
-                        if let Err(error) = crate::core_terminals::files::cleanup(&host, &paths) {
-                            tracing::warn!(%error, "Could not remove unclaimed chat attachments");
-                        }
-                    })
-                    .detach();
-            }
-        })
-        .detach();
-        self.redraw_terminal(cx);
-    }
-
     /// Adds paths, as the program will read them, to the next prompt,
     /// skipping ones already there and any past [`MAX_ATTACHMENTS`]. Whether
     /// each exists is checked by the program when the prompt goes out.
-    fn add_chat_files(
+    pub(super) fn add_chat_files(
         &mut self,
         pane_id: &str,
         paths: Vec<std::path::PathBuf>,
@@ -917,7 +838,12 @@ impl SheprdWindow {
                 path: path.to_string_lossy().into_owned(),
             })
             .collect();
-        match pane.send(Command::Prompt { text, attachments }) {
+        let origin = Some(pane.target.origin());
+        match pane.send(Command::Prompt {
+            attachments,
+            origin,
+            text,
+        }) {
             Ok(()) => {
                 pane.error = None;
                 pane.attachments.clear();

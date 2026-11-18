@@ -32,6 +32,10 @@ pub enum Error {
     TranscriptAgent,
     #[error("observe needs a Codex/Claude session UUID, positive PID and process start ticks")]
     ObserveIdentity,
+    #[error("`--choose` starts a built-in agent without arguments, not a command")]
+    ChooseCommand,
+    #[error("`--choose` starts a new conversation and cannot continue one")]
+    ChooseLoad,
     #[error("terminal must be a nonempty local identifier without routing or whitespace")]
     InvalidTerminal,
     #[error("unknown session agent `{0}`")]
@@ -49,6 +53,8 @@ pub(crate) enum Parsed {
     Mirror(MirrorOptions),
     /// Project one verified running CLI process over standard streams.
     Observe(ObserveOptions),
+    /// Follow a T3 Code thread, read-only, without starting any agent.
+    T3(T3Options),
     /// List the agents installed here, one name per line.
     Agents,
     Session(crate::session_helpers::Command),
@@ -64,6 +70,9 @@ pub(crate) struct Options {
     pub agent: AgentChoice,
     /// Listen for Sheprd and other clients.
     pub attach: bool,
+    /// Let a client switch to another installed agent until the first
+    /// prompt reaches this one.
+    pub choose: bool,
     pub cwd: Option<PathBuf>,
     /// Run without the in-pane chat view.
     pub headless: bool,
@@ -94,6 +103,17 @@ pub(crate) struct MirrorOptions {
     pub endpoint: Option<sheprd_chat_protocol::EndpointId>,
     pub pane: Option<String>,
     pub path: PathBuf,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct T3Options {
+    pub endpoint: Option<sheprd_chat_protocol::EndpointId>,
+    pub pane: Option<String>,
+    /// The server's address; by default the one running on this computer.
+    pub server: Option<String>,
+    pub thread: String,
+    /// The access token `sheprd-t3 pair` kept.
+    pub token_file: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -132,6 +152,11 @@ Usage:
                         Watch an existing JSONL transcript, read-only; starts
                         no agent and changes no Herdr pane metadata. Prints
                         its endpoint ID once ready. Stop with Ctrl+C.
+  sheprd-acp t3 THREAD --token-file FILE [--server URL] [--pane ID]
+                [--endpoint ID]
+                        Follow a T3 Code thread live, read-only, with the token
+                        `sheprd-t3 pair` kept in FILE; starts no agent. Prints
+                        its endpoint ID once ready. Stop with Ctrl+C.
 
 Agents:
   claude     claude itself, or with --acp claude-agent-acp
@@ -146,6 +171,9 @@ Agents:
 Options:
   --acp          Use the agent's ACP adapter, not the agent itself
                  (also HERDR_ACP_ADAPTER=1)
+  --choose       Let clients switch to another installed agent whenever
+                 the agent is idle (Ctrl+O here); the new agent is handed
+                 the conversation; not with --load
   --cwd DIR      Run the session in DIR instead of the current directory
   --load ID      Continue the agent's session ID instead of starting a new one
   --resume ID    Continue session ID, and stop rather than start a new one
@@ -163,7 +191,8 @@ Keys:
   /              Complete the agent's commands: Tab takes one, Up/Down choose
   Up/Down        Recall earlier prompts from an empty prompt
   Shift+Tab      Next session mode
-  Ctrl+O         Settings: model, thinking level, mode (Left/Right change)
+  Ctrl+O         Settings: agent (with --choose), model, thinking level,
+                 mode (Left/Right change)
   PgUp/PgDn      Scroll
   Ctrl+D         Quit when the prompt is empty
 ";
@@ -199,6 +228,10 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
                 })
                 .map_err(|_| Error::InvalidEndpoint(id));
         }
+        Some("t3") => {
+            args.next();
+            return t3(args);
+        }
         Some("mirror") => {
             args.next();
             return mirror(args);
@@ -216,6 +249,7 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
             args: Vec::new(),
         },
         attach: true,
+        choose: false,
         cwd: None,
         headless: false,
         load: None,
@@ -228,6 +262,7 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
             Some("-h" | "--help") => return Ok(Parsed::Help),
             Some("-V" | "--version") => return Ok(Parsed::Version),
             Some("--acp") => options.adapter = true,
+            Some("--choose") => options.choose = true,
             Some("--headless") => options.headless = true,
             Some("--no-attach") => options.attach = false,
             Some("--cwd") => {
@@ -252,7 +287,7 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
                         }
                     }
                 };
-                return Ok(Parsed::Run(options));
+                return choosable(options);
             }
             Some(name) if !name.starts_with('-') && agent.is_none() => {
                 agent = Some(
@@ -268,6 +303,24 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
         agent,
         args: Vec::new(),
     };
+    choosable(options)
+}
+
+/// `options`, unless `--choose` asks for a switch it could not make: to or
+/// from a command or extra arguments only one agent takes, or away from a
+/// conversation the agent already holds.
+fn choosable(options: Options) -> Result<Parsed, Error> {
+    if options.choose {
+        let AgentChoice::Builtin { args, .. } = &options.agent else {
+            return Err(Error::ChooseCommand);
+        };
+        if !args.is_empty() {
+            return Err(Error::ChooseCommand);
+        }
+        if options.load.is_some() {
+            return Err(Error::ChooseLoad);
+        }
+    }
     Ok(Parsed::Run(options))
 }
 
@@ -311,6 +364,40 @@ fn mirror(args: impl Iterator<Item = OsString>) -> Result<Parsed, Error> {
         }
     }
     Ok(Parsed::Mirror(options))
+}
+
+fn t3(args: impl Iterator<Item = OsString>) -> Result<Parsed, Error> {
+    let Some(mut args) = unless_help(args) else {
+        return Ok(Parsed::Help);
+    };
+    let thread = utf8(args.next(), "t3 THREAD")?;
+    let mut endpoint = None;
+    let mut pane = None;
+    let mut server = None;
+    let mut token_file = None;
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("--pane") => pane = Some(utf8(args.next(), "--pane")?),
+            Some("--server") => server = Some(utf8(args.next(), "--server")?),
+            Some("--token-file") => {
+                token_file = Some(PathBuf::from(
+                    args.next().ok_or(Error::MissingValue("--token-file"))?,
+                ));
+            }
+            Some("--endpoint") => {
+                let id = utf8(args.next(), "--endpoint")?;
+                endpoint = Some(id.parse().map_err(|_| Error::InvalidEndpoint(id))?);
+            }
+            _ => return Err(Error::UnknownOption(arg)),
+        }
+    }
+    Ok(Parsed::T3(T3Options {
+        endpoint,
+        pane,
+        server,
+        thread,
+        token_file: token_file.ok_or(Error::MissingValue("--token-file"))?,
+    }))
 }
 
 fn observe(args: impl Iterator<Item = OsString>) -> Result<Parsed, Error> {

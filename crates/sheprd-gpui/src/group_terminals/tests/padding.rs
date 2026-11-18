@@ -41,13 +41,21 @@ fn a_parked_group_takes_the_terminal_padding_too(cx: &mut TestAppContext) {
     });
     draw(cx);
 
+    let row = view.read_with(cx, |view, _| view.config.terminal.line_height());
+    // The padding comes out of the box, and the whole rows within what is
+    // left sit on the bottom of it.
     let inset = |outer: Bounds<Pixels>| {
-        Bounds::new(
+        let padded = Bounds::new(
             outer.origin + point(px(16.), px(4.)),
             size(
                 outer.size.width - px(16. + 8.),
                 outer.size.height - px(4. + 12.),
             ),
+        );
+        let rows = (f32::from(padded.size.height) / row).floor();
+        Bounds::from_corners(
+            point(padded.left(), padded.bottom() - px(rows * row)),
+            padded.bottom_right(),
         )
     };
     // The window's own terminal, in the group away from the sidebar.

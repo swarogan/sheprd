@@ -85,7 +85,7 @@ pub(super) fn left(limit: &Limit) -> String {
 
 /// `47m`, `2h 53m`, `4d 11h`: the coarsest two units that still say when,
 /// as `sheprd_usage::model::countdown` counts them.
-pub(super) fn countdown(left: Duration) -> String {
+pub(crate) fn countdown(left: Duration) -> String {
     let minutes = left.as_secs().div_ceil(60);
     let (days, hours, minutes) = (minutes / 1440, minutes / 60 % 24, minutes % 60);
     match (days, hours) {

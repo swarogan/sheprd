@@ -70,6 +70,15 @@ grep -E ' cosign-linux-(amd64|arm64)$' cosign_checksums.txt
 
 ## DigitalOcean droplets, one command (QUIC and WebSockets)
 
+In a browser, with no checkout: <https://sheprd.org/relay/>
+(`website/site/relay/`) asks for a DigitalOcean token and the regions, and
+creates the same droplets through DigitalOcean's API. It reads
+`cloud-init.yml`, `compose.yml`, and the `Caddyfile` from `main` and fills
+them as this script does; `scripts/test_relay_deploy.py` checks the two
+agree. The token is sent only to `api.digitalocean.com` and never stored.
+
+From a checkout:
+
 ```sh
 doctl auth init
 deploy/relay/create-droplet.sh nyc3 fra1 sgp1
@@ -125,9 +134,12 @@ The button reads `.do/deploy.template.yaml`. Or, with `doctl`:
 doctl apps create --spec deploy/relay/app.yaml
 ```
 
-App Platform carries HTTP but not UDP, so the relay runs there without QUIC,
-and clients use its WebSocket fallback: slower to connect and with no
-connection migration, but it works from any network. The spec wires up what
+App Platform carries HTTP but not UDP, so the relay runs there without QUIC.
+Phones and other dialers use its WebSocket fallback: slower to connect and
+with no connection migration, but it works from any network. Computers,
+though, listen on relays over QUIC only
+(`crates/sheprd-remote-control/src/relay.rs`), so none can listen on an App
+Platform relay yet: deploy a droplet for a relay Sheprd can use. The spec wires up what
 the platform provides (below); add `RELAY_DASHBOARD_TOKEN` as an encrypted
 variable in the app's settings for the dashboard.
 

@@ -14,6 +14,7 @@ fn a_queued_prompt_is_passed_on_when_it_is_sent() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "second".to_owned(),
             attachments: Vec::new(),
         },
@@ -29,6 +30,7 @@ fn a_refused_prompt_is_not_passed_on() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "   ".to_owned(),
             attachments: Vec::new(),
         },
@@ -44,6 +46,7 @@ fn a_prompt_the_agent_never_got_is_not_passed_on() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "lost".to_owned(),
             attachments: Vec::new(),
         },

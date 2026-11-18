@@ -59,6 +59,7 @@ fn next_command(stream: &mut Peer) -> Command {
 
 fn prompt(text: &str) -> Command {
     Command::Prompt {
+        origin: Some(TYPED_HERE),
         text: text.into(),
         attachments: Vec::new(),
     }

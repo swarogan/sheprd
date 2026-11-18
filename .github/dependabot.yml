@@ -16,7 +16,7 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Images pinned by digest: the relay's build bases and the droplet's
+  # Images pinned by digest: the relays' build bases and the droplets'
   # Caddy. Digests on a moving tag go stale as silently as action SHAs.
   - package-ecosystem: docker
     directory: /crates/sheprd-relay
@@ -28,6 +28,22 @@ updates:
       prefix: chore
   - package-ecosystem: docker-compose
     directory: /deploy/relay
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+  - package-ecosystem: docker
+    directory: /crates/sheprd-push-relay
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+  - package-ecosystem: docker-compose
+    directory: /deploy/push-relay
     schedule:
       interval: weekly
     cooldown:

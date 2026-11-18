@@ -34,6 +34,25 @@ and clears zoom; zooming selects its pane. Saved and daemon-owned selections
 are projected without reordering the pane tree. Names, selection, and zoom
 survive reading the corresponding file again.
 
+## Closing a workspace or deleting its worktree
+
+iOS `closeWorkspace` and `removeWorktree` call
+`/api/v2/workspaces/{workspace}/close` and
+`/api/v2/workspaces/{workspace}/remove-worktree`, handled in
+`sheprd-remote-control/src/web/workspace.rs`. Herdr 1 gets `workspace.close`
+for that workspace alone (`close_group: false`) and `worktree.remove` without
+force. A workspace Sheprd keeps for Herdr 2 gets `Op::CloseWorkspace` or
+`Op::RemoveWorktree` through `control::layout`, which the desktop makes as its
+workspace menu does: closing ends the workspace's tabs, and deleting removes the
+linked checkout with Git, never forced, then closes the workspace. With the
+desktop closed the daemon makes neither and says to open Sheprd.
+
+Deleting is refused before it reaches either keeper for a main checkout, and
+for a checkout whose `.herdr/worktree.toml` has an archive script or cannot be
+read: Sheprd's own delete dialog runs that script first. A checkout with
+uncommitted changes stays; the phone is told to delete it in Sheprd, which
+offers to discard them.
+
 ## Verification boundaries
 
 Deterministic regressions cover stale/absent desktop routing, exit before and

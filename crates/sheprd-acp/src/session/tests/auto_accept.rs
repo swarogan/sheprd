@@ -1,13 +1,16 @@
 use super::*;
 
 fn request(harness: &mut Harness, request: i64, options: Value) {
-    harness.input(Input::Agent(Inbound::Request {
-        id: wire::RequestId::Number(request),
-        method: "session/request_permission".to_owned(),
-        params: json!({"sessionId": "s1",
+    harness.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Request {
+            id: wire::RequestId::Number(request),
+            method: "session/request_permission".to_owned(),
+            params: json!({"sessionId": "s1",
             "toolCall": {"toolCallId": format!("call-{request}"), "title": "Edit", "kind": "edit"},
             "options": options}),
-    }));
+        },
+    ));
 }
 
 fn answer_to(harness: &Harness, request: i64) -> Option<Value> {

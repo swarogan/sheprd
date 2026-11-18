@@ -10,12 +10,14 @@ mod math_input;
 mod parse;
 mod quote;
 mod remote;
+mod size;
 
 pub(super) use code::{CodeText, MAX_CODE_LINE_CHARS, MAX_CODE_LINES, TAB_WIDTH};
 pub(super) use fence::Fence;
 pub(super) use math::{PADDING as MATH_PADDING, draw as draw_math};
 pub(super) use parse::parse;
 pub(super) use remote::remote_content;
+pub(crate) use size::Size;
 
 use super::visual::{Source, VisualId, Visuals};
 use pulldown_cmark::{Alignment, HeadingLevel};
@@ -32,6 +34,8 @@ pub(crate) struct Style {
     pub code: bool,
     pub strike: bool,
     pub link: Option<String>,
+    /// A step larger or smaller than the prose, as `:big[text]` asks.
+    pub size: Option<Size>,
 }
 
 /// How a formula is typeset: within a line, or set apart as its own display.

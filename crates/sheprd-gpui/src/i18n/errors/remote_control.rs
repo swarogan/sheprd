@@ -6,7 +6,7 @@
 
 use super::Localize;
 use crate::i18n::fl;
-use sheprd_remote_control::{app, app::enroll, control};
+use sheprd_remote_control::{app, app::enroll, control, relay_label};
 
 impl Localize for app::Error {
     fn localize(&self) -> String {
@@ -17,6 +17,9 @@ impl Localize for app::Error {
             }
             Self::Control(error) => error.localize(),
             Self::Enroll(error) => error.localize(),
+            Self::GitHubHost { host } => {
+                fl!("error-remote-control-github-host", host = host.as_str())
+            }
             Self::IdleDays => fl!("error-remote-control-idle-days"),
             Self::Io {
                 operation, path, ..
@@ -38,6 +41,11 @@ impl Localize for app::Error {
             Self::Relay { relay, .. } => {
                 fl!("error-remote-control-relay", relay = relay.as_str())
             }
+            Self::RelayLabel { relay, source } => fl!(
+                "error-remote-control-relay-label",
+                relay = relay.as_str(),
+                reason = source.localize()
+            ),
             Self::Service {
                 program,
                 status,
@@ -52,6 +60,28 @@ impl Localize for app::Error {
             Self::Unexpected => fl!("error-remote-control-unexpected"),
             Self::UnknownUser => fl!("error-remote-control-unknown-user"),
             Self::Unsupported => fl!("error-remote-control-unsupported"),
+            // keep-sorted end
+        }
+    }
+}
+
+impl Localize for relay_label::Error {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::Blank { field } => fl!("error-remote-control-relay-label-blank", field = *field),
+            Self::Control { field } => {
+                fl!("error-remote-control-relay-label-control", field = *field)
+            }
+            Self::Length { field, max } => fl!(
+                "error-remote-control-relay-label-length",
+                field = *field,
+                max = max.to_string()
+            ),
+            Self::Tags => fl!(
+                "error-remote-control-relay-label-tags",
+                max = relay_label::TAGS_MAX.to_string()
+            ),
             // keep-sorted end
         }
     }

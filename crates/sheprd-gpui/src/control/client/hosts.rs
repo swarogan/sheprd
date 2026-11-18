@@ -148,6 +148,19 @@ pub(super) fn usage(context: &Context) -> crate::Result<Output> {
     }
 }
 
+pub(super) fn usage_pick(context: &Context) -> crate::Result<Output> {
+    match context.call(Request::Host, HostOp::UsagePick)? {
+        Response::Host {
+            reply: Reply::UsagePick(pick),
+        } => {
+            let none = pick.agent.is_none();
+            let output = Output::data(text::usage_pick(&pick), &pick)?;
+            Ok(if none { output.nothing() } else { output })
+        }
+        response => Err(unexpected(response)),
+    }
+}
+
 pub(super) fn security(command: SecurityCommand, context: &Context) -> crate::Result<Output> {
     if let SecurityCommand::Open { repository, item } = command {
         return context.act(Request::Host, HostOp::SecurityOpen { repository, item });

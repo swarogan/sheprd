@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SheprdRemoteCore
+import SheprdVoice
 
 /// One spoken command, from the microphone opening to the result. Rules
 /// read the words as they come, the on-device model takes what they could

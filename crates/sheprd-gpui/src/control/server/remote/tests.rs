@@ -12,6 +12,7 @@ fn device(id: &str, name: &str) -> Device {
         connected: false,
         via: None,
         hosts: Vec::new(),
+        share_github: true,
     }
 }
 

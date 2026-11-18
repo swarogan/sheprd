@@ -317,7 +317,7 @@ fn master_command(target: &str, socket: &Path) -> Command {
     let mut command = crate::environment::command("ssh");
     // The user's host key choice comes first, so it wins over the default.
     command
-        .args(ssh::HostKeys::of(target).options())
+        .args(ssh::target_options(target, ssh::HostKeys::of(target)))
         .args([
             "-N",
             "-T",

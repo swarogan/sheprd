@@ -21,6 +21,9 @@ enum HomeRow: Identifiable {
         sort.sections(of: chats.map(HomeRow.chat) + agents.map(HomeRow.agent), facts: \.facts)
     }
 
+    /// The status its row is listed by, which the edge index colors it in.
+    var status: Home.AgentStatus { facts.status }
+
     private var facts: AgentSort.Facts {
         switch self {
         case let .chat(item):

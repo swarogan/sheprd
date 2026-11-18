@@ -95,6 +95,31 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             state.changes.answer_layout(id, answer);
             return Response::Done;
         }
+        Request::GitHubLeaseAsks { login } => {
+            state.changes.seen();
+            let asks = state.lending.asks.take(login, control::ASK_WAIT);
+            return Response::GitHubLeaseAsks { asks };
+        }
+        Request::GitHubLease { id, answer } => {
+            state.lending.asks.answer(id, answer);
+            return Response::Done;
+        }
+        Request::ShareGitHub { device, share } => {
+            let changed = state.auth().devices_mut().set_share_github(&device, share);
+            match changed {
+                Ok(true) => {
+                    state.lending.shares_changed();
+                    Ok(Response::Done)
+                }
+                Ok(false) => {
+                    return Response::Error {
+                        code: ErrorCode::UnknownDevice,
+                        message: "no such device".into(),
+                    };
+                }
+                Err(error) => Err(error),
+            }
+        }
         Request::Pair => {
             let mut origins = state.origins();
             let details = super::addresses::current(&mut origins);
@@ -112,10 +137,11 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             allow,
             code,
             hosts,
+            share_github,
         } => {
             let answered = state
                 .auth()
-                .answer_with_hosts(&id, allow, &code, &hosts, now)
+                .answer_with_hosts(&id, allow, &code, &hosts, share_github, now)
                 .map(Response::Pairing);
             // An approved phone that sent relay keys reaches this computer
             // through them at once.
@@ -133,10 +159,12 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             .map(Response::NearbyStarted),
         Request::NearbyReveal { session, nonce } => {
             let origins = state.origins();
-            let revealed = state
-                .auth()
-                .nearby_reveal(&session, &nonce, &state.fingerprint, &origins, now)
-                .map(Response::NearbyRevealed);
+            let revealed = {
+                let mut auth = state.auth();
+                crate::relay::refresh_offer(state.relay.as_deref(), &mut auth);
+                auth.nearby_reveal(&session, &nonce, &state.fingerprint, &origins, now)
+                    .map(Response::NearbyRevealed)
+            };
             crate::relay::open_pairing(state);
             revealed
         }
@@ -201,6 +229,18 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
                 origins: state.origins(),
             })
         }),
+        Request::HostRelays => Ok(Response::HostRelays {
+            jobs: state.auth().take_host_relays(now),
+        }),
+        Request::HostRelayed {
+            device,
+            relay,
+            outcome,
+        } => state
+            .auth()
+            .host_relayed(&device, &relay, *outcome, now)
+            .map(|()| Response::Done),
+        Request::RelayEnroll(request) => return relay_enroll(state, &request, now),
         Request::Revoke { device } => match state.auth().revoke(&device) {
             Ok(true) => Ok(Response::Done),
             Ok(false) => {
@@ -217,6 +257,21 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             };
             return match state.tags.offer(offer, now) {
                 Ok(tags) => Response::Tags(tags),
+                Err(error) => Response::Error {
+                    code: ErrorCode::Unsaved,
+                    message: error.to_string(),
+                },
+            };
+        }
+        Request::ShareRelays(offer) => {
+            let Some(relay) = &state.relay else {
+                return Response::Error {
+                    code: ErrorCode::Unsupported,
+                    message: "this computer cannot listen on relays".into(),
+                };
+            };
+            return match relay.share(offer) {
+                Ok(relays) => Response::Relays { relays },
                 Err(error) => Response::Error {
                     code: ErrorCode::Unsaved,
                     message: error.to_string(),
@@ -299,6 +354,61 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
     })
 }
 
+/// Keeps a phone's relay keys carried here from another computer, and
+/// answers with this computer's relays, signed with its CA's key so the
+/// phone knows the answer is this computer's.
+fn relay_enroll(state: &State, request: &control::host_relay::Request, now: u64) -> Response {
+    use control::host_relay::{Info, Outcome, Proof};
+    let failed = |reason: &str| {
+        Response::Relayed(Outcome::Failed {
+            reason: reason.to_owned(),
+        })
+    };
+    let Some(fingerprint) = crate::auth::nearby::fingerprint_bytes(&state.fingerprint) else {
+        return failed("this computer has no fingerprint"); // i18n: data
+    };
+    // A computer serving the user's own certificate has no CA key to sign
+    // with, as for presence.
+    let Some(authority) = &state.authority else {
+        return failed("this computer cannot sign with its certificate authority"); // i18n: data
+    };
+    match state.auth().keep_relay(request, &fingerprint, now) {
+        Ok(true) => {}
+        Ok(false) => return Response::Relayed(Outcome::Elsewhere),
+        Err(error) => return failed(&error.to_string()),
+    }
+    let unsigned = Proof {
+        certificate: crate::auth::encode(authority.ca_der()),
+        key: String::new(),
+        signature: String::new(),
+    };
+    let mut outcome = match &state.relay {
+        Some(relay) => {
+            relay.devices_changed();
+            // Labels are not signed; the phone reads them once it gets through.
+            match relay.offer().filter(Info::valid) {
+                Some(info) => Outcome::Relayed {
+                    info,
+                    proof: unsigned,
+                },
+                None => Outcome::Kept { proof: unsigned },
+            }
+        }
+        None => Outcome::Kept { proof: unsigned },
+    };
+    let signed = outcome
+        .message(request)
+        .and_then(|message| Some((authority.public_key()?, authority.sign(&message)?)));
+    let Some((key, signature)) = signed else {
+        return failed("this computer could not sign its answer"); // i18n: data
+    };
+    if let Outcome::Relayed { proof, .. } | Outcome::Kept { proof } = &mut outcome {
+        proof.key = crate::auth::encode(&key);
+        proof.signature = crate::auth::encode(&signature);
+    }
+    Response::Relayed(outcome)
+}
+
 /// A nonce for the phone whose hint is `hint`, signed with this computer's
 /// CA key, so the phone knows which computer asks before it signs.
 fn presence_challenge(state: &State, hint: &str, now: u64) -> Result<Response, crate::auth::Error> {
@@ -357,6 +467,7 @@ fn status(state: &State) -> Status {
         chats: layout.chats().count(),
         devices: state.auth().devices().len(),
         connected: state.connected().len(),
+        github_asks: state.lending.asks.queued(),
         relays: state
             .relay
             .as_ref()

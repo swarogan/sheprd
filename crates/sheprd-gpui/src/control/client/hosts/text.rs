@@ -2,7 +2,9 @@
 //! without an app; `finish` makes the app's text safe to print.
 use crate::control::protocol::{
     app::HostInfo,
-    hosts::{CheckInfo, CommentInfo, LoadInfo, LocalPorts, Ports, PrInfo, Reply},
+    hosts::{
+        CheckInfo, CommentInfo, LoadInfo, LocalPorts, Ports, PrInfo, Reply, RoomState, UsagePick,
+    },
 };
 use std::fmt::Write as _;
 
@@ -273,6 +275,43 @@ pub(super) fn usage(reply: &Reply) -> String {
         }
     }
     if let Some(note) = note {
+        text.push_str(note);
+    }
+    text.trim_end().to_owned()
+}
+
+pub(super) fn usage_pick(pick: &UsagePick) -> String {
+    let mut text = String::new();
+    match (&pick.agent, &pick.reason) {
+        (Some(agent), Some(reason)) => {
+            let _ = writeln!(text, "{agent}: {reason}");
+        }
+        (Some(agent), None) => {
+            let _ = writeln!(text, "{agent}");
+        }
+        (None, _) => {
+            let _ = writeln!(text, "No agent to start on {}", pick.host);
+        }
+    }
+    for candidate in &pick.candidates {
+        let room = match candidate.room {
+            RoomState::Ample => "ample",
+            RoomState::Unknown => "unknown",
+            RoomState::Tight => "tight",
+            RoomState::Spent => "spent",
+        };
+        let _ = write!(text, "  {:<10} {room:<8}", candidate.agent);
+        if let Some(used) = candidate.used_percent {
+            let _ = write!(text, " {used:>3.0}% used");
+        }
+        if let Some(left) = candidate.runs_out_in_seconds {
+            let _ = write!(text, ", runs out in {}", duration(left));
+        } else if let Some(left) = candidate.resets_in_seconds {
+            let _ = write!(text, ", resets in {}", duration(left));
+        }
+        text.push('\n');
+    }
+    if let Some(note) = &pick.note {
         text.push_str(note);
     }
     text.trim_end().to_owned()

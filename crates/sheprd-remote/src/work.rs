@@ -15,6 +15,7 @@ mod error;
 pub mod fanout;
 mod inspect;
 pub mod owned_agent;
+mod reuse;
 
 /// Ownership receipts for newly created linked checkouts. The existing
 /// marker format is shared with fan-out so saved receipts remain readable.
@@ -24,6 +25,7 @@ pub use deadline::identity_before;
 pub use inspect::{git, identity, open};
 
 pub use error::{Error, Result, Step};
+pub use reuse::pull_existing;
 
 /// The host of an app-kept Herdr 2 workspace. A custom Herdr 1 socket does
 /// not relocate the app's local core or files. This is deliberately

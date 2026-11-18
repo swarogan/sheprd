@@ -194,7 +194,7 @@ fn handle(
     match view.clone() {
         View::Home => {
             state.hub.wake_for_phone();
-            views.start(view, follow_home(state, out))
+            views.start(view, follow_home(state, device.clone(), out))
         }
         View::Chat { pane } => {
             let Some(link) = layout.chat(&pane).and_then(|_| state.hub.chat(&pane)) else {
@@ -258,7 +258,7 @@ async fn access_lost(state: &Shared, token: &str, device: &DeviceId) -> ByeReaso
 /// Sends home now and after every burst of changes in any chat, the
 /// layout, or the pull requests; never twice the same, and never for
 /// streamed text alone.
-async fn follow_home(state: Shared, out: Outbound) {
+async fn follow_home(state: Shared, device: DeviceId, out: Outbound) {
     let mut all = state.hub.subscribe_all();
     let mut layout = state.hub.watch_layout();
     let mut pull_requests = state.pull_requests.subscribe();
@@ -266,9 +266,11 @@ async fn follow_home(state: Shared, out: Outbound) {
     let mut tags = state.tags.subscribe();
     let mut shortcuts = state.shortcuts.subscribe();
     let mut opened = state.opened.changed();
+    let mut lending = state.lending.watch();
     let mut sent = None;
     loop {
-        let current = home(&state);
+        state.lending.checkouts.want();
+        let current = home(&state, &device);
         if sent.as_ref() != Some(&current) {
             let message = ServerMessage::Home {
                 home: current.clone(),
@@ -290,6 +292,7 @@ async fn follow_home(state: Shared, out: Outbound) {
                 changed = tags.changed() => if changed.is_err() { return } else { break },
                 changed = shortcuts.changed() => if changed.is_err() { return } else { break },
                 changed = opened.changed() => if changed.is_err() { return } else { break },
+                changed = lending.changed() => if changed { break } else { return },
                 // A stopped sampler leaves the last figures standing.
                 changed = load.changed(), if load.has_changed().is_ok() => if changed.is_ok() { break },
                 () = out.closed() => return,
@@ -330,6 +333,8 @@ impl Batch {
                 }
             }
             Event::Connection => self.connection = true,
+            // Only the lists show it, through home.
+            Event::Summary => {}
         }
     }
 

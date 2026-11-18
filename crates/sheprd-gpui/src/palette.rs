@@ -393,7 +393,7 @@ pub(super) struct Palette {
     selected: usize,
     scroll: UniformListScrollHandle,
     target: Option<Target>,
-    filter: Filter,
+    pub(super) filter: Filter,
     /// Narrows Go To to agents in one status; other filters ignore it.
     agent_filter: AgentFilter,
     query: String,

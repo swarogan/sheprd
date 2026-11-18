@@ -8,6 +8,8 @@ impl Localize for Error {
         match self {
             // keep-sorted start
             Self::Malformed(_) => fl!("error-nearby-malformed"),
+            Self::Missing(program) => fl!("error-nearby-missing", program = *program),
+            Self::NoStateDir => fl!("error-nearby-no-state-dir"),
             Self::Pipe(pipe) => fl!("error-nearby-pipe", pipe = *pipe),
             Self::Spawn(_) => fl!("error-nearby-spawn"),
             Self::TooLarge { limit } => fl!("error-nearby-too-large", limit = *limit),

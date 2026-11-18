@@ -14,7 +14,7 @@ Cargo.lock merge=cargo-lock
 
 # The daemon's Rust tests compare the native app's JSON fixtures byte for
 # byte with what they write, so a Windows checkout must not turn LF to CRLF.
-ios/SheprdRemoteCore/Tests/SheprdRemoteCoreTests/Fixtures/** text eol=lf
+ios/SheprdRemoteCore/Tests/*/Fixtures/** text eol=lf
 
 # Signatures cover these files' exact bytes: a Windows checkout turning LF
 # into CRLF would make every signature fail. Checked out byte for byte.

@@ -23,7 +23,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, view: &mut View, tick: usize) {
     let (bottom_height, bottom) = if !view.transcript.permissions.is_empty() {
         permission_height(view, width)
     } else if view.settings.is_some() {
-        (view.transcript.options.len() + 2, Bottom::Settings)
+        (view.setting_rows() + 2, Bottom::Settings)
     } else {
         composer_height(view, width)
     };
@@ -144,12 +144,22 @@ fn draw_settings(frame: &mut Frame<'_>, view: &View, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let selected = view.settings.unwrap_or(0);
-    let rows: Vec<Line<'_>> = view
+    // While the chat may switch agents, the agent comes first.
+    let agent = view
+        .transcript
+        .harnesses
+        .as_ref()
+        .map(|_| ("Agent".to_owned(), view.transcript.agent.clone()));
+    let options = view
         .transcript
         .options
         .iter()
+        .map(|option| (option.name.clone(), option.current_name()));
+    let rows: Vec<Line<'_>> = agent
+        .into_iter()
+        .chain(options)
         .enumerate()
-        .map(|(index, option)| {
+        .map(|(index, (name, current))| {
             let marker = if index == selected { "› " } else { "  " };
             let value = Style::default()
                 .fg(Color::Cyan)
@@ -160,8 +170,8 @@ fn draw_settings(frame: &mut Frame<'_>, view: &View, area: Rect) {
                 });
             Line::from(vec![
                 Span::raw(marker),
-                Span::styled(format!("{}: ", option.name), Style::default()),
-                Span::styled(format!(" ‹ {} › ", option.current_name()), value),
+                Span::styled(format!("{name}: "), Style::default()),
+                Span::styled(format!(" ‹ {current} › "), value),
             ])
         })
         .collect();

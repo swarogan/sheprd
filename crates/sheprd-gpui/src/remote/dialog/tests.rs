@@ -12,6 +12,7 @@ use std::{
         Mutex,
         atomic::{AtomicBool, Ordering},
     },
+    time::Instant,
 };
 
 mod addresses;
@@ -19,6 +20,8 @@ mod en_xa;
 mod hosts;
 mod keyboard;
 mod networks;
+mod share_github;
+mod ssh;
 
 fn on() -> RemoteConfig {
     RemoteConfig {
@@ -51,6 +54,9 @@ fn window(
     enabled: bool,
     send: super::super::supervisor::Send,
 ) -> (Entity<SheprdWindow>, &mut VisualTestContext) {
+    // The fixture's sidebar spinners would otherwise redraw the whole window
+    // at every frame each `wait` steps the clock through.
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (view, cx) = cx.add_window_view(fixture_window);
     let config = RemoteConfig { enabled, ..on() };
     cx.update(|_, cx| Supervisor::fixture(cx, config.clone(), send));
@@ -125,6 +131,7 @@ fn pairing_daemon(_: &Path, request: &Request) -> Result<Response, control::Erro
                 device_name: "Pixel\u{202e}".into(),
                 code: "428913".into(),
                 app: Some("https://other.example:8443".into()),
+                ssh: false,
             })
         }
         Request::Pairing { .. } => Response::Pairing(PairingState::Waiting {
@@ -185,6 +192,7 @@ fn a_phone_scans_claims_and_is_allowed(cx: &mut TestAppContext) {
         allow: true,
         code: "428913".into(),
         hosts: Vec::new(),
+        share_github: true,
     }));
     // A finished pairing is not cancelled on close.
     cx.simulate_keystrokes("escape");
@@ -259,6 +267,7 @@ fn pixel() -> Device {
         connected: true,
         via: None,
         hosts: Vec::new(),
+        share_github: true,
     }
 }
 

@@ -20,7 +20,7 @@ work from any network, not a detour for traffic that has a better route.
 | Who can dial | Only devices the computer names. A computer gives the relay the public dial keys of its paired devices; any other dial hears `offline`, as if the computer were not there, and never reaches it. Revoking a device ends its sessions at once. |
 | End-to-end encryption | Hybrid post-quantum Noise inside the stream (below). TLS to the relay protects only metadata. |
 | State | None. Memory only; a restart drops sessions and listeners reconnect. No database, no volume. |
-| Many relays | Relays share nothing. A computer listens on every relay it knows, and a client dials whichever answers first. Adding a region is starting a droplet. |
+| Many relays | Relays share nothing and never forward to each other. A computer listens on every relay it knows; a dialer only ever dials the computer's relays, never its own, so two machines near different relays still meet. The dialer tries the relay with the shortest whole path first (Choosing the nearest relay). Adding a region is starting a droplet. |
 | Choosing a relay | Sheprd's relays by default, listed in one static file, `https://sheprd.org/relays.json`, so they are added or all removed without a release; or the user's own: any number of private endpoints, which can replace ours entirely (below). |
 | Zero config | Every setting has a safe default. The image runs with no settings; `deploy/relay` serves it at `IP.sslip.io` with a Let's Encrypt certificate and no DNS work. |
 | Operator safety | Limits on connections (total and per address), listeners, sessions (total and per route), frame size, bandwidth (per session and total), idle and total session time, and dial and listen rates. |
@@ -449,6 +449,27 @@ relays = "default"   # Sheprd's relays (the default). Or one of:
   unreachable in Settings and `sheprd remote status`; the others keep
   working.
 - Changing the list restarts only the listen sockets, not the daemon.
+- An endpoint may be a table that also labels it, so lists tell relays
+  apart (`sheprd_remote_control::relay_label`, built):
+
+  ```toml
+  relays = [
+    "https://relay.example.org",
+    { endpoint = "https://fra3.example.org", name = "fra3",
+      description = "not for public use", tags = ["eu", "private"] },
+  ]
+  ```
+
+  The label is the user's own words and never reaches a relay, nor the
+  machines Sheprd shares its relays with, which get the addresses only. Sheprd
+  passes it to the daemon as `--relay-name`, `--relay-description`, and
+  `--relay-tag` after that `--relay`; `sheprd remote status` shows it, and
+  paired phones receive it in `GET /api/relay` as `labels`, keyed by
+  endpoint, and list it on the computer's page. The nearby offer leaves it
+  out, keeping the sealed Bluetooth payload as the vectors fix it. Names
+  are at most 64 characters, descriptions 256, and tags 32, with at most 8
+  tags, none blank or with a control character; a misspelt key is an
+  error rather than a dropped label.
 
 **The phone.** Pairing (QR, Nearby, Bonjour) carries the computer's
 endpoints, and every connection refreshes them, so editing the list on the
@@ -457,16 +478,90 @@ never need a token. Settings > Computers > a computer lists its relays, and
 "Add relay" lets a user type an endpoint for a computer paired before it
 had one.
 
+**Built: the machines Sheprd connects to.** A relay added once on the
+computer reaches every SSH and cloud machine its Sheprd connects to, so a
+phone paired with them through it (`docs/remote-control-plan.md`, Other
+machines) reaches them through the same relays:
+
+- Sheprd (`relay_sharing`) runs `sheprd-remote-control relays --offer`
+  over SSH on each connected machine that has the program, with
+  `{"source", "relays"}`: this computer's host name and its `[remote]
+  relays`, whole. It offers at once when the list changes or a machine
+  connects, every 10 minutes after, and 2 minutes after a machine did not
+  take it. An empty list is offered once per run, so a relay removed while
+  Sheprd was closed is withdrawn too.
+- The machine's daemon keeps each source's list in
+  `STATE_DIR/relay/shared.json` (0600; 16 sources, 16 relays each), the
+  offer replacing what that source shared before, and listens on its own
+  `[remote] relays` and every shared relay, each once. Relays start and
+  stop at once, without a restart, and its own setting is never changed.
+  When the command cannot reach the daemon, it writes the file itself,
+  then asks once more. The file is what stands: the daemon builds each
+  change on it, reads it again once its control socket answers, and every
+  minute after, so an offer written while it started, or while its socket
+  was busy, is never lost.
+- Every daemon certifies loopback, and keeps its relay keys even with no
+  relay set, so a relay shared later serves phones at once.
+- The phone learns the new relays from `GET /api/relay` the next time it
+  reaches the machine directly, and checks again every 10 minutes while
+  connected. Settings > Computers marks a computer it can reach through a
+  relay ("Tailscale · Relay"), and its page lists the relays and says when
+  the phone is connected through one.
+
 **Sheprd to SSH machines.** `sheprd-relay-agent --relay ENDPOINT
-[--token-file FILE]`, repeatable, and Devices lets the user pick which of
-the computer's relays to dial.
+[--token-file FILE]`, repeatable. Enrolling a device from Sheprd sets the
+agent's relays to this computer's, and the device's record keeps them
+(Clients, Sheprd and SSH machines).
 
 **What is not built yet.** The `[remote] relays` setting, the token store,
 Settings, the command, and the phone's side arrive with the daemon and iOS
 work (phase 3). Until then no client reads a relay endpoint, so none of
 these is exposed as if it worked.
 
-## Many users, kept apart
+### Choosing the nearest relay
+
+With relays in several regions (say Asia, Europe, US east and west), a
+session's path is phone → relay → computer, and its latency is both legs.
+A relay near either end is close to the direct path, so the one to avoid
+is a relay far from both.
+
+- **The computer measures its leg.** Each listener reads its QUIC
+  connection's smoothed round trip when it starts listening and every
+  30 s (`Listener::rtt`), and forgets it when the relay drops it.
+  `GET /api/relay`, and the nearby offer, list the relays nearest first
+  and add `rtt_ms`, each listening relay's round trip in milliseconds;
+  a relay the computer is not listening on now has no entry and comes
+  last. Older phones ignore the field.
+- **The phone measures its own leg** in the background
+  (`RelayProbes`): two `GET /v1/info` per relay, timing the second so TLS
+  setup is not counted, kept 5 minutes and forgotten when the network
+  changes. Opening a session never waits for a probe; the first one after
+  launch uses the computer's order alone.
+- **The phone ranks the computer's relays** (`RelayNearness.ranked`) by
+  the sum of both legs: relays the computer listens on before those it
+  does not, relays the phone reached before those it could not, then the
+  shortest path, ties in the computer's order. It tries them in that
+  order, as before.
+- The phone saves a computer's new order when it next answers directly,
+  keeping its keys, and only when the order changed or a round trip moved
+  by more than 20 ms and a quarter, so jitter does not rewrite the
+  Keychain.
+
+**Why relays do not forward to each other.** A mesh would let each side
+use the relay nearest to itself, with the relays carrying the session
+between them. It would buy little: over the public internet, phone →
+nearby relay → far relay → computer is no shorter than phone → the far
+relay → computer, and it doubles the relays' bandwidth. It would cost
+the design's simplest properties: relays would have to trust and
+authenticate each other, share every listener's dial keys or route
+lookups, and keep state about where each computer is; and a private relay
+could not take part without joining Sheprd's mesh. Listening on each
+relay costs a computer one idle QUIC connection per region, which is
+cheap for the handful of regions planned. If the list grows large, a
+computer can listen on only its nearest few, since phones already try
+every relay the computer names and an `offline` answer is immediate.
+
+
 
 One relay serves many people's computers and phones. It keeps them apart
 without accounts, so a public relay holds nothing worth stealing, and
@@ -701,14 +796,61 @@ last uses its own domain.
   axum router over the decrypted stream with `hyper`'s
   `serve_connection`, so the native API, WebSocket, and bearer tokens are
   unchanged.
-- `sheprd remote status --json` reports each relay: listening, last error.
+- `sheprd remote status --json` reports each relay: listening with its
+  round trip (`rtt_ms`), or the last error; Settings shows the round trip
+  beside each relay, so a user can see which is nearest.
 - **Built (first cut):** `[remote] relays` lists private relays; the daemon
   listens on each over QUIC (no WebSocket fallback yet), reading the pin
   from `/v1/info`. Paired phones learn the route, relays, and tunnel
   identity from `GET /api/relay` and send one dial key and their tunnel key
-  with `POST /api/relay`, over the network or Tailscale. Still to come: a
-  dial key per relay, Sheprd's signed list (`"default"`), the WebSocket
+  with `POST /api/relay`, over the network or Tailscale. A phone that
+  missed that, because the computer turned relays on while the phone was
+  away, gets its keys there through another computer it reaches: it signs
+  them with its device key for the far computer and posts them to the near
+  one (`POST /api/v2/hosts/relay`), whose Sheprd runs
+  `sheprd-remote-control relay-enroll` over SSH on its machines until the
+  one with that fingerprint checks the signature, keeps the keys, and
+  answers with its relays, signed with its CA key (`control::host_relay`).
+  Sheprd, the near daemon, and the phone each check that signature against
+  the pinned fingerprint, so no other host can answer for that computer.
+  Sheprd gives up after eight minutes (`host_relay::CARRY_MS`), before the
+  near daemon stops waiting. The far daemon dates each phone's relay keys
+  and refuses carried keys signed before them, and the phone drops a
+  carried answer once it reached that computer directly, so keys that
+  arrive late never replace newer ones. Still to come: a dial
+  key per relay, Sheprd's signed list (`"default"`), the WebSocket
   fallback, and pairing over a relay from the QR.
+
+#### Carrying a phone's keys through another computer
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Phone
+    participant N as Near computer<br/>(daemon)
+    participant S as Sheprd on the<br/>near computer
+    participant F as Far computer<br/>(daemon)
+    participant R as Relay
+    Note over P,F: The far computer turned on relays while the phone was away,<br/>so the phone never sent it relay keys and cannot reach it.
+    P->>P: Make relay keys, sign them with<br/>the device key for the far computer
+    P->>N: POST /api/v2/hosts/relay (signed keys)
+    N-->>P: pending
+    S->>N: HostRelays (each poll)
+    N-->>S: the phone's request
+    loop The host the pairing names, then each SSH and cloud machine
+        S->>F: ssh: sheprd-remote-control relay-enroll
+        F->>F: Fingerprint mine? Signature by this phone's key?<br/>Keep the keys, name them to the relays
+        F-->>S: relayed (route, relays, tunnel identity),<br/>signed with its CA key, or elsewhere
+        S->>S: Signed by the CA the request pins?<br/>If not, pass over and ask the next host
+    end
+    S->>N: HostRelayed (outcome)
+    P->>N: POST /api/v2/hosts/relay (same request)
+    N-->>P: done: relayed
+    P->>P: Check the CA signature against the<br/>fingerprint pinned at pairing, keep the record
+    P->>R: Dial the far computer's route
+    R->>F: Let the phone's dial key through
+    F-->>P: End-to-end tunnel, then the same API
+```
 
 ### iOS app and other apps
 
@@ -737,7 +879,13 @@ last uses its own domain.
   computer's own addresses, and the daemon answers inside the tunnel with
   the same TLS it serves on the network, so pinning, sign-in, and the live
   socket are unchanged. The proxy carries at most four sessions, the
-  relay's limit per dial key. Still to come: QUIC on iOS, a relay label in
+  relay's limit per dial key. A computer whose link gave up and that has
+  no relay record is reached through another one that is online
+  (`RelayCarrier`): the one that paired it first, else any, each asked again
+  at most every 30 minutes, and none for a day once the computer keeps the
+  keys with no relay or no computer online connects to it. The relays it
+  answers with become its record.
+  Still to come: QUIC on iOS, a relay label in
   the app, pairing over a relay, and the relay for intents, notification
   actions, and the share extension, which still go direct.
 - The PWA cannot use the relay: a browser cannot run the handshake inside a
@@ -745,13 +893,178 @@ last uses its own domain.
 
 ### Sheprd and SSH machines
 
-- `sheprd-relay-agent`, a small listener on the SSH machine, accepts streams
-  and forwards each, after the Noise handshake, to `127.0.0.1:22`. Each SSH
-  session is one QUIC stream, so several share a connection.
-- Sheprd connects with `ssh -o ProxyCommand='sheprd relay connect ROUTE'`,
-  so SSH keys, host keys, and `known_hosts` work as before.
-- Devices > Discover gains a "Through relay" source beside Tailscale, which
-  stays supported for people who have it.
+Sheprd reaches every other host through an `ssh` child it starts itself
+(`sheprd-client`'s `ssh`), so the relay goes in as that child's
+`ProxyCommand` and nothing above SSH changes. The machines are usually
+servers running Herdr and not Sheprd, so `sheprd-remote-control` is not
+there to listen: a dedicated agent is. Reusing the daemon on a host that
+does run Sheprd is a later shortcut, not a substitute.
+
+```text
+Sheprd ─ssh─▶ sheprd relay connect ──QUIC──▶ relay ◀──QUIC── sheprd-relay-agent ─▶ 127.0.0.1:22
+              └──────────── tunnel (IKpsk2 + ML-KEM-768), then SSH inside ────────────┘
+```
+
+**The agent (`crates/sheprd-relay-agent`).** A small Tokio binary, no
+GPUI, built on `sheprd_relay::client` and `sheprd-tunnel` exactly as the
+daemon is.
+
+- Its own P-256 route key and tunnel identity live in its state directory
+  (`$XDG_STATE_HOME/sheprd-relay-agent`, or `~/Library/Application
+  Support` on macOS), 0600. It listens on each relay in its config
+  (`--relay ENDPOINT [--token-file FILE]`, repeatable, or `"default"` for
+  Sheprd's signed list), over QUIC with the WebSocket fallback, with the
+  daemon's reconnect backoff.
+- `authorized` in the same directory holds one line per desktop allowed to
+  dial it: the desktop's dial key, its tunnel key, and a label. The agent
+  names those dial keys to every relay and admits only those tunnel keys,
+  so any other dial hears `offline` at the relay or nothing past it. It
+  reloads the file when it changes and names the keys again: removing a
+  line ends that desktop's sessions at once.
+- Each admitted stream is spliced, inside the tunnel, to `127.0.0.1:22`
+  (the port is a flag). Each SSH session is one QUIC stream, so several
+  share a connection. It never runs a command or opens another port.
+- It runs as a systemd user unit on Linux and a launchd agent on macOS,
+  started at login (or with lingering), and logs no address or route.
+- `sheprd-relay-agent status --json` reports each relay (listening, last
+  error) and the number of authorized desktops, for the app to read over
+  SSH.
+- **Built:** `run`, `status [--json]`, `authorize`, and `revoke`, over QUIC
+  to private relays, with tests on a loopback relay. `status` makes the
+  keys when they are missing, so enrolling reads the route before the
+  agent first runs. Still to come: the service units, the WebSocket
+  fallback, and `"default"` (Sheprd's signed list).
+
+**`sheprd relay connect`.** A mode of the `sheprd` executable that SSH
+runs as its `ProxyCommand`, parsed before GPUI starts, as the setup relay's
+attach mode is. Tokio runs only in this short-lived child, never in the
+app.
+
+- Arguments: `--direct %h:%p`, the device's route, its relays, and the
+  pinned agent identity; its keys come from the credential store, never
+  the command line.
+- It races the connection as the phone does: a direct TCP connection to
+  `%h:%p` first, then, 750 ms later, every relay at once, QUIC first and
+  the WebSocket fallback 300 ms after it. The first `ok` wins and the rest
+  are dropped, so a reachable direct path costs nothing extra.
+- Over a relay it runs the tunnel initiator against the pinned identity,
+  then copies bytes between its stdin and stdout and the tunnel. A refusal
+  or a wrong identity exits non-zero with a reason SSH shows, so
+  `sheprd-client`'s failure classification can name it.
+- `%h` is unchanged, so `known_hosts`, host key approval, and
+  `ControlPath` multiplexing behave exactly as they do today.
+
+**Keys and records.** The desktop's dial key and tunnel key are made once
+and kept in `sheprd-credentials`. Each enrolled device keeps a record of
+the agent's route, relays, and tunnel identity with the saved device.
+`sheprd-client` adds `-o ProxyCommand=…` only for a device with a record;
+every other host is reached as before.
+
+**Enrolling.** Turning on "Reach from anywhere" in a device's host menu,
+while the host answers directly (LAN, Tailscale, or a public address),
+opens the app's confirmation dialog, then, over the SSH connection that
+already works:
+
+1. installs or updates the agent from the release Sheprd ships, built for
+   the host's platform, and enables its user service;
+2. appends this desktop's keys to `authorized`;
+3. reads back the route, relays, and identity from `status --json`, and
+   saves the record.
+
+SSH is the trusted channel, so this needs no QR code or pairing secret,
+and the agent's relays default to the ones this computer uses. Turning it
+off removes this desktop's line; the agent stays for other desktops until
+the user removes it from the same menu.
+
+**Interface and command line.**
+
+- Devices > Discover gains a "Through relay" source for enrolled devices,
+  beside Tailscale, which stays supported for people who have it.
+- The host indicator says which path a connection took ("Direct",
+  "Through relay (fra1)").
+- `sheprd device relay enable|disable|status HOST`: enabling and disabling
+  open the confirmation dialog; `status` reports the record and the
+  agent's state. It goes in `docs/cli.md` and the skill's command table.
+
+**What it does not cover.** Only `ssh` children the app starts use the
+relay. Herdr's own machine connections, `git` over SSH, and an `ssh` the
+user types in a terminal still go direct. The app never edits
+`~/.ssh/config`; the host menu offers a `ProxyCommand` snippet the user can
+add for those.
+
+**Tests.** The agent and `relay connect` against a real relay on loopback,
+as the daemon's relay tests do: the direct path preferred when it answers,
+the relay when it does not, an unlisted dial or tunnel key refused, and
+removing a line in `authorized` ending a live session. Pure tests for the
+`ProxyCommand` arguments and for parsing `status --json`.
+
+### Adding a nearby Sheprd from another network
+
+**Built.** Two computers that both run Sheprd sit side by side on different
+networks with no route between them, so neither can SSH to the other.
+Bluetooth is the trusted channel that pairs them, and the relay carries
+SSH afterwards. This is the "reuse the daemon on a host that runs Sheprd"
+shortcut: the computer being added needs `sheprd-remote-control` running
+with relays, and it needs no `sheprd-relay-agent`.
+
+```text
+Sheprd A ─ssh─▶ sheprd-remote-control relay-connect ──QUIC──▶ relay ◀──QUIC── B's daemon ─▶ 127.0.0.1:22
+                └──────────── tunnel (IK + ML-KEM-768), then SSH inside ────────────┘
+```
+
+1. **B** opens Remote control > Pair device (or `sheprd remote pair`). Its
+   Bluetooth helper advertises as it does for phones.
+2. **A** opens Add Device > Nearby Sheprd (macOS only for now). Its helper
+   scans as a central (`macos/sheprd-nearby/Central.swift`), connects to
+   each computer it finds to read `info`, and lists those that name
+   themselves, which only happens while Pair device is open.
+3. Picking one starts `sheprd-remote-control desktop-pair` (`desktop`),
+   which runs a phone's side of nearby pairing over the same `pair`
+   characteristic, with Sheprd carrying its frames on stdio
+   (`control::desktop`). The child uses the daemon's own commitment, code,
+   and sealing functions, so a man in the middle still gets one guess, and
+   both screens show the same code.
+4. The sealed offer names B's relays, route, and tunnel identity. A dials
+   the one-use pairing key on B's relays, runs the tunnel's pairing
+   handshake keyed by the sealed token, then TLS pinned to the CA
+   fingerprint the code covered, and claims with its name, its relay
+   dial and tunnel keys, and an `ssh-ed25519` key
+   (`desktop/id_ed25519`, made by `ssh-keygen`). B refuses the claim
+   before spending the token when it has no SSH server on `127.0.0.1:22`
+   (Remote Login off) or no `authorized_keys` to write (Windows).
+5. B's dialog says that another computer wants to open terminals and what
+   Allow does, and it leaves out the phone-only hosts and GitHub switches.
+   On Allow, the daemon (`ssh_access`) adds one line to
+   `~/.ssh/authorized_keys`: `from="127.0.0.1,::1",no-agent-forwarding,no-X11-forwarding`,
+   the key, then `sheprd-desktop:DEVICE`. The line is written atomically,
+   and a linked file is refused. Only B's own relay sessions reach sshd from
+   loopback, so the key is useless from the network. Revoking the device,
+   or its expiring after `device_idle_days`, removes exactly that line.
+6. A polls on the same connection. Once allowed, it learns the user to
+   log in as and B's SSH host keys, keeps the route, relays, and identity
+   in `desktop/hosts/ID.json`, and keeps the host keys in
+   `desktop/known_hosts.d/r-ID.sheprd.invalid`, a file per machine so two
+   pairings finishing at once never write the same one. ID is the route's
+   first eight bytes in hex.
+7. Sheprd checks Herdr there through the relay and saves the device as
+   `USER@r-ID.sheprd.invalid` without Herdr's CLI, because `machine add`
+   would run its own `ssh`.
+
+From then on, every `ssh` that `sheprd-client` starts for a
+`*.sheprd.invalid` target (`relay_host`) gets
+`ProxyCommand=sheprd-remote-control relay-connect --state-dir … %h`,
+that `IdentityFile` with `IdentitiesOnly`, the machine's own known hosts
+file (`UserKnownHostsFile=…/known_hosts.d/%h`, OpenSSH 8.4 or later), and
+`StrictHostKeyChecking=yes`, ahead of the user's own options.
+`.invalid` never resolves, so nothing else can reach it. `relay-connect`
+dials B's route with A's dial key on the first relay that lets it
+through. B's daemon admits that tunnel key, sees that the device has an
+SSH key, splices the session to its SSH server instead of serving the
+API, and marks the device seen.
+
+Not yet: Linux and Windows helpers that scan, sharing a relay record
+when B's relays change, and racing the relays. As with SSH machines,
+`git` and a typed `ssh` do not use the proxy.
 
 ## Deployment
 
@@ -799,6 +1112,10 @@ holds no relay secrets and deploys nothing.
    setting and token store, `sheprd remote relays`, the pairing flow above
    (QR fields, pairing keys, the `IKpsk2` handshake, approval), revocation,
    the connection race, status, and settings text. Live tests on a phone over cellular with Wi-Fi off.
-4. **SSH machines**: `sheprd-relay-agent`, `sheprd relay connect`, Devices.
+4. **SSH machines**, in this order: `sheprd-relay-agent` with its
+   `authorized` file, service units, and `status --json`; `sheprd relay
+   connect` and its direct-then-relay race; the desktop keys, device
+   records, and `ProxyCommand` in `sheprd-client`; enrolling over SSH;
+   then Devices, the host indicator, and `sheprd device relay`.
 5. **Our relays**: image publishing, a few regions, a Prometheus scrape
    and alerts on refusals and bandwidth.

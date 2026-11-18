@@ -19,9 +19,10 @@ default = ["server"]
 # maintainer's OpenPGP signature or the site workflow's Ed25519 one. For
 # clients that fetch the list; the relay itself never reads it.
 signed-directory = ["dep:ed25519-dalek", "dep:pgp"]
-# Reaching a relay over QUIC as a listener or a dialer (`client`), for the
-# daemon and tests; no axum or server limits.
-client = ["dep:quinn", "dep:rustls", "dep:tokio"]
+# Reaching a relay over QUIC as a listener or a dialer (`client`), its
+# `/v1/info` read with ureq, for the daemon, the SSH agent, and tests; no
+# axum or server limits.
+client = ["dep:quinn", "dep:rustls", "dep:tokio", "dep:ureq"]
 server = [
   "dep:axum",
   "dep:futures-util",
@@ -72,6 +73,7 @@ secrecy            = { optional = true, workspace = true }
 tokio              = { optional = true, workspace = true }
 tracing            = { optional = true, workspace = true }
 tracing-subscriber = { features = ["fmt"], optional = true, workspace = true }
+ureq               = { optional = true, workspace = true }
 
 [dev-dependencies]
 anyhow.workspace            = true

@@ -18,10 +18,10 @@ server = [
     "dep:aes-gcm",
     "dep:axum",
     "dep:futures-lite",
-    "dep:base64",
     "dep:getrandom",
     "dep:gix",
     "dep:hkdf",
+    "dep:http-body-util",
     "dep:hyper",
     "dep:hyper-util",
     "dep:if-addrs",
@@ -29,14 +29,12 @@ server = [
     "dep:mdns-sd",
     "dep:sheprd-backend",
     "dep:sheprd-session",
-    "dep:p256",
     "dep:pulldown-cmark",
+    "dep:quinn",
     "dep:rcgen",
     "dep:rustls",
-    "dep:secrecy",
     "dep:sheprd-apns",
     "sheprd-relay/client",
-    "dep:sha2",
     "dep:sheprd-terminal",
     "dep:sheprd-tunnel",
     "dep:socket2",
@@ -55,7 +53,8 @@ path              = "src/main.rs"
 required-features = ["server"]
 
 [dependencies]
-secrecy                        = { optional = true, workspace = true }
+# A borrowed GitHub token on the control socket, redacted in `Debug`.
+secrecy.workspace              = true
 sheprd-apns                    = { optional = true, workspace = true }
 sheprd-chat-protocol.workspace = true
 sheprd-client.workspace        = true
@@ -63,6 +62,12 @@ sheprd-github.workspace        = true
 # Relay addresses in `[remote] relays`; with `server`, listening on them
 # (`client`), so paired phones reach this computer from anywhere.
 sheprd-relay.workspace         = true
+# Checking the far computer's signed answer to a phone's relay keys
+# (`control::host_relay`), which Sheprd does too; already in its graph
+# through `sheprd-relay`.
+base64.workspace               = true
+p256.workspace                 = true
+sha2.workspace                 = true
 # The pairing dialog's QR code, drawn by Sheprd.
 qrcode.workspace              = true
 # The macOS user ID the LaunchAgent loads under, and the server's host name.
@@ -82,23 +87,24 @@ uuid.workspace                = true
 
 aes-gcm        = { optional = true, workspace = true }
 axum           = { optional = true, workspace = true }
-base64         = { optional = true, workspace = true }
 futures-lite   = { optional = true, workspace = true }
 getrandom      = { optional = true, workspace = true }
 gix            = { optional = true, workspace = true }
 hkdf           = { optional = true, workspace = true }
 # Serving the API over a relay's end-to-end tunnel, as axum serves it over TLS.
-hyper          = { features = ["http1", "server"], optional = true, workspace = true }
+# Claims a desktop makes of a nearby Sheprd, inside the relay's tunnel.
+http-body-util = { optional = true, workspace = true }
+hyper          = { features = ["client", "http1", "server"], optional = true, workspace = true }
 hyper-util     = { features = ["service", "tokio"], optional = true, workspace = true }
 if-addrs       = { optional = true, workspace = true }
 maud           = { optional = true, workspace = true }
 # Advertises the daemon over Bonjour so phones nearby find it to pair.
 mdns-sd        = { optional = true, workspace = true }
-p256           = { optional = true, workspace = true }
 pulldown-cmark = { optional = true, workspace = true }
+# The relay connection a desktop's claim and `relay-connect` dial over.
+quinn          = { optional = true, workspace = true }
 rcgen          = { optional = true, workspace = true }
 rustls         = { optional = true, workspace = true }
-sha2           = { optional = true, workspace = true }
 sheprd-backend = { optional = true, workspace = true }
 sheprd-core-client.workspace = true
 sheprd-session = { optional = true, workspace = true }
@@ -108,7 +114,8 @@ socket2        = { optional = true, workspace = true }
 # This computer's CPU and memory, shown above its workspaces on a phone.
 sysinfo        = { optional = true, workspace = true }
 time           = { optional = true, workspace = true }
-tokio          = { optional = true, workspace = true }
+# `relay-connect` carries SSH between its stdio and the tunnel.
+tokio          = { features = ["io-std", "io-util"], optional = true, workspace = true }
 tokio-rustls   = { optional = true, workspace = true }
 # The daemon log: requests, refused handshakes, and errors phones report.
 tracing-subscriber = { features = ["fmt"], optional = true, workspace = true }
@@ -122,7 +129,6 @@ x509-parser    = { optional = true, workspace = true }
 futures-util.workspace      = true
 # A real relay on loopback, for the daemon's relay tests.
 sheprd-relay                = { features = ["client", "server"], workspace = true }
-p256.workspace              = true
 roxmltree.workspace         = true
 tokio-tungstenite.workspace = true
 tower.workspace             = true

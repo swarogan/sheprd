@@ -163,6 +163,18 @@ impl DialogInput {
         self.reversed = extend && offset < anchor;
     }
 
+    /// A press at `offset`: a single click places the caret (extending the
+    /// selection with shift), and a double or later click selects the whole
+    /// field, so a name being replaced can be cleared in one keystroke.
+    pub fn click(&mut self, offset: usize, click_count: usize, extend: bool) {
+        if click_count >= 2 {
+            self.selection = 0..self.text.len();
+            self.reversed = false;
+        } else {
+            self.move_to(offset, extend);
+        }
+    }
+
     pub fn key(&mut self, key: &Keystroke, cx: &mut App) -> bool {
         if self.marked.is_some() {
             return false;
@@ -325,7 +337,7 @@ impl SheprdWindow {
                         && input.marked.is_none()
                         && let Some(index) = input.index_at(event.position)
                     {
-                        input.move_to(index, event.modifiers.shift);
+                        input.click(index, event.click_count, event.modifiers.shift);
                         cx.notify();
                     }
                 }),

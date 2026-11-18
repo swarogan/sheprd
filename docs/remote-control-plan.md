@@ -105,8 +105,13 @@ required.
   sign anything but TLS servers.
 - On macOS with the application firewall on, the first start asks whether
   `sheprd-remote-control` may accept incoming connections; until the user allows it,
-  LAN and Tailscale requests hang (loopback works). The settings page says
-  so.
+  LAN and Tailscale requests hang (loopback works). A daemon signed with a
+  developer ID keeps that approval across updates; an ad-hoc or unsigned
+  one, such as a local build, is approved only as that exact build, so the
+  first start after a rebuild is blocked again. After each service change
+  Sheprd checks for that case (`socketfilterfw --getglobalstate` and the
+  daemon's `TeamIdentifier`) and warns in Settings > Remote control and on
+  the title bar's phone button, while the person is still there to act.
 - The phone installs the CA once during pairing: a `.mobileconfig` profile on
   iOS (then Settings > General > About > Certificate Trust Settings), a CA
   file on Android. The pairing page walks through it and the QR carries the
@@ -161,6 +166,14 @@ own certificate and domain.
 4. After approval the device is stored (public key, name, created, last seen)
    and gets session tokens by signing challenges. Revoking it in Sheprd
    ends its sessions and drops its push subscription immediately.
+   The approval step also carries **Share GitHub sign-in with this phone**,
+   on by default and naming the account it lends; the choice is kept with
+   the device (`share_github`, which a record from before the switch reads
+   as on) and changed later beside each device in Settings > Remote
+   control (`Request::ShareGitHub`). Turning it off, or revoking the
+   device, stops further tokens (`GET /api/v2/github/token`,
+   `docs/ios-github-plan.md`); a `gh` token the phone already holds works
+   until `gh` signs out.
 5. iOS gives a Home Screen web app storage of its own, so the key saved in
    the browser never reaches it. While the paired browser shows home, it
    mints a single-use handoff token (24 hours, one per device, reused until

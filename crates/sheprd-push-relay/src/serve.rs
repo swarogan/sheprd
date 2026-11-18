@@ -12,7 +12,7 @@ use crate::{
 #[cfg(feature = "postgres")]
 use secrecy::SecretString;
 use secrecy::{ExposeSecret, SecretSlice};
-use sheprd_apns::{Config, Sender, is_private, load_secret_key};
+use sheprd_apns::{Config, Host, Sender, is_private, load_secret_key};
 use std::{
     fs,
     net::SocketAddr,
@@ -25,8 +25,12 @@ use tokio::net::TcpListener;
 const PURGE: Duration = Duration::from_secs(60 * 60);
 const MIN_SECRET: usize = 32;
 
-/// Runs the relay until it is told to stop.
+/// Runs the relay until it is told to stop, or with `--check`, loads its
+/// secrets and stops without opening a store or a socket.
 pub async fn serve(options: Options) -> Result<()> {
+    if options.check {
+        return Secrets::load(&options.secrets).map(drop);
+    }
     match &options.backend {
         Backend::Memory => run(&options, Memory::default()).await,
         Backend::Postgres => postgres(&options).await,
@@ -52,24 +56,50 @@ async fn postgres(_: &Options) -> Result<()> {
     Err(Error::NoPostgres)
 }
 
+/// Everything the relay reads from its secrets directory, each checked as
+/// the relay uses it.
+pub(crate) struct Secrets {
+    environment: Host,
+    issuer: Issuer,
+    keys: Keyring,
+    sender: Sender,
+}
+
+impl Secrets {
+    pub(crate) fn load(dir: &Path) -> Result<Self> {
+        let config = Config::load(dir)?.ok_or_else(|| Error::NoApnsConfig {
+            path: dir.to_owned(),
+        })?;
+        let environment = config.host;
+        let previous = dir.join("relay-key-previous.pem");
+        let keys = Keyring::new(
+            load_secret_key(&dir.join("relay-key.pem"))?,
+            previous
+                .exists()
+                .then(|| load_secret_key(&previous))
+                .transpose()?,
+        );
+        let secret = dir.join("credential-secret");
+        let issuer = Issuer::new(read_secret(&secret)?.expose_secret())
+            .ok_or(Error::SecretSize { path: secret })?;
+        Ok(Self {
+            environment,
+            issuer,
+            keys,
+            sender: Sender::new(config)?,
+        })
+    }
+}
+
 async fn run(options: &Options, store: impl Store) -> Result<()> {
-    let config = Config::load(&options.secrets)?.ok_or_else(|| Error::NoApnsConfig {
-        path: options.secrets.clone(),
-    })?;
-    let environment = config.host;
-    let previous = options.secrets.join("relay-key-previous.pem");
-    let keys = Keyring::new(
-        load_secret_key(&options.secrets.join("relay-key.pem"))?,
-        previous
-            .exists()
-            .then(|| load_secret_key(&previous))
-            .transpose()?,
-    );
-    let secret = options.secrets.join("credential-secret");
-    let issuer = Issuer::new(read_secret(&secret)?.expose_secret())
-        .ok_or(Error::SecretSize { path: secret })?;
+    let Secrets {
+        environment,
+        issuer,
+        keys,
+        sender,
+    } = Secrets::load(&options.secrets)?;
     let relay = Relay::new(
-        Sender::new(config)?,
+        sender,
         environment,
         issuer,
         keys,

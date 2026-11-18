@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 
 fn chat(pane: &str, status: AgentStatus) -> ChatRow {
     ChatRow {
+        named: true,
         pane: pane.to_owned(),
         tab: format!("tab-{pane}"),
         endpoint: EndpointId::random(),

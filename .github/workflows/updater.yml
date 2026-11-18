@@ -4,6 +4,8 @@ name: Updater Packaging
 # both lists: its macOS jobs share runners with CI and Release.
 on:
   pull_request:
+    # ready_for_review starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'crates/sheprd-updater/**'
       - 'crates/sheprd-client/**'
@@ -42,6 +44,8 @@ concurrency:
 
 jobs:
   rust-harness:
+    # Drafts run nothing until marked ready for review.
+    if: github.event.pull_request.draft != true
     name: Rust Updater (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -61,6 +65,8 @@ jobs:
         run: python3 scripts/test-updater.py
 
   packaging:
+    # Drafts run nothing until marked ready for review.
+    if: github.event.pull_request.draft != true
     name: Python Contract (${{ matrix.os }})
     strategy:
       fail-fast: false

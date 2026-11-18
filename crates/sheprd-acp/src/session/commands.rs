@@ -3,7 +3,7 @@
 use acp::v1 as wire;
 use sheprd_chat_protocol::{
     Attachment, Author, Change, Command, CommandId, MAX_ATTACHMENTS, MAX_PROMPT_SIZE, OptionValue,
-    PermissionId, Queued, Rejection, Status, Turn,
+    Origin, PermissionId, Queued, Rejection, Status, Turn,
 };
 
 use super::{ConnId, Pending, Session, Update};
@@ -24,9 +24,17 @@ impl<R: FnMut(Update)> Session<R> {
             );
         }
         let rejected = match command {
-            Command::Prompt { text, attachments } => self.prompt(id, text, attachments),
+            Command::Prompt {
+                text,
+                attachments,
+                origin,
+            } => self.prompt(id, text, attachments, origin),
             Command::Cancel => self.cancel(),
             Command::Answer { option, permission } => self.answer(permission, &option),
+            Command::AnswerQuestion {
+                answers,
+                permission,
+            } => self.answer_question(permission, answers),
             Command::SetMode { id } => self.set_mode(id),
             Command::SetOption { id, value } => self.set_option(id, &value),
             Command::Unqueue { id } => self.unqueue(id),
@@ -35,6 +43,7 @@ impl<R: FnMut(Update)> Session<R> {
                 Ok(())
             }
             Command::StopActivity { call_id } => self.stop_activity(&call_id),
+            Command::SetAgent { agent } => self.set_agent(agent),
         }
         .err();
         self.ack(conn, id, rejected);
@@ -45,6 +54,7 @@ impl<R: FnMut(Update)> Session<R> {
         id: CommandId,
         text: String,
         attachments: Vec<Attachment>,
+        origin: Option<Origin>,
     ) -> Result<(), Rejection> {
         if text.trim().is_empty() && attachments.is_empty() {
             return Err(Rejection::EmptyPrompt);
@@ -73,16 +83,21 @@ impl<R: FnMut(Update)> Session<R> {
                 id,
                 text,
             });
+            if let Some(origin) = origin {
+                self.queued_origins.insert(id, origin);
+            }
             self.queue_changed(queued);
             return Ok(());
         }
-        self.send_prompt(&text, &attachments);
+        self.send_prompt(&text, &attachments, origin);
         Ok(())
     }
 
     /// Sends a prompt with its files, read now, and shows it in the
-    /// transcript: the text with a line per file, then the pictures.
-    fn send_prompt(&mut self, text: &str, attachments: &[Attachment]) {
+    /// transcript: the text with a line per file, then the pictures. What
+    /// Sheprd tells the agent besides goes first, and the transcript leaves
+    /// it out.
+    fn send_prompt(&mut self, text: &str, attachments: &[Attachment], origin: Option<Origin>) {
         let Some(session) = self.acp_session.clone() else {
             return;
         };
@@ -100,7 +115,16 @@ impl<R: FnMut(Update)> Session<R> {
         }
         let prompt = self.projector.prompt(&shown, attachments.len());
         self.emit(prompt);
-        let mut blocks = Vec::with_capacity(prepared.len() + 1);
+        let mut blocks = Vec::with_capacity(prepared.len() + 3);
+        if let Some(note) = self.context.before_prompt(origin, text) {
+            blocks.push(wire::ContentBlock::Text(wire::TextContent::new(note)));
+        }
+        // The agent that took over hears the conversation next, apart from
+        // what the user wrote.
+        let handoff = self.thread.take_handoff();
+        if let Some(handoff) = &handoff {
+            blocks.push(wire::ContentBlock::Text(wire::TextContent::new(handoff)));
+        }
         if !text.trim().is_empty() {
             blocks.push(wire::ContentBlock::Text(wire::TextContent::new(text)));
         }
@@ -113,7 +137,9 @@ impl<R: FnMut(Update)> Session<R> {
         }
         let request = wire::PromptRequest::new(session, blocks);
         if self.request("session/prompt", &request, Pending::Prompt) {
-            // Only a prompt the agent received names the chat.
+            // Only a prompt the agent received names the chat and starts
+            // the conversation a later agent is handed.
+            self.thread.prompted(&shown, handoff);
             (self.report)(Update::Prompt(shown));
             self.turn = Some(self.next_request);
             self.emit(Change::Turn {
@@ -122,6 +148,8 @@ impl<R: FnMut(Update)> Session<R> {
                 }),
             });
             self.status(Status::Working);
+        } else if let Some(handoff) = handoff {
+            self.thread.restore_handoff(handoff);
         }
     }
 
@@ -135,8 +163,9 @@ impl<R: FnMut(Update)> Session<R> {
             return;
         }
         let next = queued.remove(0);
+        let origin = self.queued_origins.get(&next.id).copied();
         self.queue_changed(queued);
-        self.send_prompt(&next.text, &next.attachments);
+        self.send_prompt(&next.text, &next.attachments, origin);
     }
 
     fn cancel(&mut self) -> Result<(), Rejection> {
@@ -186,6 +215,25 @@ impl<R: FnMut(Update)> Session<R> {
             return Err(Rejection::UnknownOption);
         }
         self.resolve(permission, Some(option));
+        Ok(())
+    }
+
+    fn answer_question(
+        &mut self,
+        permission: PermissionId,
+        answers: Vec<String>,
+    ) -> Result<(), Rejection> {
+        if !self.asked.contains_key(&permission) {
+            return Err(Rejection::UnknownPermission);
+        }
+        self.transcript
+            .permissions
+            .iter()
+            .find(|asked| asked.id == permission)
+            .and_then(|asked| asked.question.as_ref())
+            .ok_or(Rejection::UnknownOption)?
+            .check(&answers)?;
+        self.resolve_answers(permission, answers);
         Ok(())
     }
 
@@ -271,7 +319,7 @@ impl<R: FnMut(Update)> Session<R> {
             .position(|queued| queued.id == id)
             .ok_or(Rejection::UnknownQueued)?;
         queued.remove(index);
-        self.emit(Change::Queue { queued });
+        self.queue_changed(queued);
         Ok(())
     }
 }

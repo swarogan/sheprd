@@ -1,0 +1,36 @@
+{
+ "data": {
+  "repository": {
+   "nameWithOwner": "acme/app",
+   "pullRequest": {
+    "number": 7,
+    "title": "Tiny",
+    "url": "javascript:alert(1)",
+    "state": "MERGED",
+    "isDraft": false,
+    "reviewDecision": null,
+    "body": null,
+    "createdAt": null,
+    "additions": 1,
+    "deletions": 0,
+    "changedFiles": 1,
+    "baseRefName": "main",
+    "headRefName": "tiny",
+    "author": null,
+    "reviewRequests": {
+     "nodes": []
+    },
+    "latestReviews": {
+     "nodes": []
+    },
+    "timelineItems": {
+     "totalCount": 0,
+     "pageInfo": {
+      "hasPreviousPage": false
+     },
+     "nodes": []
+    }
+   }
+  }
+ }
+}

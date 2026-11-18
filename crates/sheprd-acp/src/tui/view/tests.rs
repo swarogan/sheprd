@@ -9,6 +9,7 @@ use uuid::Uuid;
 use super::*;
 
 mod attachments;
+mod harnesses;
 
 fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
     KeyEvent {
@@ -58,6 +59,7 @@ fn asking() -> Transcript {
                     name: id.to_owned(),
                 })
                 .collect(),
+            question: None,
             title: "Run?".to_owned(),
         }],
         status: Status::Working,
@@ -74,6 +76,7 @@ fn enter_sends_the_prompt_and_alt_enter_adds_a_line() {
     assert_eq!(
         press(&mut view, KeyCode::Enter),
         Some(Out::Command(Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: "fix\nit".to_owned(),
             attachments: Vec::new(),
         }))

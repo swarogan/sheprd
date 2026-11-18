@@ -21,6 +21,7 @@
 
 pub(crate) mod ask;
 pub(crate) mod install;
+pub(crate) mod relay;
 
 use crate::{automations::Machine, host_build, teleport::Host};
 use sheprd_client::{ConnectTarget, ScriptLimits, shell_quote};

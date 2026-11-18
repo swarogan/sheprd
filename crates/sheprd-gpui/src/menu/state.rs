@@ -68,6 +68,8 @@ pub(crate) struct MenuState {
     #[cfg(all(test, feature = "cloud"))]
     pub(super) cloud_settings_opened: bool,
     pub(super) wsl_setup: Option<super::devices::WslSetup>,
+    /// Add Device's Nearby Sheprd, scanning while it lives.
+    pub(super) nearby_setup: Option<super::devices::NearbySetup>,
     /// The saved distribution the removal confirmation names.
     pub(super) wsl_remove: Option<String>,
     pub(super) session_edit: Option<super::sessions::Edit>,
@@ -374,6 +376,7 @@ impl MenuState {
             #[cfg(all(test, feature = "cloud"))]
             cloud_settings_opened: false,
             wsl_setup: None,
+            nearby_setup: None,
             wsl_remove: None,
             session_edit: None,
             unfolded_device: None,
@@ -467,6 +470,7 @@ impl MenuState {
         self.cover.set(Cover::Unknown);
         self.device_setup = None;
         self.wsl_setup = None;
+        self.nearby_setup = None;
         self.wsl_remove = None;
         self.session_edit = None;
         self.unfolded_device = None;

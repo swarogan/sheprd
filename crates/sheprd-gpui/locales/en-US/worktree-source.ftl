@@ -54,8 +54,15 @@ worktree-source-branch-note = The checkout uses the local branch as it is.
 # Tags beside a row's title.
 worktree-source-detached = detached
 worktree-source-draft = draft
-# A pull request from a fork, whose branch cannot be checked out here.
-worktree-source-from-fork = from a fork - check out manually
+# A pull request whose head branch lives in a fork.
+worktree-source-from-fork = from a fork
+
+worktree-source-already-exists = Worktree already exists
+worktree-source-reusing = Already exists — will open it and pull its remote.
+worktree-source-reused = Pulled the existing worktree's remote.
+worktree-source-pull-failed = Could not pull the existing worktree's remote: { $error }
+# A pull finished after the user selected another host. $result is its outcome.
+worktree-source-background-result = { $host }: { $result }
 worktree-source-no-checkout-path = The daemon did not report the new checkout path, so no agent context note was written.
 
 # The open worktree picker.

@@ -74,6 +74,7 @@ fn remote_replies_round_trip() {
                 chats: 2,
                 devices: 1,
                 connected: 1,
+                github_asks: 0,
                 relays: Default::default(),
             })),
             error: None,
@@ -88,6 +89,7 @@ fn remote_replies_round_trip() {
                 connected: false,
                 via: None,
                 hosts: Vec::new(),
+                share_github: true,
             }],
         },
     ] {

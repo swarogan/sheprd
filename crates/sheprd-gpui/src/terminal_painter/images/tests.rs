@@ -1,4 +1,6 @@
 use super::*;
+
+mod replacement;
 use sheprd_client::protocol::SurfaceGraphicsTarget;
 
 fn key(format: SurfaceGraphicsFormat, width: u32, height: u32) -> SurfaceGraphicsAssetKey {
@@ -170,7 +172,7 @@ fn decodes_are_bounded_and_failures_are_not_retried() {
     assert!(matches!(cache.lookup(0, now), Lookup::Wait));
     cache.finish(0, Err(Error::PaneImageLimit));
     cache.finish(1, Ok(Arc::new(texture(RgbaImage::new(1, 1)))));
-    assert!(matches!(cache.lookup(0, now), Lookup::Wait));
+    assert!(matches!(cache.lookup(0, now), Lookup::Failed));
     assert!(matches!(cache.lookup(1, now), Lookup::Ready(_)));
     // A late result for an unknown serial is ignored.
     cache.finish(7, Ok(Arc::new(texture(RgbaImage::new(1, 1)))));

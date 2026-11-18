@@ -21,13 +21,16 @@ mod code_choices;
 mod convert;
 pub(crate) mod core_pane;
 mod discovery;
+pub(crate) mod effects;
 mod existing;
 mod glide;
 mod harnesses;
 mod link;
 mod list;
+pub(crate) mod modes;
 pub(crate) mod page;
 pub(crate) mod pasted;
+mod pick;
 mod prepared;
 #[cfg(feature = "integration-test")]
 pub(crate) mod preview;
@@ -43,6 +46,7 @@ mod start;
 mod summary;
 mod terminal;
 mod text;
+mod upload;
 mod view;
 pub(crate) mod visual;
 pub(crate) mod widgets;
@@ -60,6 +64,7 @@ pub(super) fn now_ms() -> u64 {
         })
 }
 pub(crate) use convert::Error as ConvertError;
+pub(crate) use pick::short_text;
 pub(crate) use start::{Error as StartError, PROGRAM_ENV, Program};
 
 use sheprd_chat_protocol::{ByeReason, EndpointId};
@@ -182,6 +187,18 @@ impl Target {
     /// conversation name files here.
     pub(crate) fn is_local(&self) -> bool {
         self.route == Route::Local
+    }
+
+    /// Where a prompt typed here comes from, as the chat's program sees it:
+    /// this app, on its machine or reaching it from another.
+    pub(crate) fn origin(&self) -> sheprd_chat_protocol::Origin {
+        use sheprd_chat_protocol::{Device, Origin, Via};
+        let via = if self.is_local() {
+            Via::Local
+        } else {
+            Via::Remote
+        };
+        Origin::new(Device::Desktop, via)
     }
 }
 

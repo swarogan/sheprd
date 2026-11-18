@@ -190,6 +190,27 @@ impl SheprdWindow {
         params: serde_json::Value,
         opens: bool,
     ) -> crate::Result<String> {
+        if let Some(source) = &mut self.menu.worktree {
+            source.create_branch = (method == sheprd_client::Method::WorktreeCreate)
+                .then(|| {
+                    params["branch"]
+                        .as_str()
+                        .filter(|branch| !branch.is_empty())
+                        .map(str::to_owned)
+                })
+                .flatten();
+            source.reuse_notice = None;
+        }
+        self.request_checkout_direct(boot, method, params, opens)
+    }
+
+    pub(super) fn request_checkout_direct(
+        &mut self,
+        boot: &str,
+        method: sheprd_client::Method,
+        params: serde_json::Value,
+        opens: bool,
+    ) -> crate::Result<String> {
         let connection = &self.endpoints[self.selected_endpoint].connection;
         let lands = !opens && self.menu.landing.is_some();
         let id = if lands {
@@ -262,11 +283,21 @@ impl SheprdWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some((branch, error)) = self
+            .menu
+            .worktree
+            .as_mut()
+            .and_then(|source| source.checking.take())
+        {
+            self.finish_checkout_check(branch, error, result, cx);
+            return;
+        }
         // A refused creation leaves the dialog open, so the row it was for is
         // released and the listing can be used again.
         let release = |this: &mut Self, error: String, cx: &mut Context<Self>| {
             if let Some(source) = &mut this.menu.worktree {
                 source.pending = None;
+                source.reuse_notice = None;
             }
             // Nothing was created, so the next submission arms its own landing.
             if let Some(launch) = this.landing_launch.take() {
@@ -281,6 +312,11 @@ impl SheprdWindow {
         };
         if let Some(error) = response.get("error") {
             let (code, message) = endpoint_error(error);
+            if code == "worktree_create_failed"
+                && self.recover_existing_checkout(format!("{code}: {message}"), cx)
+            {
+                return;
+            }
             return release(self, format!("{code}: {message}"), cx);
         }
         let result = &response["result"];
@@ -334,7 +370,15 @@ impl SheprdWindow {
                     .as_ref()
                     .map(|source| source.repo_key.clone())
             });
+        let notice = self
+            .menu
+            .worktree
+            .as_ref()
+            .and_then(|source| source.reuse_notice.clone());
         self.dismiss_menu(window, cx);
+        if let Some(notice) = notice {
+            self.local_transfer_notice(&fl!("worktree-source-already-exists"), notice, cx);
+        }
         if let Some(group) = group {
             self.collapsed_repos_mut().remove(&group);
         }

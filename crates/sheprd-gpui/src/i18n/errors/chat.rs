@@ -134,6 +134,7 @@ impl Localize for StartError {
                 )
             }
             Self::Disabled => fl!("error-chat-start-disabled"),
+            Self::Line => fl!("error-chat-start-line"),
             Self::NotConnected => fl!("error-chat-start-not-connected"),
             Self::NotLocal => fl!("error-chat-start-not-local"),
             Self::NoWorkspace => fl!("error-chat-start-no-workspace"),
@@ -202,11 +203,14 @@ impl Localize for sheprd_chat_protocol::Rejection {
             Self::NotWorking => fl!("error-chat-rejection-not-working"),
             Self::UnknownPermission => fl!("error-chat-rejection-unknown-permission"),
             Self::UnknownOption => fl!("error-chat-rejection-unknown-option"),
+            Self::InvalidAnswer => fl!("error-chat-rejection-invalid-answer"),
             Self::UnknownMode => fl!("error-chat-rejection-unknown-mode"),
             Self::UnknownSetting => fl!("error-chat-rejection-unknown-setting"),
             Self::UnknownActivity => fl!("error-chat-rejection-unknown-activity"),
             Self::UnknownQueued => fl!("error-chat-rejection-unknown-queued"),
             Self::AgentUnavailable => fl!("error-chat-rejection-agent-unavailable"),
+            Self::AgentFixed => fl!("error-chat-rejection-agent-fixed"),
+            Self::AgentMissing => fl!("error-chat-rejection-agent-missing"),
             Self::TooManyAttachments => fl!(
                 "error-chat-rejection-too-many-attachments",
                 count = sheprd_chat_protocol::MAX_ATTACHMENTS

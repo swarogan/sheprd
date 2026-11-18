@@ -24,6 +24,7 @@ use super::{
 };
 use crate::{SheprdWindow, config::ChatLayoutMode};
 
+mod effects;
 mod input_resize;
 mod progress;
 mod running;
@@ -111,6 +112,7 @@ impl Options {
             "math"
                 | "code"
                 | "diagram"
+                | "effects"
                 | "activity"
                 | "activity-open"
                 | "attachments"
@@ -140,7 +142,7 @@ impl Options {
                 | "all"
         ) {
             bail!(
-                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, running-rail, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, loading, input-resize, tools, turns, progress, progress-before, running, running-open, steps, steps-open, state-completed, state-failed, state-stopped, state-waiting, or all"
+                "HERDR_TEST_RICH_CHAT expects math, code, diagram, effects, activity, activity-open, running-rail, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, loading, input-resize, tools, turns, progress, progress-before, running, running-open, steps, steps-open, state-completed, state-failed, state-stopped, state-waiting, or all"
             );
         }
         let hold = std::env::var("HERDR_TEST_RICH_CHAT_HOLD_MS")
@@ -293,21 +295,11 @@ async fn run(
     if options.case == "selection" {
         handle.update(cx, |view, _, cx| selection::Probe::ready(view, cx))??;
     }
-    if let Some(path) = options.capture {
-        #[cfg(feature = "mockup")]
-        {
-            let pixels = handle.update(cx, |_, window, _| window.render_to_image())??;
-            cx.background_spawn(async move { pixels.save(&path) })
-                .await
-                .context("saving native fixture screenshot")?;
-        }
-        #[cfg(not(feature = "mockup"))]
-        {
-            let _ = path;
-            bail!(
-                "native screenshot capture requires the mockup feature; capture the test window externally"
-            );
-        }
+    if let Some(path) = &options.capture {
+        save(handle, path, cx).await?;
+    }
+    if options.case == "effects" {
+        effects::play(handle, options.capture.as_deref(), cx).await?;
     }
     handle.update(cx, |view, _, _| {
         if let Some(pane) = view.chats.pane(PANE) {
@@ -348,6 +340,30 @@ async fn run(
         })?;
     }
     Ok(())
+}
+
+/// Saves a picture of the window to `path`.
+async fn save(
+    handle: WindowHandle<SheprdWindow>,
+    path: &std::path::Path,
+    cx: &mut AsyncApp,
+) -> Result<()> {
+    #[cfg(feature = "mockup")]
+    {
+        let pixels = handle.update(cx, |_, window, _| window.render_to_image())??;
+        let path = path.to_owned();
+        cx.background_spawn(async move { pixels.save(&path) })
+            .await
+            .context("saving native fixture screenshot")?;
+        Ok(())
+    }
+    #[cfg(not(feature = "mockup"))]
+    {
+        let _ = (handle, path, cx);
+        bail!(
+            "native screenshot capture requires the mockup feature; capture the test window externally"
+        );
+    }
 }
 
 fn install(
@@ -437,6 +453,9 @@ fn install(
     }
     if options.case == "attachments" {
         transcript.entries = attachment_entries()?;
+    }
+    if options.case == "effects" {
+        transcript.entries = effects::entries();
     }
     if options.case == "questions" {
         transcript.entries = question_entries();
@@ -705,7 +724,7 @@ fn visuals_ready(view: &SheprdWindow) -> Result<bool> {
                 for part in parts {
                     ids.extend(match part {
                         Part::Diagram(id, _) => vec![*id],
-                        Part::Rich(blocks) => blocks
+                        Part::Rich(blocks) | Part::Bubble(_, blocks) => blocks
                             .iter()
                             .flat_map(super::rich::Block::visuals)
                             .collect(),

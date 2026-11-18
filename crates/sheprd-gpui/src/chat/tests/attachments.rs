@@ -73,6 +73,7 @@ fn files_show_as_chips_and_go_with_the_prompt(cx: &mut TestAppContext) {
     assert_eq!(
         next_command(&mut stream),
         Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: String::new(),
             attachments: vec![Attachment {
                 path: "/work/shot.png".into()
@@ -200,6 +201,7 @@ fn copied_files_paste_as_attachments_not_their_names(cx: &mut TestAppContext) {
     assert_eq!(
         next_command(&mut stream),
         Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: String::new(),
             attachments: vec![Attachment {
                 path: "/work/shot.png".into()

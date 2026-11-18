@@ -7,6 +7,7 @@ error-remote-work-script = { $step ->
     [create-worktree] creating the worktree failed: { $error }
     [list] listing the repository's worktrees failed: { $error }
     [prompt] sending the agent its prompt failed: { $error }
+    [pull] pulling the existing worktree failed: { $error }
     [remove] removing the worktree failed: { $error }
    *[start-agent] starting the agent failed: { $error }
 }
@@ -15,6 +16,7 @@ error-remote-work-output = { $step ->
     [create-worktree] creating the worktree failed: unexpected output
     [list] listing the repository's worktrees failed: unexpected output
     [prompt] sending the agent its prompt failed: unexpected output
+    [pull] pulling the existing worktree failed: unexpected output
     [remove] removing the worktree failed: unexpected output
    *[start-agent] starting the agent failed: unexpected output
 }

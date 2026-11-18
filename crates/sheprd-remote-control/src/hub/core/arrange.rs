@@ -123,7 +123,11 @@ impl Source {
                 Op::RenamePane(name) => own.rename_pane(&at, name.as_deref())?,
                 // Ending its terminals is all closing it takes.
                 Op::Close => return Ok(None),
-                Op::SplitDown | Op::SplitRight | Op::RenameWorkspace { .. } => {
+                Op::SplitDown
+                | Op::SplitRight
+                | Op::RenameWorkspace { .. }
+                | Op::CloseWorkspace { .. }
+                | Op::RemoveWorktree { .. } => {
                     return Err(super::Error::Unsupported.into());
                 }
             }
@@ -152,11 +156,19 @@ impl Source {
         // Take ownership before starting a split's shell. A running desktop
         // must receive the intent without a speculative terminal being made.
         let _owner = file_owner(path)?;
-        if let Op::RenameWorkspace { workspace, name } = op {
-            edit_owned_file(path, |bytes| {
-                edit::rename_workspace(bytes, scope, workspace, name.trim())
-            })?;
-            return Ok(None);
+        match op {
+            Op::RenameWorkspace { workspace, name } => {
+                edit_owned_file(path, |bytes| {
+                    edit::rename_workspace(bytes, scope, workspace, name.trim())
+                })?;
+                return Ok(None);
+            }
+            // Its terminals end and its checkout goes with Sheprd's own
+            // checks, which a closed Sheprd cannot make.
+            Op::CloseWorkspace { .. } | Op::RemoveWorktree { .. } => {
+                return Err(Error::SheprdClosed.into());
+            }
+            _ => {}
         }
         let at = TerminalId::new(address).map_err(Error::from)?;
         // The phone names a recovered chat's replacement, which a file saved
@@ -203,7 +215,11 @@ impl Source {
                 name: name.as_deref(),
             },
             Op::Close => Change::Close,
-            Op::SplitDown | Op::SplitRight | Op::RenameWorkspace { .. } => {
+            Op::SplitDown
+            | Op::SplitRight
+            | Op::RenameWorkspace { .. }
+            | Op::CloseWorkspace { .. }
+            | Op::RemoveWorktree { .. } => {
                 return Err(super::Error::Unsupported.into());
             }
         };

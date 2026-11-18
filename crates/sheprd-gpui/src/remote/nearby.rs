@@ -17,6 +17,7 @@
 //! [`Station`] owns the one helper for both.
 
 // keep-sorted start
+pub(crate) mod desktop;
 mod error;
 pub(crate) mod presence;
 mod relay;
@@ -25,7 +26,7 @@ mod station;
 
 pub use error::Error;
 pub(crate) use relay::*;
-pub(crate) use station::{Advert, Station};
+pub(crate) use station::{Advert, Scanner, Station};
 
 /// The computer's Bluetooth radio, as the helper last reported it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

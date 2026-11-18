@@ -37,6 +37,13 @@ fn platform_defaults_are_complete_unique_and_leave_edit_keys_available() {
             );
             if crate::controls::CTRL_SHORTCUTS {
                 assert!(!key.modifiers.platform, "{shortcut}");
+            } else if info.command.is_recent_pane() {
+                // Cmd-Tab is the system app switcher, so the Mac cycles
+                // recent panes with Ctrl-Tab, as it cycles tabs elsewhere.
+                assert!(
+                    key.modifiers.control && !key.modifiers.platform,
+                    "{shortcut}"
+                );
             } else {
                 assert!(key.modifiers.platform, "{shortcut}");
             }

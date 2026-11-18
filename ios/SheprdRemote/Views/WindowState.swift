@@ -1,4 +1,5 @@
 import SheprdRemoteCore
+import SheprdNearby
 import SwiftUI
 
 /// What belongs to one window rather than the whole app: its pair sheet,

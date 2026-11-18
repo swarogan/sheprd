@@ -15,6 +15,10 @@ use std::{
 
 /// How long a request waits for Herdr's answer.
 const TIMEOUT: Duration = Duration::from_secs(15);
+/// A workspace close can end several terminals.
+const WORKSPACE_CLOSE_TIMEOUT: Duration = Duration::from_secs(30);
+/// A large linked checkout can take a while for Herdr to remove.
+const WORKTREE_REMOVE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The longest answer read; a visible screen is far smaller.
 const MAX_ANSWER: u64 = 4 * 1024 * 1024;
 
@@ -35,13 +39,23 @@ pub(crate) enum ApiMethod {
     TabClose,
     TabCreate,
     TabRename,
+    WorkspaceClose,
     WorkspaceCreate,
     WorkspaceRename,
     WorktreeCreate,
+    WorktreeRemove,
     // keep-sorted end
 }
 
 impl ApiMethod {
+    fn timeout(self) -> Duration {
+        match self {
+            Self::WorkspaceClose => WORKSPACE_CLOSE_TIMEOUT,
+            Self::WorktreeRemove => WORKTREE_REMOVE_TIMEOUT,
+            _ => TIMEOUT,
+        }
+    }
+
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::PaneClose => "pane.close",
@@ -57,9 +71,11 @@ impl ApiMethod {
             Self::TabClose => "tab.close",
             Self::TabCreate => "tab.create",
             Self::TabRename => "tab.rename",
+            Self::WorkspaceClose => "workspace.close",
             Self::WorkspaceCreate => "workspace.create",
             Self::WorkspaceRename => "workspace.rename",
             Self::WorktreeCreate => "worktree.create",
+            Self::WorktreeRemove => "worktree.remove",
         }
     }
 }
@@ -117,7 +133,7 @@ fn call(target: &ConnectTarget, method: ApiMethod, params: &Value) -> Result<Val
 
 fn exchange(stream: &mut Stream, method: ApiMethod, params: &Value) -> Result<Value> {
     stream
-        .set_read_timeout(Some(TIMEOUT))
+        .set_read_timeout(Some(method.timeout()))
         .map_err(|_| Error::NotConnected)?;
     let mut line = json!({"id": "remote", "method": method.name(), "params": params}).to_string();
     line.push('\n');
@@ -155,3 +171,6 @@ pub(crate) fn result(answer: Value) -> Result<Value> {
         None => Ok(answer.get("result").cloned().unwrap_or(Value::Null)),
     }
 }
+
+#[cfg(test)]
+mod tests;

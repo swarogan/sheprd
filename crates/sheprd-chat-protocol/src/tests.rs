@@ -10,8 +10,11 @@ mod change;
 mod display;
 mod endpoint;
 mod frame;
+mod harnesses;
 mod media;
 mod notices;
+mod origin;
+mod questions;
 mod revisions;
 mod wire;
 
@@ -55,6 +58,7 @@ fn permission(id: u64) -> Permission {
             kind: PermissionKind::AllowOnce,
             name: "Allow".to_owned(),
         }],
+        question: None,
         title: "Run cargo test?".to_owned(),
     }
 }

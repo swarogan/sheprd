@@ -75,22 +75,43 @@ fn adopted() -> std::sync::MutexGuard<'static, HashMap<PathBuf, Adopted>> {
     ADOPTED.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+impl Adopted {
+    fn new(scope: Scope, receipt: Receipt) -> Self {
+        let terminals = receipt
+            .outcome()
+            .core_tabs
+            .iter()
+            .flat_map(Panes::terminals)
+            .cloned()
+            .collect();
+        Self {
+            scope,
+            receipt,
+            terminals,
+            seen: HashSet::new(),
+            closed: Vec::new(),
+            room: Room::default(),
+        }
+    }
+}
+
 fn adopt(path: PathBuf, scope: Scope, receipt: Receipt) {
-    let terminals = receipt
-        .outcome()
-        .core_tabs
-        .iter()
-        .flat_map(Panes::terminals)
-        .cloned()
-        .collect();
-    adopted().entry(path).or_insert(Adopted {
-        scope,
-        receipt,
-        terminals,
-        seen: HashSet::new(),
-        closed: Vec::new(),
-        room: Room::default(),
-    });
+    let entry = Adopted::new(scope, receipt);
+    adopted().entry(path).or_insert(entry);
+}
+
+fn admit(
+    adopted: &mut HashMap<PathBuf, Adopted>,
+    path: PathBuf,
+    receipt: Receipt,
+) -> Option<(Scope, Outcome)> {
+    if adopted.contains_key(&path) {
+        return None;
+    }
+    let scope = Scope::endpoint(receipt.scope());
+    let outcome = receipt.outcome();
+    adopted.insert(path, Adopted::new(scope.clone(), receipt));
+    Some((scope, outcome))
 }
 
 fn directory() -> Option<PathBuf> {
@@ -174,13 +195,10 @@ impl SheprdWindow {
                 .unwrap_or_else(PoisonError::into_inner),
         );
         for (path, receipt) in pending {
-            if adopted().contains_key(&path) {
-                continue;
+            let arrival = admit(&mut adopted(), path, receipt);
+            if let Some((scope, outcome)) = arrival {
+                self.settle_teleport(&outcome, &scope, window, cx);
             }
-            let scope = Scope::endpoint(receipt.scope());
-            let outcome = receipt.outcome();
-            adopt(path, scope.clone(), receipt);
-            self.settle_teleport(&outcome, &scope, window, cx);
         }
         // Settled outside the lock: settling reads the store, never adoptions.
         for (scope, outcome) in track(cx) {
@@ -200,6 +218,10 @@ fn track(cx: &App) -> Vec<(Scope, Outcome)> {
     let Some(store) = cx.try_global::<Store>() else {
         return Vec::new();
     };
+    track_entries(&mut adopted, store)
+}
+
+fn track_entries(adopted: &mut HashMap<PathBuf, Adopted>, store: &Store) -> Vec<(Scope, Outcome)> {
     let room = Room::of(store);
     let mut retries = Vec::new();
     for entry in adopted.values_mut() {

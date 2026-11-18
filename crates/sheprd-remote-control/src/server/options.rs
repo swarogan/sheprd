@@ -1,6 +1,6 @@
 //! Command-line options, parsed from OS strings before any runtime starts.
 
-use crate::{app::config::ActivityDetail, push::Privacy};
+use crate::{app::config::ActivityDetail, push::Privacy, relay_label::RelayLabel};
 use std::{
     ffi::OsString,
     net::{IpAddr, Ipv6Addr},
@@ -37,6 +37,9 @@ pub struct Options {
     pub device_idle: Option<Duration>,
     /// Explicit permission to read this machine's GitHub CLI credential.
     pub github_cli: bool,
+    /// GitHub Enterprise Server hosts besides those `gh` is signed in to,
+    /// whose remotes a phone is told are on GitHub.
+    pub github_hosts: Vec<String>,
     /// The Herdr daemon's client socket, as Sheprd resolved it; `None`
     /// discovers it from this process's environment. A service manager's
     /// environment may lack the shell's `XDG_CONFIG_HOME`.
@@ -46,11 +49,27 @@ pub struct Options {
     pub privacy: Privacy,
     /// The relays to listen on, so paired phones reach this computer from
     /// any network; none when empty.
-    pub relays: Vec<sheprd_relay::Endpoint>,
+    pub relays: Vec<Relay>,
     pub state_dir: PathBuf,
     /// The saved WSL distributions, as Sheprd resolved them; `None` resolves
     /// them from this process's environment.
     pub wsl_catalog: Option<PathBuf>,
+}
+
+/// A relay to listen on, and what the user calls it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Relay {
+    pub endpoint: sheprd_relay::Endpoint,
+    pub label: RelayLabel,
+}
+
+impl From<sheprd_relay::Endpoint> for Relay {
+    fn from(endpoint: sheprd_relay::Endpoint) -> Self {
+        Self {
+            endpoint,
+            label: RelayLabel::default(),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, Eq, PartialEq)]
@@ -62,8 +81,16 @@ pub enum ParseError {
     CorePair,
     #[error("{0} needs a value")]
     Missing(&'static str),
+    #[error("{option} names no relay: put it after a --relay")]
+    NoRelay { option: &'static str },
     #[error("--state-dir is required")]
     NoStateDir,
+    #[error("--relay {relay} has a label it cannot use")]
+    RelayLabel {
+        relay: String,
+        #[source]
+        source: crate::relay_label::Error,
+    },
     #[error("unknown option {0}")]
     Unknown(String),
     #[error("{option} has an invalid value")]
@@ -80,10 +107,21 @@ pub enum Invocation {
     Enroll {
         state_dir: Option<PathBuf>,
     },
+    /// Keeps a phone's relay keys another computer's Sheprd carried here,
+    /// read as JSON from standard input (`app::relay_enroll`).
+    RelayEnroll {
+        state_dir: Option<PathBuf>,
+    },
     /// Revokes a device that other computer enrolled.
     Revoke {
         state_dir: Option<PathBuf>,
         device: String,
+    },
+    /// Lists the relays this computer listens on, taking any another
+    /// computer shares on standard input (`control::relays::Offer`).
+    Relays {
+        state_dir: Option<PathBuf>,
+        offer: bool,
     },
     /// Reads this computer's text shortcuts, offering any given on standard
     /// input.
@@ -96,6 +134,18 @@ pub enum Invocation {
         state_dir: Option<PathBuf>,
         offer: bool,
     },
+    /// Adds a nearby Sheprd as `name`, with Sheprd carrying Bluetooth on
+    /// stdio (`crate::desktop`).
+    DesktopPair {
+        state_dir: Option<PathBuf>,
+        name: String,
+    },
+    /// Carries `ssh` to a machine added over Bluetooth, `r-ID.sheprd.invalid`,
+    /// through its relays: its `ProxyCommand`.
+    RelayConnect {
+        state_dir: Option<PathBuf>,
+        host: String,
+    },
     Help,
     Version,
 }
@@ -104,8 +154,12 @@ pub const USAGE: &str = "\
 Usage: sheprd-remote-control serve --state-dir DIR [options]
        sheprd-remote-control enroll [--state-dir DIR] < REQUEST.json
        sheprd-remote-control revoke --device ID [--state-dir DIR]
+       sheprd-remote-control relay-enroll [--state-dir DIR] < REQUEST.json
        sheprd-remote-control tags [--offer] [--state-dir DIR] [< TAGS.json]
        sheprd-remote-control shortcuts [--offer] [--state-dir DIR] [< SHORTCUTS.json]
+       sheprd-remote-control relays [--offer] [--state-dir DIR] [< RELAYS.json]
+       sheprd-remote-control desktop-pair --name NAME [--state-dir DIR]
+       sheprd-remote-control relay-connect [--state-dir DIR] HOST
 
 Serves this computer's Herdr chats to paired phones over HTTPS. Sheprd
 starts it when Remote control is on.
@@ -123,6 +177,8 @@ Options:
   --chat-dir DIR           Where chat sockets live (default: discovered)
   --github-cli             Read PRs/checks/logs using this host's gh sign-in;
                            permits paired phones to read accessible repositories
+  --github-host HOST       Count HOST as a GitHub Enterprise Server host for
+                           phones, besides those gh is signed in to; repeatable
   --wsl-catalog FILE       The saved WSL distributions (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default excerpt)
@@ -133,6 +189,10 @@ Options:
                            (default 30)
   --relay URL              Listen on this relay too, so paired phones reach
                            this computer from any network; repeatable
+  --relay-name NAME        What the --relay before it is called, such as fra3
+  --relay-description TEXT A line about the --relay before it, such as
+                           not for public use
+  --relay-tag TAG          A tag for the --relay before it; repeatable
   --no-bonjour             Do not advertise over Bonjour; phones then pair
                            by QR code only (on macOS, Sheprd advertises
                            while its pairing dialog is open instead)
@@ -142,6 +202,16 @@ Options:
 enroll and revoke are what Sheprd on another computer runs here over SSH,
 so a phone paired there also reaches this computer. enroll starts the
 daemon when it does not run and prints this computer's answer as JSON.
+relay-enroll keeps a phone's relay keys, signed with its own key here, so
+the phone reaches this computer through its relays, and prints the outcome
+as JSON; it needs the daemon running.
+relays --offer takes {\"source\", \"relays\"}, the relays Sheprd on
+another computer listens on, replacing what that computer shared before:
+the daemon listens on them too, beside its own [remote] relays.
+desktop-pair adds a nearby Sheprd that is on another network: Sheprd
+runs it and carries its Bluetooth frames as JSON lines on stdio. The
+other computer is then reached through its relays, and relay-connect is
+the ProxyCommand ssh runs for it.
 Their state directory defaults to the one Sheprd on this computer uses.
 ";
 
@@ -150,6 +220,19 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     match args.next().as_deref().and_then(|arg| arg.to_str()) {
         Some("serve") => {}
         Some(verb @ ("enroll" | "revoke")) => return parse_host(verb == "enroll", args),
+        // Takes `enroll`'s options, `--state-dir` alone.
+        Some("relay-enroll") => {
+            return parse_host(true, args).map(|invocation| match invocation {
+                Invocation::Enroll { state_dir } => Invocation::RelayEnroll { state_dir },
+                other => other,
+            });
+        }
+        Some("relays") => {
+            return parse_edited(args, |state_dir, offer| Invocation::Relays {
+                state_dir,
+                offer,
+            });
+        }
         Some("shortcuts") => {
             return parse_edited(args, |state_dir, offer| Invocation::Shortcuts {
                 state_dir,
@@ -161,6 +244,9 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                 state_dir,
                 offer,
             });
+        }
+        Some(verb @ ("desktop-pair" | "relay-connect")) => {
+            return parse_desktop(verb == "desktop-pair", args);
         }
         Some("-h" | "--help") | None => return Ok(Invocation::Help),
         Some("-V" | "--version") => return Ok(Invocation::Version),
@@ -177,6 +263,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let (mut core_socket, mut core_session) = (None, None);
     let mut bonjour = true;
     let mut github_cli = false;
+    let mut github_hosts = Vec::new();
     let mut relays = Vec::new();
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
@@ -248,14 +335,45 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                 let endpoint = text(value("--relay")?, "--relay")?;
                 relays.push(
                     sheprd_relay::Endpoint::parse(&endpoint)
-                        .map_err(|_| ParseError::Value { option: "--relay" })?,
+                        .map_err(|_| ParseError::Value { option: "--relay" })?
+                        .into(),
                 );
+            }
+            "--relay-name" => {
+                let name = text(value("--relay-name")?, "--relay-name")?;
+                last_label(&mut relays, "--relay-name")?.name = Some(name);
+            }
+            "--relay-description" => {
+                let description = text(value("--relay-description")?, "--relay-description")?;
+                last_label(&mut relays, "--relay-description")?.description = Some(description);
+            }
+            "--relay-tag" => {
+                let tag = text(value("--relay-tag")?, "--relay-tag")?;
+                last_label(&mut relays, "--relay-tag")?.tags.push(tag);
             }
             "--no-bonjour" => bonjour = false,
             "--github-cli" => github_cli = true,
+            "--github-host" => {
+                let host = text(value("--github-host")?, "--github-host")?;
+                if !crate::control::github::valid_host(&host) {
+                    return Err(ParseError::Value {
+                        option: "--github-host",
+                    });
+                }
+                github_hosts.push(host);
+            }
             "-h" | "--help" => return Ok(Invocation::Help),
             _ => return Err(ParseError::Unknown(name)),
         }
+    }
+    for relay in &relays {
+        relay
+            .label
+            .check()
+            .map_err(|source| ParseError::RelayLabel {
+                relay: relay.endpoint.to_string(),
+                source,
+            })?;
     }
     let certificate = match (cert, key) {
         (None, None) => Certificate::Own,
@@ -280,6 +398,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         core_endpoint,
         device_idle: (idle_days != 0).then(|| Duration::from_secs(idle_days * 24 * 60 * 60)),
         github_cli,
+        github_hosts,
         herdr_socket,
         live_activities,
         port,
@@ -288,6 +407,17 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         state_dir: state_dir.ok_or(ParseError::NoStateDir)?,
         wsl_catalog,
     })))
+}
+
+/// The label of the `--relay` that `option` follows.
+fn last_label<'a>(
+    relays: &'a mut [Relay],
+    option: &'static str,
+) -> Result<&'a mut RelayLabel, ParseError> {
+    relays
+        .last_mut()
+        .map(|relay| &mut relay.label)
+        .ok_or(ParseError::NoRelay { option })
 }
 
 /// `enroll [--state-dir DIR]` and `revoke --device ID [--state-dir DIR]`.
@@ -327,7 +457,49 @@ fn parse_host(
     })
 }
 
-/// `tags` or `shortcuts`, then `[--offer] [--state-dir DIR]`, as `made`.
+/// `desktop-pair --name NAME [--state-dir DIR]` and
+/// `relay-connect [--state-dir DIR] HOST`.
+fn parse_desktop(
+    pair: bool,
+    mut args: impl Iterator<Item = OsString>,
+) -> Result<Invocation, ParseError> {
+    let (mut state_dir, mut name, mut host) = (None, None, None);
+    while let Some(arg) = args.next() {
+        let text = arg.to_str().unwrap_or_default().to_owned();
+        match text.as_str() {
+            "--state-dir" => {
+                state_dir = Some(PathBuf::from(
+                    args.next().ok_or(ParseError::Missing("--state-dir"))?,
+                ));
+            }
+            "--name" if pair => {
+                name = Some(
+                    args.next()
+                        .ok_or(ParseError::Missing("--name"))?
+                        .into_string()
+                        .map_err(|_| ParseError::Value { option: "--name" })?,
+                );
+            }
+            "-h" | "--help" => return Ok(Invocation::Help),
+            _ if !pair && host.is_none() && !text.starts_with('-') && !text.is_empty() => {
+                host = Some(text);
+            }
+            _ => return Err(ParseError::Unknown(text)),
+        }
+    }
+    if pair {
+        return Ok(Invocation::DesktopPair {
+            state_dir,
+            name: name.ok_or(ParseError::Missing("--name"))?,
+        });
+    }
+    Ok(Invocation::RelayConnect {
+        state_dir,
+        host: host.ok_or(ParseError::Missing("HOST"))?,
+    })
+}
+
+/// `tags`, `shortcuts`, or `relays`, then `[--offer] [--state-dir DIR]`, as `made`.
 fn parse_edited(
     mut args: impl Iterator<Item = OsString>,
     made: fn(Option<PathBuf>, bool) -> Invocation,

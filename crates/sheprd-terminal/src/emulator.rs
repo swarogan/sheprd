@@ -4,6 +4,7 @@
 //! apply. herdr-core answers terminal queries itself.
 
 mod history;
+mod tear;
 
 use crate::{
     MAX_SCROLLBACK_CELLS, MAX_SCROLLBACK_LINES, Size, cells,
@@ -113,6 +114,7 @@ pub struct Emulator {
     scanner: Scanner,
     scrollback_lines: usize,
     size: Size,
+    tear: tear::Tear,
     term: Term<Listener>,
     title: Option<String>,
     title_changed: bool,
@@ -145,6 +147,7 @@ impl Emulator {
             scanner: Scanner::default(),
             scrollback_lines,
             size,
+            tear: tear::Tear::default(),
             term,
             title: None,
             title_changed: false,
@@ -158,22 +161,45 @@ impl Emulator {
             return;
         }
         let Self {
+            damage,
             graphics,
             processor,
             scanner,
+            tear,
             term,
             ..
         } = self;
+        // A tear takes damage partway through, which must see these bytes.
+        damage.fed = true;
         scanner.feed(bytes, |run| match run {
-            Run::Bytes(bytes) => processor.advance(term, bytes),
+            Run::Bytes(bytes) => {
+                let pending = processor.sync_timeout().pending_timeout();
+                let held = processor.sync_bytes_count();
+                processor.advance(term, bytes);
+                // Bytes a pending update holds all join its buffer; fewer
+                // there means it ended, even if these bytes began the next.
+                if pending
+                    && (!processor.sync_timeout().pending_timeout()
+                        || processor.sync_bytes_count() != held + bytes.len())
+                {
+                    tear.end(damage);
+                }
+            }
             Run::Graphics(command) => {
                 // An image goes where the cursor is after what came before
-                // it, so output a synchronized update holds lands first.
-                if processor.sync_timeout().pending_timeout() {
+                // it, so output a synchronized update holds lands first,
+                // and the update goes on: a chunked image replacing another
+                // stays one frame.
+                let synchronized = processor.sync_timeout().pending_timeout();
+                if synchronized {
+                    tear.open(term, damage, graphics);
                     processor.stop_sync(term);
                 }
                 if let Some(placed) = graphics.command(command) {
                     place(term, processor, graphics, placed);
+                }
+                if synchronized {
+                    processor.advance(term, b"\x1b[?2026h");
                 }
             }
         });
@@ -187,6 +213,13 @@ impl Emulator {
         self.processor.sync_timeout().pending_timeout()
     }
 
+    /// How many synchronized updates have ended. A caller timing the
+    /// pending one starts its clock again when this changes: one feed can
+    /// end an update and begin the next.
+    pub fn syncs_ended(&self) -> u64 {
+        self.tear.ended
+    }
+
     /// Applies a synchronized update the program has not ended, for a caller
     /// whose own timer ran out (terminals use about 150 ms).
     pub fn end_sync(&mut self) {
@@ -194,6 +227,7 @@ impl Emulator {
             return;
         }
         self.processor.stop_sync(&mut self.term);
+        self.tear.end(&mut self.damage);
         self.damage.fed = true;
         self.revision = self.revision.wrapping_add(1);
         self.drain_events();
@@ -228,6 +262,10 @@ impl Emulator {
 
     /// What changed since the previous take; the first take is always full.
     pub fn take_damage(&mut self) -> Damage {
+        // A torn update shows the screen from before it until it ends.
+        if self.tear.open {
+            return self.tear.take_damage();
+        }
         let alt_screen = self.term.mode().contains(TermMode::ALT_SCREEN);
         self.damage.take(&mut self.term, alt_screen)
     }
@@ -287,11 +325,18 @@ impl Emulator {
     /// graphics placements as Herdr's graphics scene, with the bytes of each
     /// image the last scene did not show.
     pub fn take_graphics(&mut self) -> Option<SurfaceGraphicsScene> {
-        if !self.graphics.active() {
-            return None;
+        if self.tear.open {
+            return self.tear.take_graphics();
         }
-        let found = self.markers();
-        self.graphics.scene(&found)
+        let scene = if self.graphics.active() {
+            let found = markers(&self.graphics, &mut self.term);
+            self.graphics.scene(&found)
+        } else {
+            None
+        };
+        // A scene kept at a tear and not taken yet carries image bytes
+        // this one leaves out.
+        tear::merge(self.tear.take_graphics(), scene)
     }
 
     /// The zero-width characters of the cell at `column`, `row` on screen.
@@ -301,38 +346,6 @@ impl Emulator {
             .zerowidth()
             .map(<[char]>::to_vec)
             .unwrap_or_default()
-    }
-
-    /// The placement markers on screen and in the rows above it that a
-    /// placement could still reach down from. Markers of placements that
-    /// were replaced or deleted are swept out of their cells on the way, so
-    /// what a program redraws in place never piles up.
-    fn markers(&mut self) -> Vec<Found> {
-        let graphics = &self.graphics;
-        let grid = self.term.grid_mut();
-        let offset = i64::try_from(grid.display_offset()).unwrap_or(0);
-        let history = i64::try_from(grid.history_size()).unwrap_or(0);
-        let above = i64::try_from(self.graphics.tallest()).unwrap_or(0);
-        let rows = i64::try_from(grid.screen_lines()).unwrap_or(0);
-        let first = (-above).max(offset - history);
-        let mut found = Vec::new();
-        for row in first..rows {
-            let Ok(line) = i32::try_from(row - offset) else {
-                continue;
-            };
-            let columns = grid.columns();
-            let cells = &mut grid[Line(line)];
-            for column in 0..columns {
-                for marker in sweep(&mut cells[Column(column)], |marker| graphics.placed(marker)) {
-                    found.push(Found {
-                        marker,
-                        row,
-                        column: u16::try_from(column).unwrap_or(u16::MAX),
-                    });
-                }
-            }
-        }
-        found
     }
 
     /// How many rows each line takes, from the oldest in history down to
@@ -389,6 +402,37 @@ impl Emulator {
             self.clipboard = inbox.clipboard;
         }
     }
+}
+
+/// The placement markers on screen and in the rows above it that a
+/// placement could still reach down from. Markers of placements that
+/// were replaced or deleted are swept out of their cells on the way, so
+/// what a program redraws in place never piles up.
+fn markers(graphics: &Graphics, term: &mut Term<Listener>) -> Vec<Found> {
+    let grid = term.grid_mut();
+    let offset = i64::try_from(grid.display_offset()).unwrap_or(0);
+    let history = i64::try_from(grid.history_size()).unwrap_or(0);
+    let above = i64::try_from(graphics.tallest()).unwrap_or(0);
+    let rows = i64::try_from(grid.screen_lines()).unwrap_or(0);
+    let first = (-above).max(offset - history);
+    let mut found = Vec::new();
+    for row in first..rows {
+        let Ok(line) = i32::try_from(row - offset) else {
+            continue;
+        };
+        let columns = grid.columns();
+        let cells = &mut grid[Line(line)];
+        for column in 0..columns {
+            for marker in sweep(&mut cells[Column(column)], |marker| graphics.placed(marker)) {
+                found.push(Found {
+                    marker,
+                    row,
+                    column: u16::try_from(column).unwrap_or(u16::MAX),
+                });
+            }
+        }
+    }
+    found
 }
 
 /// Marks the cursor's cell with a placement and, unless the command kept

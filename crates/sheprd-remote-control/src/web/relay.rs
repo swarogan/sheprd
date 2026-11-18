@@ -15,7 +15,7 @@ pub(super) async fn info(
     _device: Device,
 ) -> Result<Json<crate::relay::Info>, ApiError> {
     let relay = state.relay.as_ref().ok_or(ApiError::NotFound)?;
-    Ok(Json(relay.info()))
+    relay.info().map(Json).ok_or(ApiError::NotFound)
 }
 
 /// A phone's relay keys, base64url.
@@ -48,7 +48,7 @@ pub(super) async fn enroll(
         state_for_write
             .auth()
             .devices_mut()
-            .set_relay(&device, keys)
+            .set_relay(&device, keys, crate::web::render::now_ms())
     })
     .await
     .map_err(|_| ApiError::NotFound)??;

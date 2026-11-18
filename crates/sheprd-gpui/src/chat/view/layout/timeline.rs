@@ -95,20 +95,15 @@ impl ChatLayout for Timeline {
             .children(parts.chips)
             .child(parts.draft.px(px(14.)).pt(px(12.)).pb(px(8.)))
             .child(
-                div()
-                    .debug_selector(|| "chat-settings".into())
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(8.))
-                    .px(px(10.))
-                    .pb(px(10.))
-                    .child(parts.attach)
-                    .child(parts.shortcuts)
-                    .children(parts.settings)
-                    .child(div().flex_1())
-                    .children(parts.usage)
-                    .child(parts.send),
+                super::composer_foot(
+                    parts.attach,
+                    parts.shortcuts,
+                    parts.settings,
+                    parts.usage,
+                    parts.send,
+                )
+                .px(px(10.))
+                .pb(px(10.)),
             )
     }
 }

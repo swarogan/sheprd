@@ -57,6 +57,9 @@ pub(super) fn open(
     cx: &mut gpui::TestAppContext,
     run: Runner,
 ) -> (Entity<SheprdWindow>, &mut VisualTestContext) {
+    // `settle` steps the clock through every frame of the fixture's sidebar
+    // spinners, each a whole-window draw; nothing here is about motion.
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.simulate_resize(size(px(800.), px(700.)));
     cx.update(|window, cx| {

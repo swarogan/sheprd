@@ -1,12 +1,14 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod chat;
 mod kept_failure;
 
 fn picker(chosen: Landing) -> Picker {
     Picker::new(
         crate::teleport::host_for(&sheprd_client::ConnectTarget::Local).unwrap(),
         chosen,
+        false,
     )
 }
 

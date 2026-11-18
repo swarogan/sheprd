@@ -37,7 +37,9 @@ impl Error {
             }
             Self::Layout(layout::Failure::Busy) => StatusCode::TOO_MANY_REQUESTS,
             Self::Layout(layout::Failure::Gone) => StatusCode::NOT_FOUND,
-            Self::Layout(layout::Failure::Watching) => StatusCode::CONFLICT,
+            Self::Layout(
+                layout::Failure::Dirty | layout::Failure::NotWorktree | layout::Failure::Watching,
+            ) => StatusCode::CONFLICT,
             Self::Layout(layout::Failure::Refused) => StatusCode::BAD_GATEWAY,
             Self::NoDesktop => StatusCode::SERVICE_UNAVAILABLE,
             Self::TimedOut => StatusCode::GATEWAY_TIMEOUT,

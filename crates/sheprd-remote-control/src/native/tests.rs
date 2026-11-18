@@ -4,6 +4,7 @@ use sheprd_chat_protocol::{EndpointId, PermissionId};
 use sheprd_client::protocol::AgentStatus;
 
 mod agent_name;
+mod chat_title;
 mod create;
 mod create_start;
 mod fixtures;
@@ -14,6 +15,7 @@ mod installed_agents_path;
 #[cfg(unix)]
 mod live_chat;
 mod messages;
+mod pane_job;
 mod pictures;
 mod projection;
 mod reducer;
@@ -42,6 +44,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
                 endpoint,
                 agent: Some("claude".into()),
                 title: "Equalize splits".into(),
+                named: true,
                 status: AgentStatus::Working,
             }],
             terminals: vec![crate::hub::Terminal {
@@ -53,6 +56,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
                     label: None,
                     cwd: Some("/work".into()),
                     focused: true,
+                    job: None,
                 }],
                 zoomed: false,
                 agent: Some(crate::hub::TerminalAgent {
@@ -92,6 +96,7 @@ pub(super) fn permission(id: u64) -> sheprd_chat_protocol::Permission {
                 name: "Deny".into(),
             },
         ],
+        question: None,
         title: "Run `git push origin fix/mise`?".into(),
     }
 }

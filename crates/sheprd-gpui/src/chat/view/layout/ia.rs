@@ -147,19 +147,12 @@ impl ChatLayout for IA {
             .border_color(rgb(mix(theme.background, theme.foreground, 14)))
             .children(parts.chips.map(|chips| chips.px_0().pt_0()))
             .child(parts.draft)
-            .child(
-                div()
-                    .debug_selector(|| "chat-settings".into())
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(parts.attach)
-                    .child(parts.shortcuts)
-                    .children(parts.settings)
-                    .child(div().flex_1())
-                    .children(parts.usage)
-                    .child(parts.send),
-            )
+            .child(super::composer_foot(
+                parts.attach,
+                parts.shortcuts,
+                parts.settings,
+                parts.usage,
+                parts.send,
+            ))
     }
 }

@@ -6,14 +6,18 @@ use std::collections::HashMap;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::text::Line;
 use sheprd_chat_protocol::{
-    Attachment, Change, Command, Cursor, EntryId, MAX_ATTACHMENTS, Rejection, ServerMessage,
-    Status, Transcript,
+    Attachment, Change, Command, Cursor, Device, EntryId, MAX_ATTACHMENTS, Origin, Rejection,
+    ServerMessage, Status, Transcript, Via,
 };
 use unicode_width::UnicodeWidthChar;
 
 use sheprd_chat_protocol::assist::{self, History};
 
 use super::lines;
+
+/// Where a prompt typed in this view comes from: the terminal of the
+/// machine the agent runs on.
+const TYPED_HERE: Origin = Origin::new(Device::Terminal, Via::Local);
 
 /// What the view asks the program to do.
 #[derive(Debug, PartialEq, Eq)]
@@ -180,6 +184,12 @@ impl View {
         if self.choice >= self.options() {
             self.choice = 0;
         }
+        // The agent row goes once the choice closes, and another agent
+        // offers other settings.
+        if let Some(at) = self.settings {
+            let rows = self.setting_rows();
+            self.settings = (rows > 0).then(|| at.min(rows - 1));
+        }
         Received::Applied
     }
 
@@ -250,9 +260,15 @@ impl View {
         assist::completions(&self.transcript, &self.composer.text)
     }
 
+    /// The settings panel's rows: the agent while the chat may switch
+    /// to another, then the agent's own settings.
+    pub(crate) fn setting_rows(&self) -> usize {
+        usize::from(self.transcript.harnesses.is_some()) + self.transcript.options.len()
+    }
+
     /// Keys while the settings panel is open: it takes every key.
     fn settings_key(&mut self, key: &KeyEvent, at: usize) -> Option<Out> {
-        let count = self.transcript.options.len();
+        let count = self.setting_rows();
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
             KeyCode::Esc => self.settings = None,
@@ -261,7 +277,11 @@ impl View {
             KeyCode::Down => self.settings = Some((at + 1).min(count.saturating_sub(1))),
             KeyCode::Left | KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => {
                 let step = if key.code == KeyCode::Left { -1 } else { 1 };
-                let option = self.transcript.options.get(at)?;
+                let choosing = self.transcript.harnesses.is_some();
+                if choosing && at == 0 {
+                    return assist::step_agent(&self.transcript, step).map(Out::Command);
+                }
+                let option = self.transcript.options.get(at - usize::from(choosing))?;
                 return assist::step(option, step).map(Out::Command);
             }
             _ => {}
@@ -282,7 +302,7 @@ impl View {
         if let Some(at) = self.settings {
             return self.settings_key(&key, at);
         }
-        if ctrl && key.code == KeyCode::Char('o') && !self.transcript.options.is_empty() {
+        if ctrl && key.code == KeyCode::Char('o') && self.setting_rows() > 0 {
             self.settings = Some(0);
             return None;
         }
@@ -347,6 +367,7 @@ impl View {
                     self.history.push(&text, &self.transcript);
                 }
                 return Some(Out::Command(Command::Prompt {
+                    origin: Some(TYPED_HERE),
                     text,
                     attachments: std::mem::take(&mut self.attachments),
                 }));

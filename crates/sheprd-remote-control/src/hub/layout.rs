@@ -50,6 +50,10 @@ pub(crate) struct Chat {
     /// The agent's name as Herdr reports it, such as `claude`.
     pub(crate) agent: Option<String>,
     pub(crate) title: String,
+    /// Whether the pane's label or its agent set `title`, rather than the
+    /// tab's label standing in for one; a phone prefers the first prompt to
+    /// a stand-in.
+    pub(crate) named: bool,
     pub(crate) status: AgentStatus,
 }
 
@@ -93,6 +97,19 @@ pub(crate) struct TerminalPane {
     pub(crate) cwd: Option<String>,
     /// The tab's focused pane, which a phone opens first.
     pub(crate) focused: bool,
+    /// What runs in front of its shell; `None` when the backend does not
+    /// say, as Herdr 1's snapshot does not.
+    pub(crate) job: Option<Job>,
+}
+
+/// What a terminal pane runs in front, as a phone's row shows it.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub(crate) enum Job {
+    /// Its shell waits at a prompt.
+    Idle,
+    /// A program runs: its command line, bounded and on one line.
+    Running { command: String },
 }
 
 impl Terminal {
@@ -216,14 +233,16 @@ pub(crate) fn project_with(snapshot: &ClientShellSnapshot, listed: Chats) -> Lay
         .filter_map(|agent| {
             let endpoint = endpoint(&agent.tokens)?;
             seen.insert(agent.pane_id.clone()).then(|| {
-                let title = snapshot
+                let named = snapshot
                     .panes
                     .iter()
                     .find(|pane| pane.pane_id == agent.pane_id)
                     .and_then(|pane| pane.label.as_deref())
                     .and_then(sheprd_client::text::caption)
                     .or_else(|| agent_title(agent))
-                    .map(str::to_owned)
+                    .map(str::to_owned);
+                let title = named
+                    .clone()
                     .unwrap_or_else(|| tab_label(snapshot, &agent.tab_id));
                 (
                     agent.workspace_id.clone(),
@@ -232,6 +251,7 @@ pub(crate) fn project_with(snapshot: &ClientShellSnapshot, listed: Chats) -> Lay
                         tab: agent.tab_id.clone(),
                         endpoint,
                         agent: agent_kind(agent),
+                        named: named.is_some(),
                         title,
                         status: agent.agent_status,
                     },
@@ -265,6 +285,7 @@ pub(crate) fn project_with(snapshot: &ClientShellSnapshot, listed: Chats) -> Lay
                             label: pane.label.clone().filter(|label| !label.trim().is_empty()),
                             cwd: pane.foreground_cwd.clone().or_else(|| pane.cwd.clone()),
                             focused: pane.focused,
+                            job: None,
                         })
                         .collect();
                     let agents: Vec<TerminalAgent> = snapshot

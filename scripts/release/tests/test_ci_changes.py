@@ -68,6 +68,15 @@ class CiChanges(GitFixture):
             self.commit_path(path)
             self.assertEqual(self.detect(), "code=true", path)
 
+    def test_files_crates_embed_or_test_trigger_native_jobs(self):
+        # The app embeds the skills it installs, Markdown and all, and
+        # sheprd-relay's tests check the published relay list.
+        for path in ("skills/herdr-mods/SKILL.md", "skills/herdr-gpui-browser/examples/page.html",
+                     "website/site/relays.json", "website/site/relays.json.asc"):
+            self.base = self.git("rev-parse", "HEAD").strip()
+            self.commit_path(path)
+            self.assertEqual(self.detect(), "code=true", path)
+
     def test_deletions_trigger_native_jobs(self):
         self.commit_path("crates/example.rs")
         self.base = self.git("rev-parse", "HEAD").strip()

@@ -1,4 +1,5 @@
 import SheprdRemoteCore
+import SheprdNearby
 import SwiftUI
 import UIKit
 

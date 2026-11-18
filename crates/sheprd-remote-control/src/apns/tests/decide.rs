@@ -73,6 +73,7 @@ fn permission(id: u64, title: &str) -> Permission {
         call_id: None,
         id: PermissionId(id),
         options: Vec::new(),
+        question: None,
         title: title.to_owned(),
     }
 }

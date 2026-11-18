@@ -3,6 +3,7 @@ use sheprd_remote_control::control::{ErrorCode, NearbyRevealed, NearbyStarted};
 use std::io::Cursor;
 
 mod presence;
+mod scanning;
 
 const PHONE: &str = "0A1B2C3D-4E5F-6071-8293-A4B5C6D7E8F9";
 

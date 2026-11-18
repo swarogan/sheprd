@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths: ['**/Cargo.toml', 'Cargo.lock', 'deny.toml', '.github/workflows/supply-chain.yml']
   pull_request:
+    # ready_for_review starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths: ['**/Cargo.toml', 'Cargo.lock', 'deny.toml', '.github/workflows/supply-chain.yml']
   # Advisories are filed against dependencies that are not changing, so this
   # has to run on a clock to be useful at all.
@@ -21,6 +23,7 @@ concurrency:
 jobs:
   zizmor:
     if: >-
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       ((github.event_name == 'pull_request' &&
@@ -44,6 +47,7 @@ jobs:
 
   cargo-deny:
     if: >-
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       ((github.event_name == 'pull_request' &&

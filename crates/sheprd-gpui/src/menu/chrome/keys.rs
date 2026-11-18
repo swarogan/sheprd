@@ -189,6 +189,10 @@ impl SheprdWindow {
             self.add_wsl_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::AddNearby) {
+            self.add_nearby_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::RemoveWsl) {
             self.remove_wsl_key(event, window, cx);
             return;
@@ -370,6 +374,9 @@ impl SheprdWindow {
             }
             "enter" if self.menu.page == Some(Page::AgentSkill) => {
                 self.install_browser_skill(window, cx);
+            }
+            "enter" if self.menu.page == Some(Page::AppRename) => {
+                self.confirm_app_rename(window, cx);
             }
             "enter" if self.menu.page == Some(Page::OpenLink) => {
                 self.confirm_open_link(window, cx);

@@ -113,9 +113,12 @@ fn a_tool_update_from_another_session_cannot_replace_this_sessions_output() {
     start(&mut harness);
     harness.update(progress("ours"));
     let before = harness.transcript().clone();
-    harness.input(Input::Agent(Inbound::Notification {
-        method: "session/update".into(),
-        params: json!({"sessionId":"another-session","update":progress("theirs")}),
-    }));
+    harness.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Notification {
+            method: "session/update".into(),
+            params: json!({"sessionId":"another-session","update":progress("theirs")}),
+        },
+    ));
     assert_eq!(harness.transcript(), &before);
 }

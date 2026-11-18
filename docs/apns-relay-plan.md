@@ -444,8 +444,12 @@ then nothing issues credentials, so the relay cannot serve a real phone. Also
 still to add: the counters. Stores and `RelayClient` are built; the daemon uses
 the client once `Delivery` lands in phase 4.
 
-**3. Image and host.** Add the Dockerfile, the workflow, and the compose file.
-Bring up a sandbox relay on a small host.
+**3. Image and host.** Built: `crates/sheprd-push-relay/Dockerfile`,
+`.github/workflows/push-relay-image.yml`, and `deploy/push-relay`, whose
+README is the runbook: one DigitalOcean droplet per environment with a
+reserved IP, revocations in SQLite, and secrets made offline by
+`make-secrets.sh` and copied over SSH, never in user data. Still to do: bring
+up the sandbox relay and try the recovery on it.
 
 **4. Connect it.** Add `Delivery`, handles in `Registration`, the opt-in settings,
 iOS attestation and handles, and sealed Live Activities. Test on a real device

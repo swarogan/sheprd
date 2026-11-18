@@ -46,7 +46,7 @@ impl Downgrade {
                         self.clients = Some(count);
                         Change::Clients { count }
                     }
-                    Change::Activity { .. } => Change::Clients {
+                    change if self.revision < since(&change) => Change::Clients {
                         count: self.clients?,
                     },
                     change => change,
@@ -55,6 +55,15 @@ impl Downgrade {
             }
             message => Some(message),
         }
+    }
+}
+
+/// The revision that added `change`.
+fn since(change: &Change) -> u32 {
+    match change {
+        Change::Activity { .. } => 1,
+        Change::Harnesses { .. } => 2,
+        _ => 0,
     }
 }
 

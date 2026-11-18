@@ -9,14 +9,15 @@ mod kept_worktrees;
 pub(super) mod popover;
 mod render;
 mod requests;
+mod reuse;
 #[cfg(feature = "cloud")]
 mod sandbox_images;
 mod scripts;
 
 pub(super) use kept_worktrees::Ask;
-pub(crate) use kept_worktrees::KeptDone;
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use kept_worktrees::Landing as KeptLanding;
+pub(crate) use kept_worktrees::{KeptDone, remove_kept_checkout_on};
 
 use super::{Page, WorkspaceAction, WorkspaceMenuAction, state::Deletion};
 use crate::{SheprdWindow, dialog_input::DialogInput, i18n::fl};

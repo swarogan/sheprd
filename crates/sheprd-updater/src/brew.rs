@@ -45,7 +45,7 @@ const BUNDLE: &str = "Herdr.app";
 const PREFIXES: [&str; 2] = ["/opt/homebrew", "/usr/local"];
 const UPGRADE: Duration = Duration::from_secs(30 * 60);
 const QUERY: Duration = Duration::from_secs(60);
-const RELAUNCH: Duration = Duration::from_secs(30);
+pub(crate) const RELAUNCH: Duration = Duration::from_secs(30);
 const DETAIL: usize = 120;
 /// Homebrew's output is unbounded; the diagnostics built from it are not.
 const TAIL: usize = 8;
@@ -95,14 +95,23 @@ fn prefixes() -> impl Iterator<Item = PathBuf> {
 /// to run. [`detect`] also refuses an unsafe prefix, but that receipt would
 /// still go stale if the bundle moved out from under it.
 pub(super) fn recorded(bundle: &Path) -> bool {
-    recorded_in(bundle, prefixes())
+    recording_cask(bundle).is_some()
 }
 
-fn recorded_in(bundle: &Path, prefixes: impl IntoIterator<Item = PathBuf>) -> bool {
-    prefixes.into_iter().any(|prefix| {
+/// The token of the cask whose receipt names this bundle, trusted or not.
+pub(super) fn recording_cask(bundle: &Path) -> Option<&'static str> {
+    recording_cask_in(bundle, prefixes())
+}
+
+fn recording_cask_in(
+    bundle: &Path,
+    prefixes: impl IntoIterator<Item = PathBuf>,
+) -> Option<&'static str> {
+    prefixes.into_iter().find_map(|prefix| {
         TOKENS
             .iter()
-            .any(|token| owned_bundle(&prefix, token, bundle).is_some())
+            .copied()
+            .find(|token| owned_bundle(&prefix, token, bundle).is_some())
     })
 }
 
@@ -415,8 +424,8 @@ pub(super) fn upgrade(
 /// the waiter with it.
 ///
 /// By the time `open` runs nothing is left to show an error, so every outcome
-/// goes to the system log and a failure raises an alert. The alert text is a
-/// fixed argument, never interpolated into AppleScript. A wall-clock deadline
+/// goes to the system log and a failure raises an alert. The alert texts are
+/// [`Alerts`] passed as arguments, never interpolated into AppleScript. A wall-clock deadline
 /// stops the waiter when this process never exits: it then tells the user to
 /// restart by hand rather than open a copy that would only activate this one.
 const RELAUNCH_SCRIPT: &str = r#"
@@ -425,6 +434,8 @@ pid=$1
 bundle=$2
 id=$3
 limit=$4
+stuck=$5
+failed=$6
 (
   trap '' HUP
   report() { logger -t herdr-gpui -- "relaunch: $1"; }
@@ -438,7 +449,7 @@ limit=$4
   while kill -0 "$pid" 2>/dev/null; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       report "gave up: $pid did not exit"
-      alert "Sheprd did not quit in time to restart. Quit Sheprd, then open it again to finish the update."
+      alert "$stuck"
       exit 0
     fi
     sleep 0.05
@@ -460,11 +471,23 @@ limit=$4
     sleep 1
   done
   report "open failed"
-  alert "Sheprd was updated but could not restart. Open Sheprd from Applications."
+  alert "$failed"
   exit 1
 ) >/dev/null 2>&1 &
 exit 0
 "#;
+
+/// What the relaunch waiter tells the user when it cannot finish: when this
+/// app never quits, and when the bundle will not open.
+pub(crate) struct Alerts {
+    pub(crate) stuck: &'static str,
+    pub(crate) failed: &'static str,
+}
+
+const UPGRADED: Alerts = Alerts {
+    stuck: "Sheprd did not quit in time to restart. Quit Sheprd, then open it again to finish the update.",
+    failed: "Sheprd was updated but could not restart. Open Sheprd from Applications.",
+};
 
 /// The bundle executable, as named by `CFBundleExecutable` in Info.plist.
 const EXECUTABLE: &str = "Contents/MacOS/Herdr";
@@ -479,6 +502,7 @@ pub(super) fn relaunch(cask: &Cask) -> Result<()> {
         crate::APP_ID,
         "/usr/bin:/bin",
         RELAUNCH,
+        &UPGRADED,
     )
 }
 
@@ -502,12 +526,13 @@ fn runnable(bundle: &Path) -> Result<()> {
 }
 
 /// `search_path` is the waiter's whole `PATH`; tests put stand-ins first.
-fn schedule_relaunch(
+pub(crate) fn schedule_relaunch(
     pid: u32,
     bundle: &Path,
     bundle_id: &str,
     search_path: impl AsRef<OsStr>,
     limit: Duration,
+    alerts: &Alerts,
 ) -> Result<()> {
     let mut command = sheprd_client::new_command("/bin/sh");
     command
@@ -518,6 +543,8 @@ fn schedule_relaunch(
         .arg(bundle)
         .arg(bundle_id)
         .arg(limit.as_secs().to_string())
+        .arg(alerts.stuck)
+        .arg(alerts.failed)
         // The app `open` starts inherits this environment and passes it to
         // the Herdr server and its panes, so it must not carry a locale.
         .env_clear()

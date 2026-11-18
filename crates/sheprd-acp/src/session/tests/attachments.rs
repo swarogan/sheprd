@@ -22,6 +22,7 @@ fn files_go_with_the_prompt_and_show_in_the_transcript() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "look".to_owned(),
             attachments: vec![attach(&notes), attach(&shot)],
         },
@@ -49,6 +50,7 @@ fn files_alone_make_a_prompt_and_go_as_links_by_default() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: String::new(),
             attachments: vec![attach(&file)],
         },
@@ -64,6 +66,7 @@ fn missing_or_too_many_files_are_refused() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "x".to_owned(),
             attachments: vec![Attachment {
                 path: "/no/such/file".into(),
@@ -80,6 +83,7 @@ fn missing_or_too_many_files_are_refused() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "x".to_owned(),
             attachments: vec![attach(&file); MAX_ATTACHMENTS + 1],
         },

@@ -24,6 +24,12 @@ The native app for Sheprd's remote control (`docs/ios-app-plan.md`).
 | --- | --- |
 | `project.yml` | XcodeGen spec for the `SheprdRemote` app and the `SheprdRemoteWidgets` extension: iOS 26, Swift 6 with complete concurrency checking, iPhone and iPad |
 | `SheprdRemoteCore/` | Swift package with no UIKit: the transcript model and its reducer, the v2 API's messages, `ComputerLink` (address racing, resubscription, backoff), pairing links, fingerprints, session signatures, sealed notifications |
+| `SheprdRemoteCore/Sources/SheprdGitHub/` | The phone's GitHub client, its own target over `SheprdRemoteCore` (never the reverse) and linked by the app alone: hosts, leased and signed-in tokens, the GraphQL and REST reads, pull requests, checks, and their logs |
+| `SheprdRemoteCore/Sources/SheprdNearby/` | Nearby pairing over Bluetooth: the offer exchange, framing, the short code, and the sightings the scan keeps; the radio is in `SheprdRemote/Nearby/`. Over `SheprdRemoteCore`, linked by the app alone |
+| `SheprdRemoteCore/Sources/SheprdRelay/` | Reaching a computer through Sheprd relays: dial proofs, sessions, the local proxy, racing, nearness, and the saved list. Over `SheprdRemoteCore` and `SheprdTunnel`, linked by the app alone; the saved `RelayRecord` itself stays in Core |
+| `SheprdRemoteCore/Sources/SheprdTerminal/` | A terminal tab's input and selection: keys, echo, composition, dictation, handles, cells, and waiting. Over `SheprdRemoteCore`, linked by the app alone |
+| `SheprdRemoteCore/Sources/SheprdTunnel/` | The end-to-end tunnel inside a relay stream, checked against the Rust `sheprd-tunnel` vectors. It depends on nothing, and Core uses it to check the identity a relay record pins |
+| `SheprdRemoteCore/Sources/SheprdVoice/` | Voice commands: the parser, names, the on-device model's schema, drafts, plans, and follow-ups. Over `SheprdRemoteCore`, linked by the app alone |
 | `SheprdRemote/` | The app: `Fleet` (one link per computer), `Cache`, the pinned HTTPS and WebSocket client, pairing, Keychain, and `Views/` |
 | `SheprdRemoteWidgets/` | The lock screen and Dynamic Island layouts |
 | `Shared/` | The Live Activity's attributes, compiled into both targets |
@@ -91,7 +97,14 @@ and nothing goes through your phone.
      opens a chat, as tapping a Live Activity does.
    - `-openTerm PANE` opens a terminal; `-type TEXT` then types into it
      (a newline presses Enter).
-   - `-tab workspaces|settings` opens that tab, and `-openWorkspace ID`
+   - `-homeSearch TEXT` types into Home's search, and `-pullRequestSearch TEXT`
+     into the Pull Requests tab's. With `-gitHubDemo signedIn`,
+     `-gitHubDemoLoading N` holds the Pull Requests tab loading N seconds.
+   - `-homeJump N` scrolls Home to the bottom, then jumps to section N as
+     its edge index does; `-homeJumpRow YES` jumps to that section's first
+     row, as its first dot does, and `-homeJumpSweep YES` first crosses every
+     entry from the bottom up, as a drag along the index does.
+   - `-tab workspaces|pullRequests|settings` opens that tab, and `-openWorkspace ID`
      opens that workspace's screen in it.
    - `-otherAgents YES` unfolds a workspace's other agents.
    - With `-openWorkspace`, `-openChanges YES` opens its changes; then
@@ -99,6 +112,16 @@ and nothing goes through your phone.
      confirmation for the first failing check's log.
    - `-renameWorkspace YES` opens a workspace's rename alert. It lists the
      local Herdr daemon's real workspaces, so pressing Rename changes one.
+     `-renamePending NAME` shows a rename to NAME on its way, sending nothing.
+     `-askAgentName YES` asks the workspace's most recent agent chat for a
+     short name and renames the workspace to it, as the alert's Ask button
+     does; that prompts the chat's agent once.
+   - `-summarizeFirst YES` asks for the row summary of a workspace's first
+     chat with a reply, as its row's swipe does. It runs Claude Code once
+     on the computer, which costs a model call.
+   - A workspace's screen ends with Close Workspace and, for a linked
+     worktree, Delete Worktree. Both act on the paired computer's real
+     workspaces, so try them on one made for the purpose.
    - `-newWorkspace YES` opens the new workspace form.
    - `-computerTags work,lab` tags the first computer, `-computerTagFilter work`
      filters Workspaces by a tag, and `-openComputer YES` opens the first
@@ -109,6 +132,8 @@ and nothing goes through your phone.
      simulator has no microphone, and `-voiceConfirm YES` then presses Start
      which creates what the card shows. Run it
      against a sandboxed Herdr, not your own.
+   - `-sampleChat YES` opens a made-up chat that needs no daemon, for
+     screenshots of the chat screen without real prompts.
    - With `-openLink`, `-session YES` opens the chat's session sheet and
      `-draft TEXT` types into its composer (`-draft /` lists the slash
      commands).
@@ -135,11 +160,11 @@ Voice reads the plan aloud and takes a plain yes, for a new worktree only.
 | Step | Where | What |
 | --- | --- | --- |
 | Hear | `SheprdRemote/Voice/VoiceListener.swift` | `DictationTranscriber` on the phone, primed with the fleet's names |
-| Read | `SheprdRemoteCore/.../Voice/VoiceParser.swift` | Rules, on every word, so the card fills in during the sentence |
+| Read | `SheprdRemoteCore/Sources/SheprdVoice/VoiceParser.swift` | Rules, on every word, so the card fills in during the sentence |
 | Read what is left | `VoiceModel.swift` | The on-device model, only for sentences the rules cannot place; its schema lists only what exists |
 | Check | `VoiceDraft.adopting` | A name counts only if it was heard, and a task only if the words are the speaker's own. The model cannot stop a chat or answer a question |
 | Plan | `VoicePlan.swift` | Fills in what was not said and labels it. Something named that does not exist becomes a question, never a substitute |
-| Confirm | `SheprdRemote/Views/VoiceSheet.swift` | The card is the request. Starting an agent, sending, stopping, and answering take a tap on Start |
+| Confirm | `SheprdRemote/Views/Voice/VoiceSheet.swift` | The card is the request. Starting an agent, sending, stopping, and answering take a tap on Start |
 
 `VOICE_EVAL=1 swift test --filter VoiceEvalTests` scores every sentence in
 `Fixtures/voice` against the real model, which needs Apple Intelligence on the

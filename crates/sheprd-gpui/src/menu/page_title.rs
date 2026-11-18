@@ -31,12 +31,13 @@ impl Page {
             Self::AddCloud(_) => fl!("menu-page-add-device"),
             #[cfg(feature = "coder")]
             Self::AddCoder => fl!("menu-page-add-coder-workspace"),
-            Self::AddDevice => fl!("menu-page-add-device"),
+            Self::AddDevice | Self::AddNearby => fl!("menu-page-add-device"),
             #[cfg(feature = "cloud")]
             Self::AddProvider => fl!("menu-page-add-cloud-provider"),
             Self::AddWsl => fl!("menu-page-add-wsl-distribution"),
             Self::AgentSkill => fl!("menu-page-install-the-agent-skill"),
             Self::Application => fl!("menu-page-menu"),
+            Self::AppRename => fl!("menu-page-rename-the-app"),
             Self::AppUpdate | Self::Update => fl!("menu-page-update"),
             Self::Automation => fl!("menu-page-automations"),
             Self::AzureDevOps => fl!("menu-page-azure-devops-tokens"),

@@ -228,7 +228,9 @@ fn lists_host<'a>(name: &str, files: impl IntoIterator<Item = &'a PathBuf>) -> R
 
 fn known_hosts(target: &str) -> Result<KnownHosts> {
     let mut command = crate::environment::command("ssh");
-    command.args(["-G", "--", target]);
+    command
+        .args(crate::relay_host::options(target))
+        .args(["-G", "--", target]);
     let (status, output) = super::run(&mut command, Duration::from_secs(5), || false)?;
     if !status.success() {
         return Err(crate::Error::RemoteCommand(status));

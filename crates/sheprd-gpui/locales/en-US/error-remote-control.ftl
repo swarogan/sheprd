@@ -4,6 +4,8 @@
 
 # $key is the certificate's config key: cert or key.
 error-remote-control-certificate-path = remote.certificate { $key } must be an absolute UTF-8 path
+# $host is an entry of remote.github_hosts as the user wrote it.
+error-remote-control-github-host = remote.github_hosts has { $host }, which is not a host name
 error-remote-control-idle-days = remote.device_idle_days must be between 0 (never) and 365
 # $operation is what failed on the file or folder $path.
 error-remote-control-io = { $operation ->
@@ -20,6 +22,15 @@ error-remote-control-port = remote.port must be between 1 and 65535
 error-remote-control-program-missing = sheprd-remote-control was not found beside Sheprd or on PATH
 # $relay is an entry of remote.relays as the user wrote it.
 error-remote-control-relay = remote.relays has { $relay }, which is not a relay address
+# $relay is an entry of remote.relays; $reason is one of the
+# error-remote-control-relay-label-* messages below.
+error-remote-control-relay-label = remote.relays gives { $relay } a label it cannot use: { $reason }
+# $field is the label's key in the config file: name, description, or tag.
+error-remote-control-relay-label-blank = its { $field } is blank
+error-remote-control-relay-label-control = its { $field } has a control character, such as a line break
+# $max is a number of characters.
+error-remote-control-relay-label-length = its { $field } is longer than { $max } characters
+error-remote-control-relay-label-tags = it has more than { $max } tags
 error-remote-control-qr = The pairing link does not fit in a QR code
 # $program is the service manager command, such as launchctl or systemctl;
 # $status is how it ended, in the system's words; $stderr is its own output.

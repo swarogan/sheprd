@@ -33,6 +33,7 @@ mod apply;
 mod archive;
 pub(crate) mod bundle;
 mod location;
+mod rename;
 mod signing;
 
 pub(super) use apply::run_helper;
@@ -43,6 +44,7 @@ use archive::extract;
 use archive::{safe_link, safe_path};
 use location::{detect, lock, owned};
 pub(super) use location::{effective_uid, mac_bundle};
+pub use rename::{HomebrewBundle, Legacy, LegacyBundle};
 use signing::identity;
 
 const HELPER: &str = "--herdr-apply-update";

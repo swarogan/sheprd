@@ -138,6 +138,7 @@ fn start_code(error: &crate::chat::StartError) -> ErrorCode {
     match error {
         StartError::AgentMissing(_)
         | StartError::Disabled
+        | StartError::Line
         | StartError::NotLocal
         | StartError::ProgramMissing => ErrorCode::Unsupported,
         StartError::NoWorkspace => ErrorCode::NotFound,

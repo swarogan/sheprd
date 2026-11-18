@@ -25,6 +25,7 @@ struct ComputerScreen: View {
         let status = model.fleet.machines.first { $0.id == device }?.status
         let addresses = Self.addresses(computer)
         let connected: String? = if case let .online(origin) = status, addresses.contains(where: { $0.origin == origin }) { origin } else { nil }
+        let relayed = model.fleet.throughRelay(device)
         return List {
             Section {
                 VStack(spacing: 6) {
@@ -56,6 +57,29 @@ struct ComputerScreen: View {
             } footer: {
                 if connected != nil {
                     Text("Connected through the checked address. When it stops answering, this phone tries the others.")
+                }
+            }
+            if !computer.relayHosts.isEmpty {
+                Section {
+                    // Which relay carries the connection is the proxy's to
+                    // know, so the section says it once, not on every row.
+                    if relayed {
+                        Label("Connected through a relay", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    if let record = computer.relay {
+                        // By position: a list written by hand may name a
+                        // relay twice.
+                        ForEach(Array(record.relays.enumerated()), id: \.offset) { _, relay in
+                            RelayLabelView(relay: relay, label: record.label(for: relay))
+                                .padding(.vertical, 2)
+                                .accessibilityElement(children: .combine)
+                        }
+                    }
+                } header: {
+                    Text("Relays")
+                } footer: {
+                    Text("When none of the addresses answers, such as with Tailscale off, this \(UIDevice.current.model) reaches \(name) through a relay, end to end encrypted.")
                 }
             }
             if let vouching = model.vouching(computer) {

@@ -22,6 +22,8 @@ pub(super) fn defaults(command: Command) -> &'static [&'static str] {
         FocusDown => &["ctrl-alt-shift-down"],
         NextPane => &["ctrl-alt-shift-]"],
         PreviousPane => &["ctrl-alt-shift-["],
+        RecentPane => &["ctrl-tab"],
+        RecentPaneReverse => &["ctrl-shift-tab"],
         Back => &["ctrl-shift-["],
         Forward => &["ctrl-shift-]"],
         Zoom => &["ctrl-shift-enter"],

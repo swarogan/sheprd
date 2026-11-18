@@ -49,6 +49,7 @@ fn busy() -> View {
             kind: PermissionKind::AllowOnce,
             name: "Allow once".to_owned(),
         }],
+        question: None,
         title: "Run cargo test -p parser".to_owned(),
     }];
     transcript.queued = vec![Queued {

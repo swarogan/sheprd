@@ -50,6 +50,8 @@ pub(crate) struct NewDevice {
     pub(crate) public_key: PublicKey,
     /// The relay keys the phone sent with its claim, stored when approved.
     pub(crate) relay: Option<super::devices::RelayKeys>,
+    /// A desktop's SSH key, let in through the relays when approved.
+    pub(crate) ssh: Option<crate::ssh_access::SshKey>,
 }
 
 #[derive(Debug, Default)]
@@ -131,6 +133,7 @@ impl Open {
                 device_name: device.name.clone(),
                 code: code.clone(),
                 app: device.app.clone(),
+                ssh: device.ssh.is_some(),
             },
             Phase::Finished { state, .. } => state.clone(),
         }
@@ -231,6 +234,7 @@ impl Pairings {
             name,
             public_key,
             relay: None,
+            ssh: None,
         };
         // Single use: a nearby token's code is the one both screens agreed on.
         let code = match open.nearby.take() {
@@ -301,6 +305,21 @@ impl Pairings {
             && id == claim
         {
             device.relay = Some(keys);
+        }
+    }
+
+    /// Keeps the SSH key a desktop sent with `claim`, so approving it lets
+    /// that desktop in over SSH.
+    pub(crate) fn claimed_ssh(&mut self, claim: &ClaimId, key: crate::ssh_access::SshKey) {
+        if let Some(Open {
+            phase: Phase::Claimed {
+                claim: id, device, ..
+            },
+            ..
+        }) = self.open.as_mut()
+            && id == claim
+        {
+            device.ssh = Some(key);
         }
     }
 

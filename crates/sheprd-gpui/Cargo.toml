@@ -41,6 +41,7 @@ sheprd-credentials.workspace    = true
 sheprd-diagnostics.workspace    = true
 sheprd-github.workspace         = true
 sheprd-i18n.workspace           = true
+sheprd-memory.workspace         = true
 sheprd-mods.workspace           = true
 sheprd-orchestrator.workspace   = true
 sheprd-remote.workspace         = true

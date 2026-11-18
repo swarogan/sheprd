@@ -6,7 +6,7 @@ use crate::{
     NavigationTarget, SheprdWindow,
     chat::{
         Program,
-        start::{self, PROGRAM_ENV, command_line, locate_in, tab_params},
+        start::{self, AgentChoice, PROGRAM_ENV, command_line, locate_in, tab_params},
     },
     sidebar::layout_tests::fixture_window,
     window::MockPeer,
@@ -73,18 +73,21 @@ fn a_file_that_cannot_run_is_not_the_program() {
 #[test]
 fn the_typed_line_names_only_the_agent() {
     for agent in Agent::ALL {
-        let line = command_line(*agent);
+        let line = command_line(*agent, AgentChoice::Open);
         assert!(line.contains(PROGRAM_ENV));
         assert!(line.ends_with(&format!("{agent}'")) || line.ends_with(agent.name()));
         assert!(!line.contains('/'), "{line}");
     }
     if cfg!(unix) {
         assert_eq!(
-            command_line(Agent::Claude),
-            r#" sh -c 'exec "$HERDR_ACP" claude'"#
+            command_line(Agent::Claude, AgentChoice::Open),
+            r#" sh -c 'exec "$HERDR_ACP" --choose claude'"#
         );
     } else {
-        assert_eq!(command_line(Agent::Claude), "& $env:HERDR_ACP claude");
+        assert_eq!(
+            command_line(Agent::Claude, AgentChoice::Open),
+            "& $env:HERDR_ACP --choose claude"
+        );
     }
 }
 
@@ -153,6 +156,8 @@ fn a_remote_line_finds_the_hosts_own_program() {
     assert!(line.ends_with("exit 127'"));
     assert!(line.contains("$HOME/.herdr/bin/herdr-acp"));
     assert!(line.contains("exec \"$p\" opencode"));
+    // The host's program may predate switching agents.
+    assert!(!line.contains("--choose"));
     // The matched-version remote install path is quoted inside the script;
     // the outer shell must preserve that quoting rather than terminate it.
     assert!(line.contains("herdr-remote-control/bin/"));
@@ -220,7 +225,8 @@ fn a_new_chat_opens_a_tab_and_types_the_fixed_line(cx: &mut gpui::TestAppContext
         DaemonMessage::ClientShellPaneInput {
             pane_id: "w1:p9".into(),
             events: vec![
-                ClientPaneInputEvent::TextCommit(command_line(Agent::Claude)),
+                // The fixture's program was never asked for its help.
+                ClientPaneInputEvent::TextCommit(command_line(Agent::Claude, AgentChoice::Fixed)),
                 crate::menu::enter_key(),
             ],
         }
@@ -297,4 +303,63 @@ fn an_agent_the_host_lacks_does_not_start(cx: &mut gpui::TestAppContext) {
             assert!(!view.chat_starting());
         })
     });
+}
+
+#[test]
+fn only_a_program_that_offers_the_choice_is_asked_for_it() {
+    let help = sheprd_help("  --choose       Let clients switch to another installed agent\n");
+    assert_eq!(AgentChoice::from_help(help.as_bytes()), AgentChoice::Open);
+    let older = sheprd_help("  --acp          Use the agent's ACP adapter\n");
+    assert_eq!(AgentChoice::from_help(older.as_bytes()), AgentChoice::Fixed);
+    assert_eq!(AgentChoice::from_help(b""), AgentChoice::Fixed);
+    if cfg!(unix) {
+        assert_eq!(
+            command_line(Agent::Codex, AgentChoice::Fixed),
+            r#" sh -c 'exec "$HERDR_ACP" codex'"#
+        );
+    }
+}
+
+fn sheprd_help(options: &str) -> String {
+    format!("Usage:\n  sheprd-acp [OPTIONS] AGENT\n\nOptions:\n{options}")
+}
+
+#[cfg(unix)]
+#[test]
+fn a_program_that_cannot_run_offers_no_choice() {
+    assert_eq!(
+        AgentChoice::of(Path::new("/nonexistent/sheprd-acp")),
+        AgentChoice::Fixed
+    );
+}
+
+/// A wrapper whose child keeps the help's pipe open is given up on at the
+/// deadline, rather than leaving the program's lookup unanswered.
+#[cfg(unix)]
+#[test]
+fn a_program_whose_help_never_ends_offers_no_choice() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let wrapper = dir.path().join("sheprd-acp");
+    std::fs::write(&wrapper, "#!/bin/sh\necho '  --choose'\nsleep 30 &\nwait\n").unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let started = Instant::now();
+    let deadline = Duration::from_millis(300);
+    assert_eq!(
+        AgentChoice::of_within(&wrapper, deadline),
+        AgentChoice::Fixed
+    );
+    assert!(started.elapsed() < Duration::from_secs(5));
+
+    let quick = dir.path().join("quick");
+    std::fs::write(
+        &quick,
+        "#!/bin/sh\necho '  --choose   Let clients switch'\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&quick, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        AgentChoice::of_within(&quick, Duration::from_secs(5)),
+        AgentChoice::Open
+    );
 }

@@ -1,5 +1,6 @@
 import Foundation
 import SheprdRemoteCore
+import SheprdNearby
 import Network
 import Observation
 

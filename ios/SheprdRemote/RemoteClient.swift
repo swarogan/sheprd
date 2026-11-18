@@ -242,6 +242,12 @@ final class RemoteClient: Sendable {
         )
     }
 
+    /// Hands this phone's relay keys for another computer to this one, to
+    /// carry there; posting the same request again reads where it stands.
+    func carryRelay(_ request: API.HostRelayRequest, bearer: String) async throws -> API.HostRelayState {
+        try await send("POST", "/api/v2/hosts/relay", body: request, bearer: bearer)
+    }
+
     // MARK: Tags
 
     /// Offers this phone's copy of the computer's tags; answers those that
@@ -352,6 +358,15 @@ final class RemoteClient: Sendable {
                        bearer: bearer, timeout: Self.askTimeout)
     }
 
+    /// A GitHub token this computer lends the phone for `host`
+    /// (`GitHubLeases`): 404 when it has no account there, 403 when sharing
+    /// is off, 429 and 504 when it asks the phone to wait. The answer is
+    /// SheprdGitHub's `LeaseAnswer`, named by the caller: the share extension
+    /// compiles this file without linking SheprdGitHub.
+    func githubToken<Answer: Decodable>(host: String, bearer: String) async throws -> Answer {
+        try await send("GET", "/api/v2/github/token?\(Self.query(["host": host]))", bearer: bearer, timeout: Self.askTimeout)
+    }
+
     /// Longer than the computer waits for Sheprd (`ANSWER_WAIT`), so it is
     /// the computer that says what went wrong.
     private static let askTimeout: TimeInterval = 30
@@ -367,10 +382,40 @@ final class RemoteClient: Sendable {
         return (components.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B")
     }
 
+    /// Asks Claude, run once on its own, where the chat stands;
+    /// the summary arrives on `home` when it is done.
+    func summarize(pane: String, bearer: String) async throws {
+        let _: EmptyAnswer = try await send("POST", "/api/v2/chat/\(Self.segment(pane))/summarize", body: NoBody(), bearer: bearer)
+    }
+
+    /// A short title for the chat `pane` runs, from Claude run once on its
+    /// own; the chat is not renamed. The agent may take up to 90
+    /// seconds, so this waits longer than that for the computer to say why.
+    func suggestTitle(pane: String, bearer: String) async throws -> String {
+        struct Answer: Decodable { let title: String }
+        let answer: Answer = try await send("POST", "/api/v2/chat/\(Self.segment(pane))/title",
+                                            body: NoBody(), bearer: bearer, timeout: 100)
+        return answer.title
+    }
+
     /// Names a workspace; it always has a name.
     func renameWorkspace(_ workspace: String, to label: String, bearer: String) async throws {
         struct Body: Encodable { let label: String }
         let _: EmptyAnswer = try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/rename", body: Body(label: label), bearer: bearer)
+    }
+
+    /// Closes a workspace: its tabs close and their programs end. Its
+    /// checkout stays.
+    func closeWorkspace(_ workspace: String, bearer: String) async throws {
+        let _: EmptyAnswer = try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/close", bearer: bearer, timeout: 40)
+    }
+
+    /// Deletes a workspace's linked worktree, then closes it. Never forced:
+    /// the computer refuses a checkout with uncommitted changes, or one
+    /// with an archive script, which Sheprd runs first. Git and Sheprd may
+    /// take a while, so this waits longer than most requests.
+    func removeWorktree(_ workspace: String, bearer: String) async throws {
+        let _: EmptyAnswer = try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/remove-worktree", bearer: bearer, timeout: 80)
     }
 
     /// How to reach this computer through its relays; nil from a daemon

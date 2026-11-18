@@ -153,6 +153,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::ToggleStatusBar
         | Command::ToggleMenuBar
         | Command::ToggleModPanel
+        | Command::ToggleAllHosts
         | Command::FocusNextRegion
         | Command::FocusPreviousRegion
         | Command::ToggleZenMode
@@ -198,6 +199,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::RenameTab
         | Command::ReopenClosedTab
         | Command::LastPane
+        | Command::RecentPane
+        | Command::RecentPaneReverse
         | Command::Back
         | Command::Forward
         | Command::ResizeMode

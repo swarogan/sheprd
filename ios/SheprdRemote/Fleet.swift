@@ -1,5 +1,6 @@
 import Foundation
 import SheprdRemoteCore
+import SheprdRelay
 import Observation
 import os
 import WidgetKit
@@ -49,6 +50,10 @@ struct TerminalItem: Identifiable, Hashable {
     /// The agent Herdr detects in it, such as `claude` run in a shell.
     var agent: Home.TerminalRow.DetectedAgent? { terminal.agent }
     var title: String { agent?.title ?? terminal.label }
+    /// What closing its row closes: the whole tab.
+    var closeTarget: CloseTarget? {
+        terminal.firstPane.map { .tab(PaneKey(device: computer.device, pane: $0.pane), title: terminal.label) }
+    }
     var needsYou: Bool { agent?.status == .blocked }
     /// When the computer saw its agent last change state.
     var changed: Date? { agent?.changedMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } }
@@ -102,8 +107,9 @@ final class Fleet {
     /// Each running proxy's origin, raced after the computer's own
     /// addresses, so a direct path wins when there is one.
     @ObservationIgnored private var relayOrigins: [String: String] = [:]
-    /// The relays kept in Settings, dialed for every computer after the
-    /// ones it named. A change restarts the running proxies, which open
+    /// The relays typed in Settings, dialed for every computer after the
+    /// ones it named. Relays another computer named are not: that would
+    /// show this computer's route to a relay the user never chose for it. A change restarts the running proxies, which open
     /// their sessions with the list they started with.
     @ObservationIgnored var savedRelays: [RelayEndpoint] = [] {
         didSet {
@@ -116,6 +122,13 @@ final class Fleet {
     }
     /// Computers whose relay keys are being checked or sent.
     @ObservationIgnored private var enrolling: Set<String> = []
+    /// Gets relay keys to computers out of reach through ones online.
+    @ObservationIgnored private var carrier: RelayCarrier?
+    /// When each computer was last asked about its relays, so one that
+    /// starts listening on a relay while this phone stays connected, such
+    /// as one Sheprd on another computer shared, is learned within minutes.
+    @ObservationIgnored private var relayAsked: [String: Date] = [:]
+    private static let relayRecheck: TimeInterval = 600
     /// A computer's relay record changed, or it stopped listening on
     /// relays (nil): the app keeps it with the computer.
     var onRelay: ((String, RelayRecord?) -> Void)?
@@ -134,12 +147,24 @@ final class Fleet {
     init(sessions: Sessions, cache: Cache = .shared) {
         self.sessions = sessions
         self.cache = cache
+        carrier = RelayCarrier(
+            carry: { [weak self] near, request in
+                guard let self else { throw CancellationError() }
+                return try await self.call(near) { client, token in try await client.carryRelay(request, bearer: token) }
+            },
+            onRelay: { [weak self] device, record in
+                // A record the phone made since, sending keys directly, wins.
+                guard let self, machines.first(where: { $0.id == device })?.computer.relay == nil else { return }
+                onRelay?(device, record)
+            }
+        )
     }
 
     /// Follows `computers`: new ones get a link, forgotten ones lose theirs.
     func sync(_ computers: [Computer]) {
         let wanted = Set(computers.map(\.device))
         for machine in machines where !wanted.contains(machine.id) {
+            carrier?.forget(machine.id)
             stopLink(machine.id)
             cache.clear(machine.id)
             unreported[machine.id] = nil
@@ -195,6 +220,8 @@ final class Fleet {
     }
 
     func networkChanged() {
+        // The phone's round trips to relays were for the old network.
+        Task { await RelayProbes.shared.forget() }
         for link in links.values { Task { await link.networkChanged() } }
     }
 
@@ -581,6 +608,31 @@ final class Fleet {
         }
     }
 
+    /// Asks for a chat's row summary; every phone's list shows it when the
+    /// computer has it.
+    func summarize(_ key: PaneKey) async throws {
+        let pane = key.pane
+        try await call(key.device) { client, token in
+            try await client.summarize(pane: pane, bearer: token)
+        }
+    }
+
+    /// A short title for a chat from Claude, run once on its own.
+    func suggestTitle(_ key: PaneKey) async throws -> String {
+        let pane = key.pane
+        return try await call(key.device) { client, token in
+            try await client.suggestTitle(pane: pane, bearer: token)
+        }
+    }
+
+    /// Closes the terminal tab a pane is in, with every pane in it.
+    func closeTab(_ key: PaneKey) async throws {
+        let pane = key.pane
+        _ = try await call(key.device) { client, token in
+            try await client.termAction(.closeTab, pane: pane, bearer: token)
+        }
+    }
+
     /// Names a chat or the terminal tab a pane is in; the next `home` from
     /// the computer carries the name to every list.
     func rename(_ key: PaneKey, to label: String) async throws {
@@ -596,6 +648,22 @@ final class Fleet {
         let workspace = key.workspace
         try await call(key.device) { client, token in
             try await client.renameWorkspace(workspace, to: label, bearer: token)
+        }
+    }
+
+    /// Closes a workspace; the next `home` drops it from every list.
+    func closeWorkspace(_ key: WorkspaceKey) async throws {
+        let workspace = key.workspace
+        try await call(key.device) { client, token in
+            try await client.closeWorkspace(workspace, bearer: token)
+        }
+    }
+
+    /// Deletes a workspace's linked worktree and closes the workspace.
+    func removeWorktree(_ key: WorkspaceKey) async throws {
+        let workspace = key.workspace
+        try await call(key.device) { client, token in
+            try await client.removeWorktree(workspace, bearer: token)
         }
     }
 
@@ -627,6 +695,14 @@ final class Fleet {
     // MARK: Relays
 
     /// The addresses a computer's link races: its own, then its relay's.
+    /// Whether the computer's link is online through its relay proxy.
+    func throughRelay(_ device: String) -> Bool {
+        guard let relay = relayOrigins[device],
+              case let .online(origin) = machines.first(where: { $0.id == device })?.status
+        else { return false }
+        return origin == relay
+    }
+
     private func origins(_ computer: Computer) -> [String] {
         computer.origins + (relayOrigins[computer.device].map { [$0] } ?? [])
     }
@@ -659,11 +735,14 @@ final class Fleet {
         relayOrigins[device] = nil
     }
 
-    /// Asks the computer, while it answers directly, how to reach it
-    /// through its relays, and sends this phone's keys when they are new.
-    private func enrollRelay(_ device: String) {
+    /// Asks the computer how to reach it through its relays. While it
+    /// answers directly, sends this phone's keys when they are new; through
+    /// a relay, only refreshes the record's order and labels, which a
+    /// record carried through another computer starts without.
+    private func enrollRelay(_ device: String, direct: Bool = true) {
         guard !enrolling.contains(device) else { return }
         enrolling.insert(device)
+        relayAsked[device] = .now
         let known = machines.first { $0.id == device }?.computer.relay
         Task {
             defer { enrolling.remove(device) }
@@ -674,10 +753,17 @@ final class Fleet {
                 return
             }
             guard let info = answer else {
-                if known != nil { onRelay?(device, nil) }
+                if direct, known != nil { onRelay?(device, nil) }
                 return
             }
-            if let known, known.matches(info) { return }
+            if let known, known.matches(info) {
+                // Same keys; only the computer's nearest relays, or what its
+                // owner calls them, may differ.
+                if let refreshed = known.refreshed(with: info) { onRelay?(device, refreshed) }
+                return
+            }
+            // New keys go only over a path the phone already trusts.
+            guard direct else { return }
             guard let record = RelayRecord.make(from: info), let keys = record.enrollment else { return }
             do {
                 try await call(device) { client, token in try await client.enrollRelay(keys, bearer: token) }
@@ -712,10 +798,13 @@ final class Fleet {
                 reportFailures(of: device)
             }
             // Over a path it already trusts, the phone learns the
-            // computer's relays and sends its keys for them.
-            if case let .online(origin) = status, origin != relayOrigins[device] {
-                enrollRelay(device)
+            // computer's relays and sends its keys for them; through a
+            // relay, it only refreshes their order and labels.
+            if case let .online(origin) = status {
+                enrollRelay(device, direct: origin != relayOrigins[device])
             }
+            // A computer out of reach may be reached through another.
+            carrier?.check(machines.map { ($0.computer, $0.status) })
         case let .unreachable(failures):
             // Kept for the computer's log, which shows only silence for
             // this: nothing here reached it.
@@ -724,6 +813,10 @@ final class Fleet {
             unreported[device, default: UnreportedFailures()].add(line)
         case let .event(.home(home)):
             if let tags = home.tags { onTags?(tags, machines[index].computer) }
+            if case let .online(origin) = machines[index].status,
+               relayAsked[device].map({ Date.now.timeIntervalSince($0) >= Self.relayRecheck }) ?? true {
+                enrollRelay(device, direct: origin != relayOrigins[device])
+            }
             onShortcutsReported?(home.shortcutsMs, device)
             // The computer's load moves every few seconds; only the header
             // shows it, so the cache, widgets, and Spotlight wait for a

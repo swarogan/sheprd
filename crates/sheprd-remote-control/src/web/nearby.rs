@@ -57,6 +57,7 @@ pub(super) async fn reveal(
     let shared = state.clone();
     let revealed = with_auth(&state, move |auth| {
         let origins = shared.origins();
+        crate::relay::refresh_offer(shared.relay.as_deref(), auth);
         Ok(auth.nearby_reveal(
             &request.session,
             &request.nonce,

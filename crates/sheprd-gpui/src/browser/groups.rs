@@ -333,6 +333,12 @@ impl Layout {
             .collect()
     }
 
+    pub(crate) fn follow_terminal(&mut self, id: GroupId) {
+        if let Some(group) = self.group_mut(id) {
+            group.pick = None;
+        }
+    }
+
     /// Makes `id` the group in use. Returns whether anything changed.
     pub(crate) fn activate(&mut self, id: GroupId) -> bool {
         if self.active == id || self.group(id).is_none() {

@@ -7,6 +7,7 @@ pub enum Step {
     CreateWorktree,
     List,
     Prompt,
+    Pull,
     Remove,
     StartAgent,
     // keep-sorted end
@@ -18,6 +19,7 @@ impl fmt::Display for Step {
             Self::CreateWorktree => "creating the worktree",
             Self::List => "listing the repository's worktrees",
             Self::Prompt => "sending the agent its prompt",
+            Self::Pull => "pulling the existing worktree",
             Self::Remove => "removing the worktree",
             Self::StartAgent => "starting the agent",
         })

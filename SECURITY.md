@@ -146,7 +146,8 @@ for every base artifact, and checks the full actual signing fingerprint from
 - Release execution is gated by [zizmor](https://docs.zizmor.sh) in the distinct
   `Release Workflow Security` job before validation/builds. Only manual dispatches
   on `main` in `sheprd-labs/sheprd`, with both actor and rerun actor `penso`, qualify.
-  CI's required `Workflow Security` check remains a separate check.
+  CI's `Workflow Security` job, which its required gate waits for, remains a
+  separate check.
 - Every action is pinned to a commit SHA; Dependabot updates them with a
   seven-day cooldown so an automated PR cannot pull in a freshly compromised
   release on day one.

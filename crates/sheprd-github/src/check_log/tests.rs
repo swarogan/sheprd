@@ -85,3 +85,5 @@ fn control_and_direction_characters_do_not_reach_a_prompt() {
 fn an_empty_log_gives_an_empty_excerpt() {
     assert_eq!(excerpt(""), "");
 }
+
+mod vectors;

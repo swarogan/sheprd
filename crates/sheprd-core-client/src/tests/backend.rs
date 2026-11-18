@@ -265,6 +265,62 @@ fn a_synchronized_update_that_never_ends_is_shown_in_time() {
     );
 }
 
+#[test]
+fn a_program_that_exits_inside_a_synchronized_update_shows_what_it_held() {
+    let (backend, mut mock) = backend();
+    let mut terminal = attached(&backend, &mut mock, Role::Active);
+    let _ = terminal.next(Duration::from_millis(20)).unwrap();
+    mock.send(5, Kind::Data, b"\x1b[?2026hheld");
+    mock.send(5, Kind::Close, br#"{"reason":"exited","exit_code":0}"#);
+    let mut text = String::new();
+    let start = std::time::Instant::now();
+    loop {
+        let updates = terminal.next(Duration::from_millis(50)).unwrap();
+        text.push_str(&shown(&updates));
+        if updates.iter().any(|u| matches!(u, SurfaceUpdate::Ended(_))) {
+            break;
+        }
+        assert!(start.elapsed() < WAIT, "never ended");
+    }
+    // No later byte or timer can end the update, so the end shows it.
+    assert!(text.contains("held"), "held output lost: {text:?}");
+}
+
+#[test]
+fn a_connection_lost_inside_a_synchronized_update_shows_what_it_held() {
+    let (backend, mut mock) = backend();
+    let mut terminal = attached(&backend, &mut mock, Role::Active);
+    let _ = terminal.next(Duration::from_millis(20)).unwrap();
+    mock.send(5, Kind::Data, b"\x1b[?2026hheld");
+    drop(mock);
+    let mut text = String::new();
+    let start = std::time::Instant::now();
+    while let Ok(updates) = terminal.next(Duration::from_millis(50)) {
+        text.push_str(&shown(&updates));
+        assert!(start.elapsed() < WAIT, "never lost");
+    }
+    // No later byte or read can end the update, so the loss shows it.
+    assert!(text.contains("held"), "held output lost: {text:?}");
+}
+
+/// The text of the frames and rows in `updates`.
+fn shown(updates: &[SurfaceUpdate]) -> String {
+    let mut text = String::new();
+    for update in updates {
+        match update {
+            SurfaceUpdate::Frame(frame) => {
+                text.extend(frame.cells.iter().map(|cell| cell.symbol.as_str()))
+            }
+            SurfaceUpdate::Rows { rows, .. } => text.extend(
+                rows.iter()
+                    .flat_map(|row| row.cells.iter().map(|cell| cell.symbol.as_str())),
+            ),
+            _ => {}
+        }
+    }
+    text
+}
+
 /// Reads until an update equal to `wanted` arrives, within `WAIT`. A read
 /// may wake before the bytes it waits for, so the update the last bytes
 /// sent cause can come a read later than the one that follows them.

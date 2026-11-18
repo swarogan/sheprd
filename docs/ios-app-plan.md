@@ -172,6 +172,12 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   `claude` run in a shell: `pane` is the pane it runs in and `title` its
   terminal title, both absent from older daemons. Home lists these tabs
   with the chats, by status, and opens the agent's pane.
+- A chat's `summary.first_prompt` is the start of its first prompt, which
+  names a chat its agent has not titled; absent before one is sent and
+  from older daemons.
+- A terminal pane's `job` is what runs in front of its shell:
+  `{"state": "running", "command": "cargo test"}` or `{"state": "idle"}`.
+  Only Herdr 2 says; it is absent for Herdr 1 and from older daemons.
 - A terminal's `convert` is what its menu may move into a chat, as
   Sheprd's Move Agent into Chat does: the agent's pane, and which agent it
   is. It is absent when nothing can move (`sheprd_client::herdr::convert`,
@@ -327,6 +333,24 @@ app learns the pane it should open:
   the agent can take up to 30 s. A refusal, such as a busy agent or one
   Herdr reports no session for, is a `409` whose `error` the phone shows;
   every refusal comes before the agent is touched, and leaves it running.
+- `POST /api/v2/chat/{pane}/summarize` asks Claude, run once on its own,
+  where the chat stands, from the end of its transcript, whatever the
+  chat's agent: Codex and Gemini cannot run without tools or MCP servers.
+  Claude runs with no tools, no MCP server, only the user's own settings,
+  and no saved session, in a fresh private folder and its own process
+  group, which ends with it; it is stopped after 90 s. Nothing reaches the
+  chat itself. It answers `202` at once, or `400` when nothing was said yet or three summaries are
+  already running, and the result reaches every phone as the chat's
+  `summary.row_summary` on `home`: `{"state": "pending", "since_ms"}`,
+  `{"state": "ready", "text", "at_ms"}`, or `{"state": "failed", "reason",
+  "at_ms"}`. The daemon keeps it until it restarts.
+- `POST /api/v2/chat/{pane}/title` asks Claude the same way for a short title for the chat (at most 40 characters, cut on a
+  word) and answers `{"title"}` when it is done; it does not rename the
+  chat. The Session sheet's Name from Chat button renames the chat to it
+  through `rename`. It answers `400` when nothing was said yet, `429` when
+  three agent runs are already going, `409` when no agent that can answer
+  is installed, `504` past 90 s, and `502` when the agent fails or answers
+  nothing.
 - `start` is what the chat begins with, as last picked on the phone:
   `{"mode"?, "option"?, "auto_accept"?}`. `mode` is the mode's id, or the
   choice's when `option` names the agent's mode setting. It goes before the
@@ -387,6 +411,41 @@ the daemon asks Git in the workspace's listed folder itself
   it in a prompt to a chat of the workspace with the usual `POST
   /api/chat/{pane}/command`, after showing it and asking; the daemon does
   not send it anywhere itself.
+
+For a phone that reads GitHub itself (`docs/ios-github-plan.md`), `home`
+also says which repository each workspace is on and which accounts this
+computer lends the device asking:
+
+- Each workspace gains `"github": {"host", "owner", "repo", "branch"?,
+  "head"?, "head_owner"?}`: its `upstream` remote's repository when that
+  is on a GitHub host, as a fork's pull requests live there, else its
+  `origin`'s. SSH (`git@host:o/r`), `ssh://`, and `https://` remotes are
+  read; a user name or token in the URL is dropped. `branch` is absent on
+  a detached HEAD and `head`, the commit checked out, before the first
+  commit. `head_owner` is the owner of the repository the branch is pushed
+  to (the remote `branch.<name>.remote` names, else `origin`), so a fork's
+  pull request is matched by `head_owner:branch`; it is present only when
+  it is a GitHub login on the same host that differs, ignoring case, from
+  `owner`. The field is absent when neither remote
+  is on a GitHub host: github.com, a GHE.com `*.ghe.com` host, a host `gh`
+  is signed in to on the computer, or one listed in `[remote]
+  github_hosts`. The daemon reads the checkouts with Git off the request
+  path, at most 256 folders, every 30 s while a phone looks.
+- `"github_hosts": [{"host", "login"}]` at the top: Sheprd's main
+  github.com account while Sheprd is open, then each host `gh` is signed in
+  to. Absent while the device's **Share GitHub sign-in** switch is off.
+- `GET /api/v2/github/token?host=HOST` answers `{"host", "login", "token",
+  "expires_at"?, "source": "sheprd"|"gh"}`. For github.com, Sheprd's main
+  account comes first: the daemon asks Sheprd (`Request::GitHubLeaseAsks`,
+  answered with `Request::GitHubLease` once Sheprd has checked the token
+  with GitHub), waiting up to 15 s. Otherwise, and for Enterprise hosts,
+  the daemon runs `gh auth token --hostname HOST`; `gh` tokens carry no
+  `expires_at`. Sheprd alone renews its own tokens, never the daemon; the
+  phone asks again on a 401. 403 while the device's switch is off, 404
+  when no account is there for the host, 400 for a host that is not a host
+  name, 429 past five asks a device makes in a minute or so, and 504 when
+  Sheprd did not answer in time and `gh` had nothing. The token is never
+  logged.
 
 The daemon cannot call Sheprd, so a question waits in a bounded mailbox.
 While a phone is connected, Sheprd holds one `Request::ChangeAsks` open on

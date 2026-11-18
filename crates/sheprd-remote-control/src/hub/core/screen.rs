@@ -44,7 +44,7 @@ pub(super) struct Screen {
     /// hold then no longer sets its size, and closing a view leaves it
     /// alone. A phone that asks for its size again takes it back.
     taken_back: bool,
-    sync_since: Option<Instant>,
+    sync_since: Option<(Instant, u64)>,
     touched: Instant,
 }
 
@@ -305,7 +305,13 @@ impl Screen {
             }
         }
         if self.emulator.sync_pending() {
-            let since = self.sync_since.get_or_insert_with(Instant::now);
+            // One read can end an update and begin the next, which is timed
+            // afresh.
+            let ended = self.emulator.syncs_ended();
+            let since = match self.sync_since {
+                Some((since, seen)) if seen == ended => since,
+                _ => self.sync_since.insert((Instant::now(), ended)).0,
+            };
             if since.elapsed() >= Duration::from_millis(150) {
                 self.emulator.end_sync();
                 self.sync_since = None;

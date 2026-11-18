@@ -1,0 +1,54 @@
+{
+ "data": {
+  "repository": {
+   "b0": {
+    "nodes": [
+     {
+      "author": {
+       "login": "ana"
+      },
+      "commits": {
+       "nodes": [
+        {
+         "commit": {
+          "statusCheckRollup": {
+           "contexts": {
+            "nodes": [
+             {
+              "__typename": "CheckRun",
+              "conclusion": null,
+              "databaseId": null,
+              "detailsUrl": null,
+              "name": "build",
+              "status": "IN_PROGRESS"
+             }
+            ],
+            "pageInfo": {
+             "hasNextPage": false
+            }
+           }
+          }
+         }
+        }
+       ]
+      },
+      "headRefName": "feature",
+      "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+      "headRepositoryOwner": {
+       "login": "acme"
+      },
+      "isDraft": true,
+      "mergeStateStatus": "DRAFT",
+      "mergeable": "MERGEABLE",
+      "number": 43,
+      "reviewDecision": null,
+      "state": "OPEN",
+      "title": "Pull request 43",
+      "url": "https://github.com/acme/app/pull/43"
+     }
+    ]
+   },
+   "nameWithOwner": "acme/app"
+  }
+ }
+}

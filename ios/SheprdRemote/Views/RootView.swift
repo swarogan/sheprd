@@ -1,7 +1,8 @@
 import SheprdRemoteCore
+import SheprdNearby
 import SwiftUI
 
-enum RootTab: Hashable { case home, workspaces, settings }
+enum RootTab: Hashable { case home, workspaces, pullRequests, settings }
 
 /// Home B: attention first, with Workspaces and its search, and Settings,
 /// as tabs, or
@@ -38,6 +39,10 @@ struct RootView: View {
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+        #if DEBUG
+        // The simulator loop's made-up pull request (`-githubDemo`).
+        .overlay { PullRequestDemoRoot() }
+        #endif
         .environment(window)
         // Along the top edge on every screen; sheets carry their own.
         .overlay(alignment: .top) { SyncBar().ignoresSafeArea(edges: .top) }
@@ -166,6 +171,10 @@ struct RootView: View {
                     .slidesTabBar(hidden: !workspacesPath.isEmpty)
                     .connectionToast(pairing: $window.pairing)
             }
+            Tab("Pull Requests", systemImage: "arrow.triangle.pull", value: RootTab.pullRequests) {
+                NavigationStack { PullRequestsList() }
+                    .connectionToast(pairing: $window.pairing)
+            }
             Tab("Settings", systemImage: "gearshape", value: RootTab.settings) {
                 NavigationStack { SettingsView() }
                     .connectionToast(pairing: $window.pairing)
@@ -189,7 +198,8 @@ extension RootView {
     /// chat, `-session YES` opens its session sheet and `-draft TEXT`
     /// types into the composer. `-voiceSay TEXT` runs a spoken command as
     /// if it were heard, as the simulator has no microphone, and
-    /// `-voiceThen TEXT` follows it with another.
+    /// `-voiceThen TEXT` follows it with another. `-sampleChat YES` opens a
+    /// made-up chat, for screenshots without anyone's real prompts.
     func followLaunchArguments() async {
         let defaults = UserDefaults.standard
         if let link = defaults.string(forKey: "pairLink"),
@@ -204,6 +214,7 @@ extension RootView {
         }
         switch defaults.string(forKey: "tab") {
         case "workspaces": tab = .workspaces
+        case "pullRequests": tab = .pullRequests
         case "settings": tab = .settings
         default: break
         }
@@ -236,6 +247,9 @@ extension RootView {
                 tab = .workspaces
                 workspacesPath.append(WorkspaceKey(device: machine.id, workspace: workspace))
             }
+        }
+        if defaults.bool(forKey: "sampleChat") {
+            model.pendingRoute = .chat(.sample, title: "Weather widget")
         }
         if let pane = defaults.string(forKey: "openTerm") {
             try? await Task.sleep(for: .seconds(2))

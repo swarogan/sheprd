@@ -126,6 +126,37 @@ impl Keeper {
         }
     }
 
+    /// The chat switched to `agent`; the session
+    /// that opens next is that agent's. The record of the agent before goes
+    /// at once: should the new one fail to start, a restore must not bring
+    /// back the agent the user switched away from.
+    pub(crate) fn switched(&mut self, agent: Agent) {
+        restore::remove(&self.dir, &self.endpoint);
+        self.agent = agent;
+    }
+
+    /// Holds a core chat's automatic recovery before a switch stops the
+    /// agent its record names, so a chat program lost mid-switch is never
+    /// relaunched with that agent and its session beside the new one. A
+    /// switch that cannot hold it must start no other agent.
+    pub(crate) fn hold_for_switch(&self) -> crate::Result<()> {
+        if !self.core {
+            return Ok(());
+        }
+        core::switching(self).map_err(crate::Error::RecoveryHold)
+    }
+
+    /// The agent a switch asked for started as `pid`. A core chat records it
+    /// as the agent a later restore must find gone; when that cannot be
+    /// written, the earlier agent's record goes too, so a restore refuses
+    /// rather than take the switched-away agent's end for this one's.
+    pub(crate) fn agent_switched(&mut self, pid: u32) {
+        self.child = Some(pid);
+        if self.core && self.agent_started(pid).is_err() {
+            core::agent_ended(&self.dir, &self.endpoint);
+        }
+    }
+
     /// Records the session that just opened, replacing an earlier one. A
     /// session id that could not be typed back safely is not kept, and its
     /// earlier record goes with it, so a restore never continues a session

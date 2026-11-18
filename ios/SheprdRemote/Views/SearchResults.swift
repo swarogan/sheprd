@@ -6,6 +6,9 @@ import SwiftUI
 struct SearchResults: View {
     @Environment(AppModel.self) private var model
     let query: String
+    /// Home's stack holds routes, while the Workspaces stacks hold
+    /// workspace keys, so a workspace row pushes what its stack takes.
+    var workspacesAsRoutes = false
     @State private var messages: [MessageHit] = []
     @State private var searching = false
 
@@ -29,7 +32,7 @@ struct SearchResults: View {
             if !workspaces.isEmpty {
                 Section("Workspaces") {
                     ForEach(workspaces, id: \.key) { key, machine, workspace in
-                        NavigationLink(value: key) {
+                        workspaceLink(key) {
                             HStack(spacing: 10) {
                                 WorkspaceMark(workspace: workspace)
                                 VStack(alignment: .leading, spacing: 1) {
@@ -85,6 +88,15 @@ struct SearchResults: View {
             guard !Task.isCancelled else { return }
             messages = found
             searching = false
+        }
+    }
+
+    @ViewBuilder
+    private func workspaceLink(_ key: WorkspaceKey, @ViewBuilder label: () -> some View) -> some View {
+        if workspacesAsRoutes {
+            NavigationLink(value: Route.workspace(key), label: label)
+        } else {
+            NavigationLink(value: key, label: label)
         }
     }
 }

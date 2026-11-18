@@ -33,7 +33,7 @@ const QUEUE: usize = 16;
 pub(crate) const STOP: &str = r#"{"type":"stop"}"#;
 
 /// One line from the helper.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Event {
     Radio(Radio),
     /// A whole message a phone wrote, and which phone to answer.
@@ -54,6 +54,40 @@ pub(crate) enum Event {
     },
     /// Seconds since the desktop's last input.
     Idle(u64),
+    /// Scanning (`Station::scan`): the radio as the scanning side sees it.
+    CentralRadio(Radio),
+    /// A computer showing Pair device, by the id Core Bluetooth gives it.
+    Found {
+        peripheral: String,
+        name: String,
+    },
+    /// The computer is ready to carry `pair` frames.
+    Connected {
+        peripheral: String,
+    },
+    /// A whole message the computer answered.
+    PeripheralFrame {
+        peripheral: String,
+        data: Vec<u8>,
+    },
+    /// The computer went: out of range, or it closed Pair device.
+    PeripheralDisconnected {
+        peripheral: String,
+    },
+}
+
+impl Event {
+    /// Whether the event is for whoever scans, not for pairing or presence.
+    pub(crate) fn scanned(&self) -> bool {
+        matches!(
+            self,
+            Self::CentralRadio(_)
+                | Self::Found { .. }
+                | Self::Connected { .. }
+                | Self::PeripheralFrame { .. }
+                | Self::PeripheralDisconnected { .. }
+        )
+    }
 }
 
 #[derive(Deserialize)]
@@ -65,6 +99,11 @@ enum Line {
     Disconnected { central: String },
     Idle { seconds: u64 },
     Error { message: String },
+    CentralState { state: String },
+    Found { peripheral: String, name: String },
+    Connected { peripheral: String },
+    PeripheralFrame { peripheral: String, data: String },
+    PeripheralDisconnected { peripheral: String },
 }
 
 /// A phone's message, as `POST /api/nearby/*` reads it.
@@ -78,13 +117,24 @@ enum PhoneMessage {
 /// Reads one helper line; anything malformed or oversized is `None`.
 pub(crate) fn parse_line(line: &str) -> Option<Event> {
     match serde_json::from_str::<Line>(line).ok()? {
-        Line::State { state } => Some(Event::Radio(match state.as_str() {
-            "powered_on" => Radio::On,
-            "powered_off" => Radio::Off,
-            "unauthorized" => Radio::Unauthorized,
-            "unsupported" => Radio::Unsupported,
-            _ => Radio::Unknown,
-        })),
+        Line::State { state } => Some(Event::Radio(radio(&state))),
+        Line::CentralState { state } => Some(Event::CentralRadio(radio(&state))),
+        Line::Found { peripheral, name } => {
+            let name: String = name.chars().filter(|c| !c.is_control()).take(64).collect();
+            (central_id(&peripheral) && !name.trim().is_empty())
+                .then_some(Event::Found { peripheral, name })
+        }
+        Line::Connected { peripheral } => {
+            central_id(&peripheral).then_some(Event::Connected { peripheral })
+        }
+        Line::PeripheralFrame { peripheral, data } => {
+            let data = STANDARD.decode(data).ok()?;
+            (central_id(&peripheral) && data.len() <= MAX_MESSAGE)
+                .then_some(Event::PeripheralFrame { peripheral, data })
+        }
+        Line::PeripheralDisconnected { peripheral } => {
+            central_id(&peripheral).then_some(Event::PeripheralDisconnected { peripheral })
+        }
         Line::Frame { central, data } => {
             let data = STANDARD.decode(data).ok()?;
             (central_id(&central) && data.len() <= MAX_MESSAGE)
@@ -100,6 +150,17 @@ pub(crate) fn parse_line(line: &str) -> Option<Event> {
         }
         Line::Idle { seconds } => Some(Event::Idle(seconds)),
         Line::Error { message } => Some(Event::Failure(message.chars().take(200).collect())),
+    }
+}
+
+/// The radio as Core Bluetooth names its state.
+fn radio(state: &str) -> Radio {
+    match state {
+        "powered_on" => Radio::On,
+        "powered_off" => Radio::Off,
+        "unauthorized" => Radio::Unauthorized,
+        "unsupported" => Radio::Unsupported,
+        _ => Radio::Unknown,
     }
 }
 
@@ -187,6 +248,27 @@ pub(crate) fn frame(central: &str, data: &[u8]) -> String {
 /// Writes `data` back to the phone `central` on `presence`.
 pub(crate) fn presence_frame(central: &str, data: &[u8]) -> String {
     json!({ "type": "presence_frame", "central": central, "data": STANDARD.encode(data) })
+        .to_string()
+}
+
+/// Starts or stops looking for computers showing Pair device.
+pub(crate) fn scan(on: bool) -> String {
+    json!({ "type": "scan", "on": on }).to_string()
+}
+
+/// Gets the computer `peripheral` ready to carry `pair` frames.
+pub(crate) fn connect(peripheral: &str) -> String {
+    json!({ "type": "connect", "peripheral": peripheral }).to_string()
+}
+
+/// Lets go of the computer `peripheral`.
+pub(crate) fn disconnect(peripheral: &str) -> String {
+    json!({ "type": "disconnect", "peripheral": peripheral }).to_string()
+}
+
+/// Writes `data` to the computer `peripheral`.
+pub(crate) fn peripheral_frame(peripheral: &str, data: &[u8]) -> String {
+    json!({ "type": "peripheral_frame", "peripheral": peripheral, "data": STANDARD.encode(data) })
         .to_string()
 }
 

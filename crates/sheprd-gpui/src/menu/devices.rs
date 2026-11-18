@@ -15,6 +15,7 @@ mod host_key;
 mod host_key_choice;
 mod host_menu;
 mod local_network;
+mod nearby;
 pub(super) mod picker;
 pub(super) mod rail;
 mod saved_warning;
@@ -25,6 +26,7 @@ mod wsl;
 pub(super) use add_device::Setup;
 pub(crate) use error::Error;
 pub(crate) use host_menu::HostMenu;
+pub(super) use nearby::NearbySetup;
 pub(crate) use scope::DeviceScope;
 pub(super) use wsl::WslSetup;
 

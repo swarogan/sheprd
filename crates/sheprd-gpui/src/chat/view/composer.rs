@@ -89,20 +89,22 @@ impl SheprdWindow {
                     this.browse_chat_files(&pane_id, window, cx);
                 }))
         };
-        let copying = (chat.uploading > 0).then(|| {
-            // On this machine only a pasted picture is ever pending.
-            let label = match &chat.target.route {
-                super::super::Route::Ssh(host) => {
-                    let host = safe_text(host, 80);
-                    fl!("chat-copying-files", count = chat.uploading, host = host)
-                }
-                super::super::Route::Local => {
-                    fl!("chat-preparing-pictures", count = chat.uploading)
-                }
-                route @ super::super::Route::Remote(_) => {
-                    let host = safe_text(route.remote_name().unwrap_or_default(), 80);
-                    fl!("chat-copying-files", count = chat.uploading, host = host)
-                }
+        // On this machine only a pasted picture is ever pending.
+        let host = match &chat.target.route {
+            super::super::Route::Ssh(host) => Some(safe_text(host, 80)),
+            super::super::Route::Local => None,
+            route @ super::super::Route::Remote(_) => {
+                Some(safe_text(route.remote_name().unwrap_or_default(), 80))
+            }
+        };
+        // Dropped files show as chips of their own; what is left is a
+        // picture still being saved.
+        let uploads = self.render_chat_uploads(chat, small, cx);
+        let pending = chat.uploading.saturating_sub(uploads.len());
+        let copying = (pending > 0).then(|| {
+            let label = match &host {
+                Some(host) => fl!("chat-copying-files", count = pending, host = host.clone()),
+                None => fl!("chat-preparing-pictures", count = pending),
             };
             div()
                 .debug_selector(|| "chat-uploading".into())
@@ -116,7 +118,8 @@ impl SheprdWindow {
                 .text_color(rgb(theme.subtext()))
                 .child(label)
         });
-        let chips = (!chat.attachments.is_empty() || copying.is_some()).then(|| {
+        let shown = !chat.attachments.is_empty() || copying.is_some() || !uploads.is_empty();
+        let chips = shown.then(|| {
             div()
                 .debug_selector(|| "chat-attachments".into())
                 .flex()
@@ -125,22 +128,13 @@ impl SheprdWindow {
                 .px(px(10.))
                 .pt(px(10.))
                 .children(copying)
+                .children(uploads)
                 .children(chat.attachments.iter().enumerate().map(|(index, path)| {
                     let name = path
                         .file_name()
                         .map_or_else(|| path.to_string_lossy(), |name| name.to_string_lossy())
                         .into_owned();
-                    let picture = path
-                        .extension()
-                        .and_then(|extension| extension.to_str())
-                        .and_then(|extension| {
-                            sheprd_chat_protocol::ImageType::from_mime(&format!(
-                                "image/{}",
-                                extension.to_ascii_lowercase()
-                            ))
-                        })
-                        .is_some();
-                    let icon = if picture {
+                    let icon = if crate::upload_chips::is_picture(&name) {
                         "icons/zoom.svg"
                     } else {
                         "icons/file.svg"
@@ -254,7 +248,7 @@ impl SheprdWindow {
             attach,
             shortcuts,
             settings,
-            usage: self.render_chat_usage(chat),
+            usage: self.render_chat_footer_usage(chat, host.as_deref(), small),
             send,
             place: transcript
                 .session
@@ -294,6 +288,7 @@ impl SheprdWindow {
                     .text_color(rgb(hues.red))
                     .child(problem)
             }))
+            .children(self.render_chat_agent_advice(chat, small, cx))
             .child(card)
             .children(
                 chat.menu
@@ -302,5 +297,31 @@ impl SheprdWindow {
                     .map(|menu| self.render_chat_menu(chat, &menu, cx)),
             )
             .children(self.render_chat_shortcuts(chat, cx))
+    }
+}
+
+impl SheprdWindow {
+    /// The footer's context use, after the copy's progress while files go
+    /// to the chat's host.
+    fn render_chat_footer_usage(
+        &self,
+        chat: &ChatPane,
+        host: Option<&str>,
+        small: Pixels,
+    ) -> Option<Div> {
+        let status = host.and_then(|host| self.render_chat_upload_status(chat, host));
+        let usage = self.render_chat_usage(chat);
+        if status.is_none() {
+            return usage;
+        }
+        Some(
+            div()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .children(status.map(|status| status.text_size(small)))
+                .children(usage),
+        )
     }
 }

@@ -170,6 +170,15 @@ pub(crate) fn command_title(command: &str) -> String {
 /// The `_meta` key that marks an option only a person may choose.
 pub(crate) const MANUAL: &str = "herdr.manual";
 
+/// The `_meta` key of a permission request that asks a question with
+/// choices: the whole `sheprd_chat_protocol::Question`, for clients that
+/// show it and answer it in their own words or with several choices.
+pub(crate) const QUESTION: &str = "herdr.question";
+
+/// The option a session selects to answer such a question, and the
+/// `_meta` key of that outcome holding the answers, a list of strings.
+pub(crate) const ANSWERS: &str = "herdr.answers";
+
 /// `option`, marked so auto-accepting never chooses it: an answer to a
 /// question, an extension's dialog, or a broader grant than one call.
 /// Other ACP clients still see its kind.

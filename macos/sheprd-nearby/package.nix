@@ -14,6 +14,7 @@ stdenv.mkDerivation {
       ./main.swift
       ./Framing.swift
       ./Bonjour.swift
+      ./Central.swift
     ];
   };
   nativeBuildInputs = [ swift ];
@@ -22,7 +23,7 @@ stdenv.mkDerivation {
   dontConfigure = true;
   buildPhase = ''
     runHook preBuild
-    swiftc -O -swift-version 5 main.swift Framing.swift Bonjour.swift -o sheprd-nearby
+    swiftc -O -swift-version 5 main.swift Framing.swift Bonjour.swift Central.swift -o sheprd-nearby
     runHook postBuild
   '';
   installPhase = ''

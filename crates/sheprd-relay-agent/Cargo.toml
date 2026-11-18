@@ -1,0 +1,31 @@
+# The listener on an SSH machine that lets Sheprd reach its SSH server through
+# a relay, end-to-end encrypted, from any network (docs/relay-plan.md).
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-relay-agent"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace             = true
+getrandom.workspace          = true
+p256.workspace               = true
+serde.workspace              = true
+serde_json.workspace         = true
+sheprd-relay                 = { features = ["client"], workspace = true }
+sheprd-tunnel                = { features = ["tokio"], workspace = true }
+thiserror.workspace          = true
+tokio.workspace              = true
+tracing.workspace            = true
+tracing-subscriber           = { features = ["fmt"], workspace = true }
+
+[dev-dependencies]
+axum.workspace               = true
+quinn.workspace              = true
+sheprd-relay                 = { features = ["client", "server"], workspace = true }
+tempfile.workspace           = true

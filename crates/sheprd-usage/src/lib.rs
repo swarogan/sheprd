@@ -11,6 +11,7 @@
 mod cookies;
 mod error;
 pub mod model;
+pub mod pick;
 pub mod probe;
 mod providers;
 pub mod registry;

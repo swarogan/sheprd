@@ -123,19 +123,25 @@ fn the_permission_names_the_tool_call_it_is_about() {
 #[test]
 fn other_agent_requests_are_refused() {
     let mut harness = ready();
-    harness.input(Input::Agent(Inbound::Request {
-        id: wire::RequestId::Number(9),
-        method: "fs/read_text_file".to_owned(),
-        params: json!({"sessionId": "s1", "path": "/etc/passwd"}),
-    }));
+    harness.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Request {
+            id: wire::RequestId::Number(9),
+            method: "fs/read_text_file".to_owned(),
+            params: json!({"sessionId": "s1", "path": "/etc/passwd"}),
+        },
+    ));
     let response = harness.sent().pop().unwrap();
     assert_eq!(response["id"], 9);
     assert_eq!(response["error"]["code"], -32601);
-    harness.input(Input::Agent(Inbound::Request {
-        id: wire::RequestId::Number(10),
-        method: "session/request_permission".to_owned(),
-        params: json!({"sessionId": "other", "toolCall": {"toolCallId": "x"}, "options": []}),
-    }));
+    harness.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Request {
+            id: wire::RequestId::Number(10),
+            method: "session/request_permission".to_owned(),
+            params: json!({"sessionId": "other", "toolCall": {"toolCallId": "x"}, "options": []}),
+        },
+    ));
     let response = harness.sent().pop().unwrap();
     assert_eq!(response["error"]["code"], -32602);
     assert!(!harness.transcript().is_blocked());

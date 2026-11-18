@@ -41,6 +41,7 @@ pub(super) fn apply(case: &str, transcript: &mut Transcript, now_ms: u64) {
                     kind: PermissionKind::AllowOnce,
                     name: "Allow once".into(), // i18n: data
                 }],
+                question: None,
                 title: "Run cargo test -p sheprd-gpui".into(), // i18n: data
             }];
             return;

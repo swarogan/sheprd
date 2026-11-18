@@ -16,6 +16,7 @@ mod offer_safety;
 mod padding;
 mod presentation;
 mod queue_safety;
+mod reused_shell_note;
 mod shift_selection;
 
 /// Workspace `w0` with pane `w0:p1`, and an agent in it with

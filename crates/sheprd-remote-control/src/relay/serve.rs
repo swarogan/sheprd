@@ -1,9 +1,11 @@
 //! One dial: the end-to-end tunnel, admitting only a paired device's
 //! tunnel key, then TLS with the certificate for `127.0.0.1`, then the
-//! API, as axum serves it on the network.
+//! API, as axum serves it on the network. A desktop let in over SSH
+//! (`crate::ssh_access`) reaches the local SSH server instead.
 
 use super::{Relays, Result, Served};
-use crate::web::{Peer, Shared};
+use crate::control::DeviceId;
+use crate::web::{Peer, Relayed, Shared};
 use axum::{Extension, extract::ConnectInfo};
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 use sha2::{Digest, Sha256};
@@ -52,11 +54,21 @@ async fn serve(relays: &Relays, incoming: Incoming, route: RouteId, served: Serv
     )
     .await
     .map_err(|_| sheprd_tunnel::Error::Closed)??;
+    if pairing.is_none()
+        && let Some((device, server)) = desktop(state, &accepted.remote)
+    {
+        return ssh(state, device, server, accepted.io).await;
+    }
     // Rate limits and logs key callers by address; each device gets its own
     // private one, derived from its tunnel key, so one cannot spend
     // another's.
     let peer = SocketAddr::new(address_for(&accepted.remote), 0);
-    let service = TowerToHyperService::new(router.layer(Extension(ConnectInfo(Peer(peer)))));
+    // The marker tells a prompt's origin it came through the relay.
+    let service = TowerToHyperService::new(
+        router
+            .layer(Extension(ConnectInfo(Peer(peer))))
+            .layer(Extension(Relayed)),
+    );
     let tls = tokio::time::timeout(
         HANDSHAKE,
         tokio_rustls::TlsAcceptor::from(tls).accept(accepted.io),
@@ -83,6 +95,69 @@ fn paired(state: &Shared, remote: &[u8; 32]) -> bool {
         .iter()
         .filter_map(|record| record.relay.as_ref()?.tunnel_key())
         .any(|key| key == *remote)
+}
+
+/// The desktop let in over SSH whose tunnel key `remote` is, and the SSH
+/// server to reach.
+fn desktop(state: &Shared, remote: &[u8; 32]) -> Option<(DeviceId, SocketAddr)> {
+    let auth = state.auth();
+    let server = auth.ssh_access().ok()?.server;
+    auth.devices()
+        .records()
+        .iter()
+        .find(|record| {
+            record.ssh.is_some()
+                && record
+                    .relay
+                    .as_ref()
+                    .and_then(|relay| relay.tunnel_key())
+                    .is_some_and(|key| key == *remote)
+        })
+        .map(|record| (record.id.clone(), server))
+}
+
+/// Splices a desktop's tunnel to the SSH server on loopback, whose own
+/// encryption and host key run inside it, and marks the desktop seen so it
+/// is not forgotten as idle while it uses only SSH. Revoking the desktop,
+/// or its expiring, ends the session here at once, whatever the relay does
+/// with its dial key.
+async fn ssh(
+    state: &Shared,
+    device: DeviceId,
+    server: SocketAddr,
+    mut tunnel: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+) -> Result<()> {
+    let mut revoked = state.auth().watch_revocations();
+    let touched = state.clone();
+    let seen = device.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+        touched
+            .auth()
+            .devices_mut()
+            .touch(&seen, crate::web::now_ms())
+    })
+    .await;
+    let mut server = tokio::net::TcpStream::connect(server)
+        .await
+        .map_err(super::Error::Ssh)?;
+    let gone = async {
+        loop {
+            if state.auth().devices().get(&device).is_none() {
+                return;
+            }
+            if revoked.changed().await.is_err() {
+                // The daemon is shutting down; the copy ends with it.
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    tokio::select! {
+        copied = tokio::io::copy_bidirectional(&mut tunnel, &mut server) => {
+            copied.map_err(super::Error::Ssh)?;
+        }
+        () = gone => tracing::info!("ended the SSH session of a desktop no longer paired"),
+    }
+    Ok(())
 }
 
 /// A unique local IPv6 address standing for the device with this tunnel

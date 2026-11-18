@@ -41,6 +41,15 @@ public struct ChangedFile: Codable, Hashable, Sendable, Identifiable {
     public var removed: Int?
     public var shown: DiffShown
 
+    public init(path: String, oldPath: String? = nil, status: Status, added: Int? = nil, removed: Int? = nil, shown: DiffShown) {
+        self.path = path
+        self.oldPath = oldPath
+        self.status = status
+        self.added = added
+        self.removed = removed
+        self.shown = shown
+    }
+
     public var id: String { path }
 
     public enum Status: String, Codable, Hashable, Sendable {
@@ -179,6 +188,10 @@ public struct PullRequestChecks: Codable, Hashable, Sendable {
 
 public struct CheckLogExcerpt: Codable, Hashable, Sendable {
     public var excerpt: String
+
+    public init(excerpt: String) {
+        self.excerpt = excerpt
+    }
 }
 
 /// The prompt that asks an agent to look at a failing check. The check's

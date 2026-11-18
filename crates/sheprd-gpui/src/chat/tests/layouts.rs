@@ -11,6 +11,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use sheprd_client::ConnectTarget;
 
 mod prompt_width;
+mod send_first_line;
 mod setting_icons;
 mod terminal_footer;
 

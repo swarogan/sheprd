@@ -129,7 +129,7 @@ distinct requirements, not a blanket inability to support plugins in Sheprd.
 In this repository, phone/web terminal operations are in
 `crates/sheprd-remote-control/src/native` and `src/web`; neither exposes
 `pane.link.activate` or a plugin-action dispatch route. iOS terminal input in
-`ios/SheprdRemote/Views/TerminalScreen.swift` does not dispatch that method.
+`ios/SheprdRemote/Views/Terminal/TerminalScreen.swift` does not dispatch that method.
 
 For existing plugins, inspect their action command and dependencies first. Copy
 only a compatible link action into an adapter, preserving plugin IDs and handler

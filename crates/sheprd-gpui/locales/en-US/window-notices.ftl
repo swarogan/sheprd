@@ -7,6 +7,7 @@
 window-notices-request-failed = { $operation }: { $error }
 # Moving focus to a workspace, tab, or pane.
 window-notices-navigate = Navigate
+window-notices-recent-panes-needs-surface = Recent Pane needs a newer Herdr daemon.
 window-notices-annotate-pages-unsupported = Annotating pages needs macOS or Windows
 window-notices-scrollback-needs-newer = Opening scrollback needs a newer Herdr daemon
 window-notices-clear-needs-newer = Clear Pane needs a newer Herdr daemon.
@@ -29,6 +30,22 @@ window-notices-skill-offer-body = Agents in your panes can open pages and HTML d
 window-notices-skill-offer-detail = Install writes herdr-gpui-browser/SKILL.md, herdr-automations/SKILL.md, and herdr-mods/SKILL.md into ~/.claude/skills and ~/.agents/skills, whichever exist, and keeps them up to date. A skill of any of those names you wrote yourself is left alone. Remove them any time in Settings.
 window-notices-skill-offer-install = Install
 window-notices-skill-offer-decline = Not now
+# The one-time offer to move Herdr.app to Sheprd.app, as a new install names
+# it. $from and $to are the two paths.
+window-notices-rename-offer-title = Rename Herdr to Sheprd?
+window-notices-rename-offer-body = This app is installed as { $from }. New installs are named { $to }. Rename it and restart?
+window-notices-rename-offer-detail = Your terminals keep running, and settings and sign-ins stay as they are. The old name is kept as a hidden link, so scripts that use it keep working. You will not be asked again.
+window-notices-rename-offer-confirm = Rename and Restart
+window-notices-rename-offer-decline = Not now
+# The same offer for an app Homebrew installed, which cannot rename itself:
+# it shows the commands that reinstall it, and copies them. $from is its path.
+window-notices-rename-homebrew-title = Herdr is now Sheprd
+window-notices-rename-homebrew-body = This app was installed with Homebrew as { $from }, which keeps the old name on every upgrade. To get Sheprd.app, run these commands in a terminal, even one here:
+window-notices-rename-homebrew-detail = You lose nothing: uninstalling removes only the app. Your settings, sign-ins, saved tabs, and history are kept, and your terminals keep running. Then quit Sheprd and open it again from Applications. You will not be asked again.
+window-notices-rename-homebrew-copy = Copy Commands
+window-notices-rename-commands-copied = Copied the reinstall commands
+# Moving the app failed; $error says why.
+window-notices-rename-failed = Could not rename the app: { $error }
 
 # Entering zen mode says how to leave it: by the command's name when it
 # has no shortcut, else by its $key.

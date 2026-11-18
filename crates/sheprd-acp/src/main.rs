@@ -7,6 +7,7 @@ mod attach;
 mod claude;
 mod cli;
 mod codex;
+mod context;
 mod error;
 mod files;
 mod harness;
@@ -23,6 +24,7 @@ mod restore;
 mod rpc;
 mod session;
 mod session_helpers;
+mod t3;
 mod tui;
 
 use std::process::ExitCode;
@@ -74,6 +76,13 @@ fn main() -> ExitCode {
             }
         }
         Ok(cli::Parsed::Mirror(options)) => match mirror::run(options) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("sheprd-acp: {error:#}");
+                ExitCode::FAILURE
+            }
+        },
+        Ok(cli::Parsed::T3(options)) => match t3::run(options) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("sheprd-acp: {error:#}");

@@ -12,6 +12,7 @@ fn step(step: Step) -> &'static str {
         Step::CreateWorktree => "create-worktree",
         Step::List => "list",
         Step::Prompt => "prompt",
+        Step::Pull => "pull",
         Step::Remove => "remove",
         Step::StartAgent => "start-agent",
         // keep-sorted end

@@ -323,7 +323,32 @@ Installation contracts, beyond accepting a filename:
 
 ### Moving `Herdr.app` To `Sheprd.app`
 
-Installed bundles leave the old name with an update, never on their own.
+Installed bundles leave the old name with an update, or when the user agrees to
+the one-time offer below, never on their own.
+
+**Asking first.** A release build running from a standalone `Herdr.app` offers
+once, in its first window, to rename itself to `Sheprd.app`, the name a new
+install gets. It offers only when the update would move it too: no Homebrew
+receipt names the bundle and nothing exists at `Sheprd.app`. Rename and Restart
+takes the update lock, renames the bundle, leaves the same link at the old path
+(putting the bundle back if linking fails), and quits so the relaunch waiter
+opens `Sheprd.app`. The answer, either one, is saved in `app-rename.json` in
+the app's state directory, so it never asks again; a failed rename is shown and
+not retried, and the bundle can still be renamed in Finder.
+
+A `Herdr.app` that a Homebrew receipt names cannot move itself, and the legacy
+`herdr-gpui` cask keeps that target on every upgrade. It is offered, once, the
+commands that reinstall it as `Sheprd.app` from the current cask, with Copy
+Commands:
+
+```sh
+brew uninstall --cask herdr-gpui
+brew install sheprd-labs/tap/sheprd
+```
+
+Nothing is lost: neither cask has a `zap` stanza, so uninstalling removes only
+the bundle, and settings, sign-ins, saved tabs, and history live outside it.
+Terminals keep running in their daemon.
 
 **Standalone.** When a `Sheprd.app` payload updates a bundle named `Herdr.app`,
 the helper installs it as `Sheprd.app` beside the old path, inside the same

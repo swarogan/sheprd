@@ -8,6 +8,7 @@ mod diagnostics;
 mod font_weight;
 mod glyph_cache;
 mod grid_edges;
+mod image_replacement;
 // Paint counts are recorded only with the integration-test feature.
 #[cfg(feature = "integration-test")]
 mod layers;

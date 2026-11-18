@@ -2,6 +2,7 @@ use super::*;
 
 mod bold_color;
 mod layout_chords;
+mod rows;
 mod wheel;
 mod wheel_notches;
 mod wheel_reports;

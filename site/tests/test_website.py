@@ -105,10 +105,28 @@ class WebsiteTests(unittest.TestCase):
         """sheprd_relay::directory::SETUP_URL points at the relays docs page."""
         source = (ROOT / "crates/sheprd-relay/src/directory.rs").read_text()
         self.assertIn('SETUP_URL: &str = "https://sheprd.org/docs/relays/"', source)
+        # Settings opens the deploy page beside the private relay setting.
+        self.assertIn('DEPLOY_URL: &str = "https://sheprd.org/relay/"', source)
+        self.assertTrue((WEBSITE / "relay/index.html").is_file())
         slugs, _ = docs_pages()
         self.assertIn("relays", slugs)
         page = (ROOT / "website/docs/relays.md").read_text()
         self.assertIn("cloud.digitalocean.com/apps/new?repo=https://github.com/sheprd-labs/sheprd", page)
+        self.assertIn("(https://sheprd.org/relay/)", page)
+
+    def test_relay_deploy_page_talks_only_to_digitalocean_and_github(self):
+        """sheprd.org/relay holds a DigitalOcean token: no inline script, and
+        connections only to DigitalOcean's API, GitHub's raw files, and the
+        sslip.io names the relays answer at."""
+        page = (WEBSITE / "relay/index.html").read_text()
+        self.assertNotRegex(page, r"<script(?![^>]*\bsrc=)")
+        self.assertNotIn("style=", page)
+        rule = (WEBSITE / "_headers").read_text().split("\n/relay/*\n", 1)[1].split("\n\n", 1)[0]
+        policy = re.search(r"Content-Security-Policy: (.*)", rule).group(1)
+        self.assertIn("default-src 'none'", policy)
+        self.assertIn("script-src 'self';", policy)
+        connect = re.search(r"connect-src ([^;]*)", policy).group(1).split()
+        self.assertEqual(connect, ["https://api.digitalocean.com", "https://raw.githubusercontent.com", "https://*.sslip.io"])
 
     def test_scripts_are_served_as_text(self):
         headers = (WEBSITE / "_headers").read_text()

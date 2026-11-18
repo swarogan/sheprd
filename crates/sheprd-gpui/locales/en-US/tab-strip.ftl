@@ -7,6 +7,10 @@ tab-strip-split = Split
 tab-strip-actions = Tab actions
 # A chat launcher's tooltip; $agent is the agent's name, such as Claude.
 tab-strip-new-chat = New { $agent } chat
+# The one Agent button: the chat picks its agent in the composer.
+tab-strip-new-agent-chat = New agent chat
+# The Agent button when the last agent's plan is short; $why says so.
+tab-strip-new-agent-chat-instead = New { $agent } chat: { $why }
 # On a tab dragged outside the window.
 tab-strip-release-new-window = Release to open in a new window
 # A tab another group shows, while it moves here.

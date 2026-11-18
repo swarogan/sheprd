@@ -90,6 +90,9 @@ fn family(name: &str) -> &'static str {
         "notes" => {
             "sheprd notes [list]\n    Every worktree note, most recently edited first.\nsheprd notes get|clear\nsheprd notes set TEXT...\n    The note on the caller's checkout (its repository and branch), or the\n    focused workspace's outside a Herdr pane. Notes are one line of at most\n    500 characters. `list` and `get` exit 4 when there is none."
         }
+        "memory" => {
+            "sheprd memory [list] [--all] [--limit N]\n    What agents learned about the current directory's repository: pinned\n    entries first, then the most recently used, of the repository and this\n    branch (--all: every branch's too).\nsheprd memory search WORDS... [--all] [--limit N]\n    Entries holding every word (as prefixes), else any, best first.\n    Search before starting a task.\nsheprd memory index [--chars N]\n    What an agent should see first, within N characters (default 3000):\n    pinned entries, this branch's, then the most recently used.\nsheprd memory get ID\n    One entry with its details.\nsheprd memory add [--branch] [--kind KIND] [--name NAME] [--pin]\n                  [--details TEXT] TEXT...\n    Keep TEXT (at most 500 bytes; more goes in --details, up to 16 KiB) for\n    the next agent in any worktree, tab, or chat of this repository, or with\n    --branch only for this branch's work. KIND is fact (default), gotcha,\n    command, decision, preference, or handoff. With --name, a later add of\n    that name updates the entry instead of adding another. Secrets, tokens,\n    and prompt markup are refused.\nsheprd memory pin|unpin ID\n    Pinned entries come first and are never dropped; at most 50.\nsheprd memory forget ID\n    Remove an entry that is wrong or no longer true.\n    These run here, on the host the repository is on; Sheprd need not run.\n    `list`, `search`, and `index` exit 4 when they find nothing."
+        }
         "worktree" => {
             "sheprd worktree list\n    List app-kept Git workspaces on the caller's host.\nsheprd worktree create [BRANCH]\nsheprd worktree open\nsheprd worktree delete\n    Open the create, existing-checkout, or delete dialog for the caller's\n    Herdr 2 workspace; the user confirms in Sheprd.\nsheprd worktree [status]\n    Whether the caller's worktree is muted.\nsheprd worktree mute|unmute\n    Silence its notifications, or let them through again. Mutes stay in\n    this app; nothing reaches the daemon."
         }
@@ -123,7 +126,9 @@ fn family(name: &str) -> &'static str {
         "processes" => {
             "sheprd processes [--pane ID | --terminal ID]\n    The processes under a Herdr pane or a herdr-core terminal (default the\n    caller's: HC_TERMINAL_ID, else HERDR_PANE_ID), with CPU and memory.\n    Runs here; Sheprd need not run."
         }
-        "usage" => "sheprd usage\n    AI plan usage on the window's selected host.",
+        "usage" => {
+            "sheprd usage\n    AI plan usage on the window's selected host.\nsheprd usage pick\n    The agent the Agent button would start a chat with now: the one last\n    started or picked, unless its plan is spent or close to its limit and\n    another installed agent's is not. Lists each installed agent's room\n    (ample, unknown, tight, spent) as the status bar last read it. Exits 4\n    when no agent can start."
+        }
         "security" => {
             "sheprd security\n    Private vulnerability reports in triage (titles only) and open\n    Dependabot alerts of the github.com repositories the window's\n    workspaces hold, most severe first, as the Security section last read\n    them (sign in to GitHub first). Exits 4 when there are none.\n    `ui panel security` shows the section.\nsheprd security open REPOSITORY ALERT|GHSA\n    Show alert ALERT (its number) or private report GHSA (its GHSA ID) of\n    REPOSITORY (owner/name) in the Security section, beside its list, as\n    the section last read it."
         }

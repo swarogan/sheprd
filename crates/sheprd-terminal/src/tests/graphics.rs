@@ -13,12 +13,82 @@ fn png(width: u32, height: u32) -> Vec<u8> {
     png
 }
 
-fn command(control: &str, payload: &[u8]) -> Vec<u8> {
+pub(super) fn command(control: &str, payload: &[u8]) -> Vec<u8> {
     format!("\x1b_G{control};{}\x1b\\", STANDARD.encode(payload)).into_bytes()
 }
 
-fn placements(emulator: &mut Emulator) -> Vec<SurfaceGraphicsPlacement> {
+pub(super) fn placements(emulator: &mut Emulator) -> Vec<SurfaceGraphicsPlacement> {
     emulator.take_graphics().unwrap().placements
+}
+
+#[test]
+fn synchronized_chunked_replacement_never_publishes_the_deleted_frame() {
+    let mut emulator = emulator(10, 4);
+    let placed = "a=T,t=d,f=32,s=1,v=1,i=1,p=1,c=1,r=1,C=1";
+    emulator.feed(&command(placed, &[1, 2, 3, 255]));
+    assert_eq!(placements(&mut emulator).len(), 1);
+    let _ = emulator.take_damage();
+
+    emulator.feed(b"\x1b[?2026h\x1b[3;5H");
+    emulator.feed(&command("a=d,d=i,i=1,p=1", &[]));
+    assert!(emulator.sync_pending(), "graphics must not end the frame");
+    assert!(
+        emulator.take_graphics().is_none(),
+        "do not publish deletion"
+    );
+    // Only the screen from before the update may show: the cursor the
+    // update moved stays where it was.
+    let moved = |damage: &Damage| match damage {
+        Damage::Full(frame) => frame.cursor.as_ref().map(|c| (c.x, c.y)) == Some((4, 2)),
+        Damage::Rows { cursor, .. } => cursor.as_ref().map(|c| (c.x, c.y)) == Some((4, 2)),
+    };
+    assert!(
+        !moved(&emulator.take_damage()),
+        "do not publish partial cells"
+    );
+    assert!(
+        emulator.take_damage().is_empty(),
+        "nothing more until the update ends"
+    );
+
+    emulator.feed(&command(&format!("{placed},m=1"), &[9, 8, 7]));
+    assert!(emulator.sync_pending());
+    assert!(emulator.take_graphics().is_none());
+    emulator.feed(&command("m=0", &[255]));
+    assert!(emulator.sync_pending());
+    assert!(emulator.take_graphics().is_none(), "wait for the frame end");
+    emulator.feed(b"\x1b[?2026l");
+    assert!(!emulator.sync_pending());
+    let scene = emulator.take_graphics().unwrap();
+    assert_eq!(scene.placements.len(), 1);
+    assert_eq!(scene.assets[0].data, [9, 8, 7, 255]);
+    assert_eq!((scene.placements[0].x, scene.placements[0].y), (4, 2));
+}
+
+#[test]
+fn synchronized_graphics_timeout_releases_an_intentional_delete() {
+    let mut emulator = emulator(10, 4);
+    emulator.feed(&command("a=T,f=32,s=1,v=1,i=1,C=1", &[1, 2, 3, 255]));
+    assert_eq!(placements(&mut emulator).len(), 1);
+    emulator.feed(b"\x1b[?2026h");
+    emulator.feed(&command("a=d,d=i,i=1", &[]));
+    assert!(emulator.sync_pending());
+    assert!(emulator.take_graphics().is_none());
+    emulator.end_sync();
+    assert!(!emulator.sync_pending());
+    assert!(placements(&mut emulator).is_empty());
+}
+
+#[test]
+fn synchronized_graphics_end_releases_an_intentional_delete() {
+    let mut emulator = emulator(10, 4);
+    emulator.feed(&command("a=T,f=32,s=1,v=1,i=1,C=1", &[1, 2, 3, 255]));
+    assert_eq!(placements(&mut emulator).len(), 1);
+    emulator.feed(b"\x1b[?2026h");
+    emulator.feed(&command("a=d,d=i,i=1", &[]));
+    assert!(emulator.take_graphics().is_none());
+    emulator.feed(b"\x1b[?2026l");
+    assert!(placements(&mut emulator).is_empty());
 }
 
 #[test]

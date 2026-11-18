@@ -1,0 +1,54 @@
+{
+ "data": {
+  "repository": {
+   "b0": {
+    "nodes": [
+     {
+      "author": {
+       "login": "ana"
+      },
+      "commits": {
+       "nodes": [
+        {
+         "commit": {
+          "statusCheckRollup": {
+           "contexts": {
+            "nodes": [
+             {
+              "__typename": "CheckRun",
+              "conclusion": "SUCCESS",
+              "databaseId": 70,
+              "detailsUrl": "https://github.com/acme/app/actions/runs/7/job/70",
+              "name": "test",
+              "status": "COMPLETED"
+             }
+            ],
+            "pageInfo": {
+             "hasNextPage": false
+            }
+           }
+          }
+         }
+        }
+       ]
+      },
+      "headRefName": "feature",
+      "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+      "headRepositoryOwner": {
+       "login": "acme"
+      },
+      "isDraft": false,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 42,
+      "reviewDecision": "APPROVED",
+      "state": "OPEN",
+      "title": "Add login\u202e",
+      "url": "https://github.com/acme/app/pull/42"
+     }
+    ]
+   },
+   "nameWithOwner": "acme/app"
+  }
+ }
+}

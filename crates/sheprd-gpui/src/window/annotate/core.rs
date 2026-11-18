@@ -7,7 +7,7 @@
 
 use super::*;
 use crate::core_terminals::Host;
-use sheprd_backend::TerminalId;
+use sheprd_backend::{TerminalId, TerminalInfo};
 use sheprd_core_client::{
     agent::Until,
     reply::{self, Replied},
@@ -30,6 +30,23 @@ pub(super) struct CoreAgent {
     /// Its name, so a note never reaches another program that took the
     /// terminal since.
     pub(super) agent: String,
+}
+
+/// The agent a note on the stand-in shell goes to, from what the core lists
+/// of it.
+///
+/// The note is aimed at `info`'s address, which is what the core answers to,
+/// and never at the id the window happens to hold for that shell: a restart
+/// that found an earlier launch's shell live keeps the *name* it asked for,
+/// and delivery matches a note's terminal against each record's `address`
+/// only (`reply::when_free`), so the name comes back `Replied::Gone` and the
+/// note is copied instead of typed in while the agent runs.
+pub(super) fn shell_note_agent(info: &TerminalInfo) -> Option<CoreAgent> {
+    Some(CoreAgent {
+        host: Host::Local,
+        agent: sheprd_core_client::agent_name(info)?,
+        terminal: info.id.clone(),
+    })
 }
 
 impl SheprdWindow {
@@ -113,11 +130,7 @@ impl SheprdWindow {
         {
             let terminal = view.read(cx).terminal().clone();
             let info = terminals.reported(&Host::Local, &terminal)?;
-            return Some(CoreAgent {
-                host: Host::Local,
-                agent: sheprd_core_client::agent_name(info)?,
-                terminal,
-            });
+            return shell_note_agent(info);
         }
         let (tab, terminal) = terminals.view_key(view).or_else(|| {
             let terminal = view.read(cx).terminal().clone();

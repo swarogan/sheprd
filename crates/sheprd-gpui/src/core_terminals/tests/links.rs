@@ -203,6 +203,31 @@ fn dropped_files_paste_their_escaped_paths(cx: &mut TestAppContext) {
     assert_eq!(pasted, "/tmp/Shot\\ 1.png /tmp/a");
 }
 
+/// Through real event dispatch, not a direct call: a merge once dropped the
+/// view's handler while every call-level test still passed.
+#[gpui::test]
+fn files_dropped_on_the_terminal_reach_it(cx: &mut TestAppContext) {
+    let (view, cx, backend, _) = shown(cx, &["$"], false);
+    let over = at(&view, cx, 1, 1);
+    cx.simulate_event(gpui::FileDropEvent::Entered {
+        position: over,
+        paths: ExternalPaths(vec![PathBuf::from("/tmp/a")].into()),
+    });
+    cx.simulate_event(gpui::FileDropEvent::Submit { position: over });
+    let pasted = until(|| {
+        backend
+            .received
+            .lock()
+            .unwrap()
+            .iter()
+            .find_map(|command| match command {
+                Command::Input(ClientPaneInputEvent::Paste(text)) => Some(text.clone()),
+                _ => None,
+            })
+    });
+    assert_eq!(pasted, "/tmp/a");
+}
+
 #[gpui::test]
 fn a_refused_drop_is_said_and_pastes_nothing(cx: &mut TestAppContext) {
     let (view, cx, backend, asked) = shown(cx, &["$"], false);

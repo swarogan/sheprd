@@ -18,6 +18,8 @@ struct SessionSheet: View {
     /// The name being typed; `nil` until the field is edited.
     @State private var draft: String?
     @State private var renaming = false
+    /// Claude, run once on its own, is reading the chat for a name.
+    @State private var suggesting = false
     @FocusState private var naming: Bool
 
     var body: some View {
@@ -59,15 +61,27 @@ struct SessionSheet: View {
                     .submitLabel(.done)
                     .focused($naming)
                     .onSubmit { rename(draft ?? name) }
+                    // The suggestion replaces the name when it comes, so
+                    // nothing typed meanwhile is lost to it.
+                    .disabled(suggesting)
                 if renaming {
                     ProgressView()
                 } else if naming {
                     Button("Save") { rename(draft ?? name) }.font(.subheadline.weight(.semibold))
                 }
             }
-            Button("Use the Agent's Title") { rename("") }
-                .font(.caption)
-                .disabled(renaming)
+            HStack(spacing: 16) {
+                Button { suggest() } label: {
+                    if suggesting {
+                        Label("Naming…", systemImage: "sparkles")
+                    } else {
+                        Label("Name from Chat", systemImage: "sparkles")
+                    }
+                }
+                Button("Use the Agent's Title") { rename("") }
+            }
+            .font(.caption)
+            .disabled(renaming || suggesting)
         }
         .card()
     }
@@ -234,6 +248,25 @@ struct SessionSheet: View {
                 problem = error.localizedDescription
             }
             closing = false
+        }
+    }
+
+    /// The agent's name for the chat goes in the field and is kept at once;
+    /// the field still edits it, and the agent's own title comes back
+    /// with the button beside.
+    private func suggest() {
+        naming = false
+        suggesting = true
+        Task {
+            do {
+                let title = try await model.fleet.suggestTitle(key)
+                draft = title
+                suggesting = false
+                rename(title)
+            } catch {
+                problem = error.localizedDescription
+                suggesting = false
+            }
         }
     }
 

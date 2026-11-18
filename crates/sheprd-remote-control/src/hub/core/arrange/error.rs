@@ -18,6 +18,8 @@ pub enum Error {
     NoTabs,
     #[error(transparent)]
     Panes(#[from] sheprd_session::panes::Error),
+    #[error("Open Sheprd on this computer to close this workspace or delete its worktree")]
+    SheprdClosed,
     #[error("Sheprd is starting on this computer; try again in a moment")]
     SheprdOpen,
     #[error("That is not a Herdr 2 terminal")]

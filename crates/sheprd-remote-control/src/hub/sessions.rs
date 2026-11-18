@@ -113,6 +113,22 @@ impl Sessions {
         Arc::new(sessions)
     }
 
+    #[cfg(test)]
+    pub(super) fn offline_with_target(name: &str, target: ConnectTarget) -> Arc<Self> {
+        let sessions = Self::new(None);
+        let (_, layout) = watch::channel(Arc::new(Layout {
+            connected: true,
+            ..Layout::default()
+        }));
+        lock(&sessions.list).push(Arc::new(Session {
+            name: name.to_owned(),
+            api: Api::at(target),
+            layout,
+            _daemon: None,
+        }));
+        Arc::new(sessions)
+    }
+
     pub(super) fn get(&self, name: &str) -> Option<Arc<Session>> {
         lock(&self.list)
             .iter()

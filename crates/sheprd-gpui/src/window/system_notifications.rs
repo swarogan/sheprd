@@ -461,6 +461,9 @@ mod tests {
     #[gpui::test]
     #[allow(clippy::unwrap_used)]
     fn qa_preview_posts_for_the_focused_pane_after_the_delay(cx: &mut TestAppContext) {
+        // Waiting out the delay would otherwise draw the whole window for
+        // every frame of the fixture's sidebar spinners.
+        cx.update(|cx| cx.set_reduce_motion(true));
         let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
         cx.update(|_, cx| super::install_registry(cx));
         cx.update(|window, cx| {

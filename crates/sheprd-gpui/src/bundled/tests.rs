@@ -3,6 +3,7 @@
 use super::*;
 
 mod branding;
+mod core;
 mod precedence;
 
 fn helper(path: &Path) {

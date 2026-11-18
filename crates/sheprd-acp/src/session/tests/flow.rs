@@ -36,6 +36,7 @@ fn the_prompt_request_carries_the_text_and_session() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "hello".to_owned(),
             attachments: Vec::new(),
         },
@@ -84,11 +85,14 @@ fn tool_calls_split_the_agent_text_and_take_updates() {
 #[test]
 fn updates_for_another_session_or_unknown_kinds_are_ignored() {
     let mut harness = ready();
-    harness.input(Input::Agent(Inbound::Notification {
-        method: "session/update".to_owned(),
-        params: json!({"sessionId": "other", "update": {"sessionUpdate": "agent_message_chunk",
+    harness.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Notification {
+            method: "session/update".to_owned(),
+            params: json!({"sessionId": "other", "update": {"sessionUpdate": "agent_message_chunk",
             "content": {"type": "text", "text": "x"}}}),
-    }));
+        },
+    ));
     harness.update(json!({"sessionUpdate": "from_the_future", "x": 1}));
     assert!(harness.transcript().entries.is_empty());
 }
@@ -126,6 +130,7 @@ fn authentication_errors_say_how_to_sign_in() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "hi".to_owned(),
             attachments: Vec::new(),
         },
@@ -151,11 +156,14 @@ fn load_continues_a_session_when_the_agent_supports_it() {
     let load = harness.last_request("session/load");
     assert_eq!(load["params"]["sessionId"], "old");
     // History replays before the load answers.
-    harness.input(Input::Agent(Inbound::Notification {
-        method: "session/update".to_owned(),
-        params: json!({"sessionId": "old", "update": {"sessionUpdate": "user_message_chunk",
+    harness.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Notification {
+            method: "session/update".to_owned(),
+            params: json!({"sessionId": "old", "update": {"sessionUpdate": "user_message_chunk",
             "content": {"type": "text", "text": "earlier"}}}),
-    }));
+        },
+    ));
     harness.respond(load["id"].as_i64().unwrap(), json!({}));
     assert_eq!(harness.transcript().entries[0].kind.text(), Some("earlier"));
     assert_eq!(harness.transcript().session.as_ref().unwrap().id, "old");
@@ -179,6 +187,7 @@ fn load_falls_back_to_a_new_session_with_a_warning() {
 fn agent_exit_ends_the_session_and_headless_mode_exits_with_it() {
     let mut harness = ready();
     let flow = harness.input(Input::AgentExited {
+        harness: HarnessId::default(),
         code: Some(1),
         stderr: vec!["boom".to_owned()],
     });
@@ -192,6 +201,7 @@ fn agent_exit_ends_the_session_and_headless_mode_exits_with_it() {
     });
     let receiver = headless.subscribe(1, false, None);
     let flow = headless.input(Input::AgentExited {
+        harness: HarnessId::default(),
         code: Some(0),
         stderr: Vec::new(),
     });
@@ -209,10 +219,13 @@ fn a_stalled_agent_fails_the_session_instead_of_blocking() {
     let (sender, _agent) = bounded(1);
     let mut session = Session::new(config(), Outbox(sender), |_| {});
     session.start();
-    session.handle(Input::Agent(Inbound::Response {
-        id: wire::RequestId::Number(1),
-        result: Ok(json!({"protocolVersion": 1, "agentCapabilities": {}})),
-    }));
+    session.handle(Input::Agent(
+        HarnessId::default(),
+        Inbound::Response {
+            id: wire::RequestId::Number(1),
+            result: Ok(json!({"protocolVersion": 1, "agentCapabilities": {}})),
+        },
+    ));
     assert!(matches!(session.transcript().status, Status::Failed { .. }));
 }
 

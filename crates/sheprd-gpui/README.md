@@ -947,8 +947,11 @@ preserves these drafts. Theme, font, and layout writes from Settings are seriali
 
 **Ghostty** and **Herdr** are independent library filters, both enabled initially.
 Turn either off to show only the other; search text is preserved, and changing a
-filter does not change the live theme or pending draft. Ghostty includes native
-built-ins and theme files. The built-ins bundle popular Ghostty themes from
+filter does not change the live theme or pending draft. Switching to one library
+locates its saved or drafted theme. Saved and draft cards have an accent outline,
+while a filled background marks keyboard focus; the first search result may be
+focused without being the current theme. Ghostty includes native built-ins and
+theme files. The built-ins bundle popular Ghostty themes from
 iTerm2-Color-Schemes under their Ghostty names, so a platform without Ghostty
 still lists them; when Ghostty is installed, its copy of a built-in, including
 an older spelling such as `tokyonight` or `catppuccin-mocha`, is listed once,
@@ -1800,6 +1803,30 @@ a strip squeezed by the sidebar, a panel, or a split gives up its tabs' room
 first, then drops the pair whole before the trailing controls would be
 pushed out.
 
+Ctrl-Tab (`recent_pane`) switches to the pane this window focused most
+recently before the current one across all connected machines, including
+herdr-core tabs and the fallback shell. Herdr 1 panes require surface fencing
+support; older unfenced daemons show an unsupported-command notice. A quick tap
+goes back and forth between two panes. Holding Ctrl while pressing Tab again
+walks the history without reordering intermediate panes. Releasing Ctrl makes
+the selected pane most recent once its focus is confirmed. Releasing before
+that confirmation waits; a failed selection never becomes a visit.
+Ctrl-Shift-Tab (`recent_pane_reverse`) goes the other way, starting from the
+least recently used pane. If another pane gains focus during the hold, that
+pane becomes most recent on release. Each window remembers at most 100 panes.
+Closed panes and unavailable machines are skipped. Reconnecting to the same
+daemon boot preserves its history. A restarted Herdr 1 daemon loses only
+its Herdr 1 panes. A removed machine loses its destinations. Core panes
+remain independent of Herdr 1 restarts.
+A further press while a recent selection is pending is ignored. Core panes
+can still switch locally during an unrelated Herdr 1 outage or activation.
+An unavailable selected machine can still switch to a reachable pane on
+another machine.
+The palette and the devices rail keep Ctrl-Tab for their own filters while
+they are open. A terminal program no longer receives Ctrl-Tab or
+Ctrl-Shift-Tab; unbind or rebind the two commands in `[keybindings]` to give
+the keys back.
+
 macOS keeps `Some(TitlebarOptions)` and the native Herdr window title/traffic lights,
 with transparent chrome and lights positioned at (9, 9) logical pixels. A full-width
 34px header blends `theme.surface` roughly 10% toward white, subtly lifting dark
@@ -2094,6 +2121,14 @@ checkouts without Herdr 1, using the device's GitHub account selection. See
 [desktop SSH pull requests](../../docs/desktop-ssh-pull-requests.md) for cache
 isolation, merged-checkout discovery, and the remaining cloud/WSL PR-origin
 limitation shared by both terminal backends.
+
+If **New worktree** finds that the requested branch already has a checkout,
+Sheprd warns that it already exists, pulls its remote with a fast-forward-only
+update, and opens that checkout. Fork pull requests update from their PR ref.
+A failed pull is shown as a warning and the checkout still opens. Reopening
+does not rerun setup scripts or launch another agent. If you switch hosts while
+an existing Herdr 2 checkout is being pulled, its result is reported with the
+original host's name without switching you back or opening the checkout.
 
 A repository can commit scripts that prepare, start, and clean up its
 worktrees, in `.herdr/worktree.toml` at the repository root:
@@ -3694,11 +3729,18 @@ installed: `claude`, `codex` and `pi` (which `sheprd-acp` drives without an
 ACP adapter), `copilot --acp`, `gemini --acp`, or `opencode acp`. The program can
 also be started by hand in any pane: `sheprd-acp claude`.
 
-**One click.** Each tab strip also offers a button per installed agent that
-starts its chat in a new tab of that group; the chat's tab looks like any
-other, and **+** still opens a terminal tab. Each button takes the shape
-the tab layout gives **+**. `[chat] launcher` places the buttons: `plus`
-(the default) deals them out from under **+** while the pointer is over it,
+**One click.** Each tab strip also offers an **Agent** button right after
+**+** that starts a chat in a new tab of that group, with the agent last
+started (else the first installed), or, when that agent's plan is spent or
+close to its limit, the installed agent with the most room, as the tooltip
+and composer then say (see [Choosing the agent](../../docs/rich-chat.md#choosing-the-agent)); the chat's tab looks like any other, and
+**+** still opens a terminal tab. Until its first prompt, the chat's composer
+offers the other installed agents in its own button, first among the
+settings; picking one restarts the chat with that agent, and the launcher
+starts the next chat with it too. Chats on an SSH host keep the agent they
+start with, since the host's `sheprd-acp` may be older. The button takes the
+shape the tab layout gives **+**. `[chat] launcher` places it, or a button
+per installed agent instead: `agent` is the default, `plus` deals them out from under **+** while the pointer is over it,
 to the right, or to the left when the window has no room there, `beside` keeps them right after **+**, `leading` puts them before
 the tabs, `trailing` at the strip's right end, and `button` shows one named
 button for the agent last started, the others sliding out beside it; `off`
@@ -4788,6 +4830,9 @@ Ctrl+Shift+U is left unbound for
   through the sidebar's rows on every listed host and wrap around,
   `switch_workspace` counts the selected host's rows, `focus_agent` counts the
   agent panel's, `last_pane` returns to the pane focused before this one,
+  `recent_pane`/`recent_pane_reverse` (Ctrl-Tab and Ctrl-Shift-Tab) step
+  through this window's recently used panes on every connected machine while
+  their modifier stays held,
   `move_tab_previous`/`_next` wrap a tab at either end to the other, and
   `[keys.indexed]` combos bind the digits 1-9. On macOS, the prefix, its
   chords, and custom command shortcuts recognize a shifted key such as
@@ -5029,7 +5074,8 @@ CI checks formatting, lints every target and feature,
 and runs workspace tests with default and all features on `windows-2025` (x86_64)
 and `windows-11-arm` (ARM64), including headless UI and CLI tests. Its
 `windows-native` job then runs the native tests in both runners' desktop
-sessions: `just test-sidebar`'s fixtures, and on x86_64 `just test-gui` against
+sessions, on main and on pull requests that change what the app is built from
+(`scripts/ci-changes.sh`): `just test-sidebar`'s fixtures, and on x86_64 `just test-gui` against
 a pinned Herdr `herdr.exe` (0.9.5) in the shared test sandbox, with PowerShell
 as the pane shell. Herdr publishes no ARM64 Windows build; emulated on
 `windows-11-arm`, its panes echo typed text but never act on Enter, so CI skips

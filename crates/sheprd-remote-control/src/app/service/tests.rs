@@ -84,13 +84,24 @@ fn the_daemon_runs_with_every_setting_as_an_argument() {
         device_idle_days: 9,
         enabled: true,
         github_cli: false,
+        github_hosts: Vec::new(),
         keep_running: false,
         live_activities: Default::default(),
         notifications: Privacy::Excerpt,
         port: 9443,
         // Sheprd's own: presence runs beside the daemon, not in its args.
         presence: true,
-        relays: vec!["https://relay.example.org".into()],
+        relays: vec![
+            "https://relay.example.org".into(),
+            crate::app::config::Relay {
+                endpoint: "https://fra3.example.org".into(),
+                label: crate::relay_label::RelayLabel {
+                    description: Some("not for public use".into()),
+                    name: Some("fra3".into()),
+                    tags: vec!["eu".into()],
+                },
+            },
+        ],
     };
     assert_eq!(
         words(&custom.args()),
@@ -112,6 +123,14 @@ fn the_daemon_runs_with_every_setting_as_an_argument() {
             "9",
             "--relay",
             "https://relay.example.org",
+            "--relay",
+            "https://fra3.example.org",
+            "--relay-name",
+            "fra3",
+            "--relay-description",
+            "not for public use",
+            "--relay-tag",
+            "eu",
         ]
     );
 }
@@ -319,6 +338,7 @@ fn status(version: &str) -> Response {
         chats: 0,
         devices: 0,
         connected: 0,
+        github_asks: 0,
         relays: Default::default(),
     })
 }

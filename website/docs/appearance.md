@@ -13,6 +13,8 @@ Most of these live in **Settings**, whose Appearance group has Theme, Sidebar, F
 
 **Settings > Theme** shows a large live preview and a searchable grid of theme cards, including every Ghostty theme found on your machine. Clicking a card, or moving through the grid with the arrow keys, applies it at once to every window; there is no Apply button. Only the final choice is saved, when Settings closes or the app quits. The **Ghostty** and **Herdr** filters narrow the grid to one library.
 
+Switching to one library locates its saved or drafted theme without changing it. Saved and draft themes have an accent outline; the filled background marks the card used for keyboard navigation. When a search excludes the current theme, the first result can have keyboard focus without being the current theme.
+
 Built-in themes include Default, Nord, Dracula, Catppuccin Mocha, Catppuccin Latte, and popular Ghostty themes such as TokyoNight, Gruvbox Dark, Rose Pine, Atom One Dark, and GitHub Light Default, so they are listed even without Ghostty installed. A theme can also be a Ghostty theme name, an absolute path, or a `~/` path.
 
 ```toml

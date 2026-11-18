@@ -50,6 +50,8 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (NextPane, &["cmd-alt-]"]),
         (PreviousPane, &["cmd-alt-["]),
         (LastPane, &[]),
+        (RecentPane, &["ctrl-tab"]),
+        (RecentPaneReverse, &["ctrl-shift-tab"]),
         (Back, &["cmd-["]),
         (Forward, &["cmd-]"]),
         (SwapLeft, &[]),
@@ -99,6 +101,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (ToggleStatusBar, &["cmd-alt-b"]),
         (ToggleMenuBar, &[]),
         (ToggleModPanel, &[]),
+        (ToggleAllHosts, &[]),
         (FocusNextRegion, &["cmd-f6"]),
         (FocusPreviousRegion, &["cmd-shift-f6"]),
         (ToggleZenMode, &["ctrl-cmd-z"]),
@@ -173,10 +176,20 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
 /// keystroke would fail at startup rather than here.
 #[test]
 fn every_catalog_shortcut_parses_as_a_keystroke() {
-    for shortcut in COMMANDS.iter().flat_map(|info| info.base_shortcuts()) {
-        let keystroke =
-            gpui::Keystroke::parse(shortcut).unwrap_or_else(|error| panic!("{shortcut}: {error}"));
-        assert!(keystroke.modifiers.platform, "{shortcut}");
+    for info in COMMANDS {
+        for shortcut in info.base_shortcuts() {
+            let keystroke = gpui::Keystroke::parse(shortcut)
+                .unwrap_or_else(|error| panic!("{shortcut}: {error}"));
+            // Cmd-Tab belongs to macOS, so the recent-pane cycle keeps Ctrl.
+            if info.command.is_recent_pane() {
+                assert!(
+                    keystroke.modifiers.control && !keystroke.modifiers.platform,
+                    "{shortcut}"
+                );
+            } else {
+                assert!(keystroke.modifiers.platform, "{shortcut}");
+            }
+        }
     }
     let minus = gpui::Keystroke::parse("cmd--").unwrap();
     assert_eq!(minus.key, "-");
@@ -226,6 +239,8 @@ fn gui_commands_never_send_daemon_requests() {
         Command::RenameTab,
         Command::ReopenClosedTab,
         Command::LastPane,
+        Command::RecentPane,
+        Command::RecentPaneReverse,
         Command::Back,
         Command::Forward,
         Command::ResizeMode,

@@ -4,25 +4,19 @@
 
 use super::{Error, Relays, Result, Served, Status, serve};
 use crate::web::Shared;
-use serde::Deserialize;
 use sheprd_relay::{
     Endpoint,
     client::{self, Listener},
     wire::Key,
 };
-use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::watch;
 
 /// Reconnects wait this long at first, doubling to [`LONGEST`].
 const FIRST: Duration = Duration::from_secs(1);
 const LONGEST: Duration = Duration::from_secs(60);
-/// How long reading `/v1/info` may take.
-const INFO_TIMEOUT: Duration = Duration::from_secs(10);
-/// How long one of a relay's addresses may take to answer before the next
-/// is tried. The last is given QUIC's own handshake time.
-const ATTEMPT: Duration = Duration::from_secs(5);
-/// How many of a relay's addresses are tried per connection.
-const MAX_ADDRESSES: usize = 8;
+/// How often a listening relay's round trip is read again.
+const RTT_EVERY: Duration = Duration::from_secs(30);
 
 /// Keeps listening on `endpoint` until `stopped`.
 pub(super) async fn run(
@@ -36,9 +30,18 @@ pub(super) async fn run(
         relays.set_status(&endpoint, Status::Connecting);
         let result = tokio::select! {
             result = session(&relays, &endpoint, &served, &mut wait) => result,
-            _ = stopped.wait_for(|stop| *stop) => return,
+            _ = stopped.wait_for(|stop| *stop) => {
+                relays.set_rtt(&endpoint, None);
+                return;
+            }
         };
+        relays.set_rtt(&endpoint, None);
         if let Err(error) = result {
+            // Another listener with this computer's key took the route: come
+            // back slowly, so the two do not take it from each other forever.
+            if matches!(error, Error::Client(client::Error::Replaced)) {
+                wait = LONGEST;
+            }
             tracing::warn!(relay = %endpoint, error = %error, "relay listening failed");
             relays.set_status(
                 &endpoint,
@@ -71,36 +74,42 @@ async fn session(
     wait: &mut Duration,
 ) -> Result<()> {
     let state = &served.state;
-    let (addresses, pin) = quic(endpoint).await?;
-    let connection = first_reachable(&addresses, ATTEMPT, |address| async move {
-        Ok(client::connect(address, pin).await?)
-    })
-    .await?;
+    let connection = client::reach(endpoint).await?;
     let mut listener = Listener::listen(connection, &relays.keys.route, b"").await?;
     let mut changed = relays.changed.subscribe();
     let mut pairing = relays.pairing_changed.subscribe();
     let mut revoked = state.auth().watch_revocations();
     listener.set_dial_keys(dial_keys(state)).await?;
     add_pairing(relays, &mut listener).await;
-    relays.set_status(endpoint, Status::Listening);
-    tracing::info!(relay = %endpoint, "listening on a relay");
+    // The round trip first, so whoever sees `Listening` sees it too.
+    relays.set_rtt(endpoint, Some(listener.rtt()));
+    relays.set_status(endpoint, Status::Listening { rtt_ms: None });
+    tracing::info!(relay = %endpoint, rtt = ?listener.rtt(), "listening on a relay");
     // Listening worked: the next failure starts the backoff over.
     *wait = FIRST;
+    let mut measure = tokio::time::interval(RTT_EVERY);
     loop {
         tokio::select! {
-            incoming = listener.accept() => {
-                let incoming = incoming?;
-                tokio::spawn(serve::session(
-                    Arc::clone(relays),
-                    incoming,
-                    listener.route(),
-                    served.clone(),
-                ));
+            // Only taking the stream waits here, which is cancel-safe: its
+            // header is read in its own task, so another event (the round
+            // trip timer, new keys) never drops a dial half read.
+            pending = listener.next_stream() => {
+                let pending = pending?;
+                let relays = Arc::clone(relays);
+                let route = listener.route();
+                let served = served.clone();
+                tokio::spawn(async move {
+                    match pending.incoming().await {
+                        Ok(incoming) => serve::session(relays, incoming, route, served).await,
+                        Err(error) => tracing::debug!(error = %error, "a relay dial ended before its header"),
+                    }
+                });
             }
             _ = changed.changed() => listener.set_dial_keys(dial_keys(state)).await?,
             _ = pairing.changed() => add_pairing(relays, &mut listener).await,
             _ = revoked.changed() => listener.set_dial_keys(dial_keys(state)).await?,
-            error = listener.closed() => return Err(Error::Client(error.into())),
+            _ = measure.tick() => relays.set_rtt(endpoint, Some(listener.rtt())),
+            error = listener.closed() => return Err(Error::Client(error)),
         }
     }
 }
@@ -124,77 +133,4 @@ fn dial_keys(state: &Shared) -> Vec<Key> {
         .iter()
         .filter_map(|record| record.relay.as_ref()?.dial_key())
         .collect()
-}
-
-#[derive(Deserialize)]
-struct Info {
-    quic: Option<Quic>,
-}
-
-#[derive(Deserialize)]
-struct Quic {
-    pin: String,
-    port: u16,
-}
-
-/// Connects to the first of `addresses` that answers, in the resolver's
-/// order: a relay with IPv6 and IPv4 records is still reached when this
-/// computer has a route to only one of them. An address that fails, or
-/// takes longer than `attempt` while another is left, gives way to the
-/// next; the last one's failure is the one reported.
-pub(super) async fn first_reachable<C, F>(
-    addresses: &[SocketAddr],
-    attempt: Duration,
-    mut connect: impl FnMut(SocketAddr) -> F,
-) -> Result<C>
-where
-    F: Future<Output = Result<C>>,
-{
-    let (last, earlier) = addresses
-        .split_last()
-        .ok_or_else(|| Error::Resolve(std::io::Error::other("no address")))?;
-    for address in earlier {
-        if let Ok(Ok(connection)) = tokio::time::timeout(attempt, connect(*address)).await {
-            return Ok(connection);
-        }
-    }
-    connect(*last).await
-}
-
-/// Where the relay's QUIC listens (every address its name resolves to, up
-/// to [`MAX_ADDRESSES`]), and its certificate's pin, from its `/v1/info`
-/// over HTTPS.
-async fn quic(endpoint: &Endpoint) -> Result<(Vec<SocketAddr>, sheprd_relay::pin::Pin)> {
-    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-    let url = endpoint.info().to_string();
-    let info = tokio::task::spawn_blocking(move || -> Result<Info> {
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .timeout_global(Some(INFO_TIMEOUT))
-            .max_redirects(0)
-            .build()
-            .into();
-        let mut response = agent.get(&url).call().map_err(Error::Info)?;
-        let body = response
-            .body_mut()
-            .with_config()
-            .limit(16 * 1024)
-            .read_to_vec()
-            .map_err(Error::Info)?;
-        serde_json::from_slice(&body).map_err(|_| Error::InfoFormat)
-    })
-    .await
-    .map_err(|_| Error::InfoFormat)??;
-    let quic = info.quic.ok_or(Error::NoQuic)?;
-    let pin = URL_SAFE_NO_PAD
-        .decode(quic.pin)
-        .ok()
-        .and_then(|pin| pin.try_into().ok())
-        .ok_or(Error::InfoFormat)?;
-    let host = endpoint.hostname();
-    let addresses = tokio::net::lookup_host((host.as_str(), quic.port))
-        .await
-        .map_err(Error::Resolve)?
-        .take(MAX_ADDRESSES)
-        .collect();
-    Ok((addresses, pin))
 }

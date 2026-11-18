@@ -3,7 +3,13 @@ name: CI
 on:
   push:
     branches: [main]
+  # `labeled` reruns a pull request when a label asks for every platform
+  # (scripts/ci-scope.py); any other label reruns the same Linux checks.
+  # ready_for_review starts the run a draft skipped.
   pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+  # The merge queue checks every platform before a change reaches main.
+  merge_group:
   workflow_dispatch:
 
 # Deny by default; every job below declares the scopes it actually needs.
@@ -27,13 +33,19 @@ env:
 
 jobs:
   # Audits the workflows themselves for injection, over-broad permissions,
-  # unpinned actions, and credential persistence. Gates the application
-  # jobs to catch workflow mistakes early; GitHub's fork isolation and protected
-  # release environments remain the credential boundary, not the scanner.
+  # unpinned actions, and credential persistence. It runs beside the other
+  # jobs rather than before them, since each job waits its own turn for a
+  # runner, and the required gate fails without it; GitHub's fork isolation
+  # and protected release environments remain the credential boundary, not
+  # the scanner.
+  #
+  # Draft pull requests run nothing: every job below waits on this one or on
+  # `commits`, and the run starts when the draft is marked ready for review.
   zizmor:
     if: >-
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
@@ -55,17 +67,22 @@ jobs:
   # release defect. Local commits are caught earlier by `just hooks`.
   commits:
     if: >-
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
     name: Commit messages
-    needs: zizmor
     outputs:
+      cargo_scope: ${{ steps.scope.outputs.cargo_scope }}
       code: ${{ steps.changes.outputs.code }}
-      windows_package: ${{ steps.changes.outputs.windows_package }}
+      full: ${{ steps.scope.outputs.full }}
+      gpui: ${{ steps.scope.outputs.gpui }}
+      macos_release: ${{ steps.changes.outputs.macos_release }}
       website: ${{ steps.changes.outputs.website }}
+      windows_native: ${{ steps.changes.outputs.windows_native }}
+      windows_package: ${{ steps.changes.outputs.windows_package }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -78,8 +95,8 @@ jobs:
           persist-credentials: false
       - name: Check every commit subject the changelog will publish
         env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           # A first push or a rewritten branch has no usable base; check the
@@ -96,24 +113,39 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python3 scripts/test_relays.py
+      - name: Test CI platform and crate selection
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 scripts/test_ci_scope.py
       - name: Detect build and test inputs
         id: changes
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash scripts/ci-changes.sh >> "$GITHUB_OUTPUT"
+      # Pull requests run Linux and the crates they reach; the merge queue and
+      # main run every platform over the workspace, as releases require.
+      - name: Select platforms and crates
+        id: scope
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: python3 scripts/ci-scope.py >> "$GITHUB_OUTPUT"
 
   checks:
     if: >-
       needs.commits.outputs.code == 'true' &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
     name: Format, lint, and test (${{ matrix.runner }}, ${{ matrix.features }})
-    needs: [zizmor, commits]
+    needs: commits
     strategy:
       fail-fast: false
       matrix:
@@ -126,10 +158,18 @@ jobs:
         # side, each with one of the lints; the script checks ride with the
         # default-features pass.
         features: [default, all]
+        # Pull requests run ubuntu-24.04 alone unless they need every
+        # platform (scripts/ci-scope.py); the runner set stays fixed here.
+        # When they do, they run one macOS leg, as macOS jobs have the
+        # smallest runner limit; the merge queue and main run both.
+        exclude: ${{ fromJSON(needs.commits.outputs.full != 'true' && '[{"runner":"macos-15"},{"runner":"ubuntu-24.04-arm"}]' || github.event_name == 'pull_request' && '[{"runner":"macos-15","features":"all"}]' || '[]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      # `--workspace`, the crates a pull request reaches, or empty for none.
+      SCOPE: ${{ needs.commits.outputs.cargo_scope }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -200,36 +240,37 @@ jobs:
         if: matrix.features == 'default'
         run: python3 .claude/skills/gpui-mockup/scripts/test_wait.py
       - name: Lint every target and feature
-        if: matrix.features == 'all'
-        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+        if: matrix.features == 'all' && env.SCOPE != ''
+        run: read -ra scope <<< "$SCOPE" && cargo clippy --locked "${scope[@]}" --all-targets --all-features -- -D warnings
       - name: Lint without default features
-        if: matrix.features == 'default'
-        run: cargo clippy --locked --workspace --all-targets --no-default-features -- -D warnings
+        if: matrix.features == 'default' && env.SCOPE != ''
+        run: read -ra scope <<< "$SCOPE" && cargo clippy --locked "${scope[@]}" --all-targets --no-default-features -- -D warnings
       - name: Test default features and executable CLI
-        if: matrix.features == 'default'
-        run: cargo test --locked --workspace
+        if: matrix.features == 'default' && env.SCOPE != ''
+        run: read -ra scope <<< "$SCOPE" && cargo test --locked "${scope[@]}"
       - name: Test integration-feature build and executable CLI
-        if: matrix.features == 'all'
-        run: cargo test --locked --workspace --all-features
+        if: matrix.features == 'all' && env.SCOPE != ''
+        run: read -ra scope <<< "$SCOPE" && cargo test --locked "${scope[@]}" --all-features
       # The `moonframe` feature's Luau layout loads only at run time: load every
       # module and report what fails, without a window.
       - name: Check the Moonframe layout
-        if: matrix.features == 'all'
+        if: matrix.features == 'all' && needs.commits.outputs.gpui == 'true'
         run: cargo run --locked -p sheprd-gpui --all-features -- --check
 
-  # Match the other platforms' Rust checks without an extra optimized build.
+  # Match the other platforms' Rust checks without an extra optimized build,
+  # in the merge queue, on main, and on pull requests that need every platform.
   # Native GUI tests run in windows-native; the Windows release builds run in
   # the release workflow.
   windows:
     if: >-
-      needs.commits.outputs.code == 'true' &&
+      needs.commits.outputs.code == 'true' && needs.commits.outputs.full == 'true' &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
     name: Windows check (${{ matrix.runner }}, ${{ matrix.features }})
-    needs: [zizmor, commits]
+    needs: commits
     strategy:
       fail-fast: false
       matrix:
@@ -276,16 +317,18 @@ jobs:
   # shared test sandbox, then the release-mode performance budget
   # (`just test-perf`). Hosted runners have no GPU, so Direct3D runs on WARP:
   # the budget is a regression tripwire, not a target for real hardware.
+  # Pull requests run it only when what the tests launch changes
+  # (`scripts/ci-changes.sh`); main always does.
   windows-native:
     if: >-
-      needs.commits.outputs.code == 'true' &&
+      needs.commits.outputs.windows_native == 'true' && needs.commits.outputs.full == 'true' &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
     name: Windows native GUI (${{ matrix.runner }})
-    needs: [zizmor, commits]
+    needs: commits
     strategy:
       fail-fast: false
       matrix:
@@ -344,12 +387,12 @@ jobs:
     if: >-
       needs.commits.outputs.windows_package == 'true' &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
     name: Windows package and installer
-    needs: [zizmor, commits]
+    needs: commits
     runs-on: windows-2025
     timeout-minutes: 60
     # The steps read "$TARGET" and friends, as the release workflow's do.
@@ -406,12 +449,12 @@ jobs:
     if: >-
       needs.commits.outputs.website == 'true' &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
     name: Website and docs
-    needs: [zizmor, commits]
+    needs: commits
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -431,14 +474,16 @@ jobs:
       - name: Test the sheprd.org publishing contracts
         run: python3 -m unittest discover -s site/tests -v
 
-  # Keep the branch-protection context stable while requiring every platform.
+  # Keep the branch-protection context stable while requiring every platform
+  # the run selected.
   checks-passed:
     name: Format, lint, and test
-    needs: [checks, windows, windows-native, windows-package, build-macos, commits, website]
+    needs: [checks, windows, windows-native, windows-package, build-macos, commits, website, zizmor]
     if: >-
       always() &&
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      (github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&
         github.ref == 'refs/heads/main'))
@@ -451,23 +496,47 @@ jobs:
           RESULT: ${{ needs.checks.result }}
           WINDOWS: ${{ needs.windows.result }}
           NATIVE: ${{ needs.windows-native.result }}
+          NATIVE_INPUTS: ${{ needs.commits.outputs.windows_native }}
           PACKAGE: ${{ needs.windows-package.result }}
           MACOS_RELEASE: ${{ needs.build-macos.result }}
+          MACOS_INPUTS: ${{ needs.commits.outputs.macos_release }}
           EVENT: ${{ github.event_name }}
           COMMITS: ${{ needs.commits.result }}
           CODE: ${{ needs.commits.outputs.code }}
+          FULL: ${{ needs.commits.outputs.full }}
           PACKAGE_INPUTS: ${{ needs.commits.outputs.windows_package }}
           SITE: ${{ needs.website.result }}
           SITE_INPUTS: ${{ needs.commits.outputs.website }}
+          ZIZMOR: ${{ needs.zizmor.result }}
         run: |
-          test "$COMMITS" = success || exit 1
-          if [ "$CODE" = true ]; then
-            test "$RESULT" = success && test "$WINDOWS" = success && test "$NATIVE" = success || exit 1
-          else
-            test "$CODE" = false && test "$RESULT" = skipped && test "$WINDOWS" = skipped && test "$NATIVE" = skipped || exit 1
+          test "$COMMITS" = success && test "$ZIZMOR" = success || exit 1
+          # Only a pull request may skip platforms; main and the merge queue
+          # check every one.
+          if [ "$EVENT" != pull_request ]; then
+            test "$FULL" = true || exit 1
           fi
-          # The macOS release builds run on pull requests only.
-          if [ "$CODE" = true ] && [ "$EVENT" = pull_request ]; then
+          if [ "$CODE" = true ]; then
+            test "$RESULT" = success || exit 1
+            if [ "$FULL" = true ]; then
+              test "$WINDOWS" = success || exit 1
+            else
+              test "$FULL" = false && test "$WINDOWS" = skipped || exit 1
+            fi
+          else
+            test "$CODE" = false && test "$RESULT" = skipped && test "$WINDOWS" = skipped || exit 1
+          fi
+          # The GUI tests run with every platform: on main and in the merge
+          # queue with code changes, on pull requests when their inputs
+          # change; missing detection fails.
+          if [ "$NATIVE_INPUTS" = true ] && [ "$FULL" = true ]; then
+            test "$NATIVE" = success || exit 1
+          else
+            { [ "$NATIVE_INPUTS" = false ] || [ "$FULL" = false ]; } && test "$NATIVE" = skipped || exit 1
+          fi
+          # The macOS release builds run before merge, with every platform,
+          # when their inputs change.
+          if [ "$CODE" = true ] && [ "$MACOS_INPUTS" = true ] && [ "$FULL" = true ] &&
+             { [ "$EVENT" = pull_request ] || [ "$EVENT" = merge_group ]; }; then
             test "$MACOS_RELEASE" = success || exit 1
           else
             test "$MACOS_RELEASE" = skipped || exit 1
@@ -493,7 +562,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     name: Release (${{ matrix.target }})
-    needs: [zizmor, commits]
+    needs: commits
     strategy:
       fail-fast: false
       matrix:
@@ -534,17 +603,19 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: cargo test --locked --release -p sheprd-gpui --test cli --target "$TARGET"
 
-  # The macOS release builds and their release-mode CLI suite, on pull
-  # requests only. On main they would hold two of the account-wide macOS
-  # runners the release workflow's own macOS builds wait for. With no main
-  # run to save a cache, there is nothing to restore, so they build cold.
+  # The macOS release builds and their release-mode CLI suite, before merge
+  # only and when what they depend on changes (`scripts/ci-changes.sh`): in
+  # the merge queue and on pull requests that need every platform. On main
+  # they would hold two of the account-wide macOS runners the release
+  # workflow's own macOS builds wait for. With no main run to save a cache,
+  # there is nothing to restore, so they build cold.
   build-macos:
     if: >-
-      needs.commits.outputs.code == 'true' &&
+      needs.commits.outputs.macos_release == 'true' && needs.commits.outputs.full == 'true' &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
-      github.event_name == 'pull_request'
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     name: Release (${{ matrix.target }})
-    needs: [zizmor, commits]
+    needs: commits
     strategy:
       fail-fast: false
       matrix:

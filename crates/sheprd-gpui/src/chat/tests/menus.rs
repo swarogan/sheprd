@@ -163,6 +163,7 @@ fn the_model_menu_searches_and_enter_picks_the_first_match(cx: &mut TestAppConte
     assert_eq!(
         next_command(&mut stream),
         Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: "hello".into(),
             attachments: Vec::new(),
         }

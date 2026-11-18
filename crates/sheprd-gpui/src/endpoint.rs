@@ -602,6 +602,7 @@ impl SheprdWindow {
     }
 
     pub(super) fn reset_selected(&mut self, cx: &mut Context<Self>) {
+        self.cancel_recent_navigation();
         if let Some(transfer) = &self.file_transfer {
             transfer.cancel();
         }
@@ -750,6 +751,25 @@ impl SheprdWindow {
         cx.notify();
     }
 
+    pub(crate) fn can_switch_endpoint(&self, index: usize) -> bool {
+        let Some(endpoint) = self.endpoints.get(index) else {
+            return false;
+        };
+        endpoint.enabled
+            && (index == self.selected_endpoint
+                || !(index != 0
+                    && self.endpoints[self.selected_endpoint]
+                        .live
+                        .status
+                        .is_connected()
+                    && self.endpoints[self.selected_endpoint]
+                        .connection
+                        .handle
+                        .as_ref()
+                        .is_some_and(|handle| !handle.is_disconnected())
+                    && !self.endpoints[self.selected_endpoint].live.supports_surface))
+    }
+
     fn switch_endpoint(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
         let Some(index) = self.endpoints.iter().position(|e| e.id == id && e.enabled) else {
             return false;
@@ -757,13 +777,7 @@ impl SheprdWindow {
         if index == self.selected_endpoint {
             return true;
         }
-        if index != 0
-            && self.endpoints[self.selected_endpoint]
-                .live
-                .status
-                .is_connected()
-            && !self.endpoints[self.selected_endpoint].live.supports_surface
-        {
+        if !self.can_switch_endpoint(index) {
             self.local_error = Some(fl!("endpoint-surface-switching-unsupported"));
             cx.notify();
             return false;

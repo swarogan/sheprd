@@ -3,12 +3,13 @@
 //! runs with `[remote] presence` on. It starts when the first needs it and
 //! stops when the last lets go. Each phone's `pair` frame goes to the
 //! daemon's control socket and back; `presence` frames go through
-//! [`PresenceRelay`], which also decides when a device is near.
+//! [`PresenceRelay`], which also decides when a device is near. While Add
+//! Device looks for a nearby Sheprd, the helper also scans ([`Scanner`]).
 
 use super::{
     Event, Helper, Radio, STOP, advertise_presence, answer, frame, helper_path,
     presence::{PresenceRelay, Received},
-    presence_frame, refusal, request,
+    presence_frame, refusal, request, scan,
 };
 use crate::remote::supervisor::{Client, Supervisor};
 use gpui::{App, Global};
@@ -33,6 +34,9 @@ pub(crate) struct Station {
     pairing: Option<(Weak<()>, String)>,
     presence: bool,
     radio: Option<Radio>,
+    /// Where scanning's events go, one entry per [`Scanner`]: each window's
+    /// Add Device sees every computer while its scanner lives.
+    scanners: Vec<(Weak<()>, mpsc::SyncSender<Event>)>,
     // keep-sorted end
 }
 
@@ -44,10 +48,23 @@ pub(crate) struct Advert {
     _token: Rc<()>,
 }
 
+/// Held by Add Device while it looks for a nearby Sheprd: the helper scans
+/// and its scanning events arrive on `events` until this drops.
+pub(crate) struct Scanner {
+    _token: Rc<()>,
+    pub(crate) events: mpsc::Receiver<Event>,
+}
+
+/// Scanning events waiting for Add Device; more are dropped.
+const SCANNED: usize = 64;
+
 /// What the running helper's loop does next.
 enum Check {
     Stop,
-    Run { stop_pairing: bool },
+    Run {
+        stop_pairing: bool,
+        stop_scanning: bool,
+    },
 }
 
 impl Station {
@@ -70,6 +87,51 @@ impl Station {
         }
         Self::sync(cx);
         Some(Advert { _token: token })
+    }
+
+    /// Scans for computers showing Pair device until the returned
+    /// [`Scanner`] drops. `None` when the app has no station.
+    pub(crate) fn scan(cx: &mut App) -> Option<Scanner> {
+        if !cx.has_global::<Self>() {
+            return None;
+        }
+        let token = Rc::new(());
+        let (events_in, events) = mpsc::sync_channel(SCANNED);
+        let station = cx.global_mut::<Self>();
+        station.scanners.push((Rc::downgrade(&token), events_in));
+        if let Some(lines) = &station.lines {
+            let _ = lines.send(scan(true));
+        }
+        Self::sync(cx);
+        Some(Scanner {
+            _token: token,
+            events,
+        })
+    }
+
+    /// Hands `line` to the running helper, for whoever scans.
+    pub(crate) fn send(cx: &App, line: String) {
+        if let Some(lines) = cx
+            .try_global::<Self>()
+            .and_then(|station| station.lines.as_ref())
+        {
+            let _ = lines.send(line);
+        }
+    }
+
+    /// Passes a scanning event on to every [`Scanner`] that still lives.
+    fn scanned(cx: &mut App, generation: u64, event: Event) {
+        let Some(station) = cx.try_global::<Self>() else {
+            return;
+        };
+        if station.generation != generation {
+            return;
+        }
+        for (token, events) in &station.scanners {
+            if token.strong_count() > 0 {
+                let _ = events.try_send(event.clone());
+            }
+        }
     }
 
     /// Whether to advertise for paired phones' presence.
@@ -99,6 +161,10 @@ impl Station {
                 .pairing
                 .as_ref()
                 .is_some_and(|(token, _)| token.strong_count() > 0)
+            || self
+                .scanners
+                .iter()
+                .any(|(token, _)| token.strong_count() > 0)
     }
 
     /// Starts a helper when one is wanted and none runs.
@@ -113,6 +179,9 @@ impl Station {
         }
         if station.presence {
             let _ = lines.send(advertise_presence(true));
+        }
+        if !station.scanners.is_empty() {
+            let _ = lines.send(scan(true));
         }
         station.generation += 1;
         station.lines = Some(lines);
@@ -157,8 +226,17 @@ impl Station {
             station.pairing = None;
             stop_pairing = true;
         }
+        // Scanning stops once the last scanner went.
+        let scanned = !station.scanners.is_empty();
+        station
+            .scanners
+            .retain(|(token, _)| token.strong_count() > 0);
+        let stop_scanning = scanned && station.scanners.is_empty();
         if station.wanted() {
-            Check::Run { stop_pairing }
+            Check::Run {
+                stop_pairing,
+                stop_scanning,
+            }
         } else {
             Check::Stop
         }
@@ -208,9 +286,15 @@ async fn run(
     loop {
         match cx.update(|cx| Station::check(cx, generation)) {
             Check::Stop => return,
-            Check::Run { stop_pairing } => {
+            Check::Run {
+                stop_pairing,
+                stop_scanning,
+            } => {
                 if stop_pairing {
                     helper.send(STOP.to_owned());
+                }
+                if stop_scanning {
+                    helper.send(scan(false));
                 }
             }
         }
@@ -218,6 +302,9 @@ async fn run(
             helper.send(line);
         }
         match helper.events.try_recv() {
+            Ok(event) if event.scanned() => {
+                cx.update(|cx| Station::scanned(cx, generation, event));
+            }
             Ok(Event::Radio(radio)) => cx.update(|cx| Station::set_radio(cx, generation, radio)),
             Ok(Event::Frame { central, data }) => {
                 let reply = match (request(&data), client) {
@@ -244,6 +331,14 @@ async fn run(
             Ok(Event::Failure(message)) => {
                 tracing::warn!(%message, "the nearby helper reported a failure");
             }
+            // Passed to the scanner above.
+            Ok(
+                Event::CentralRadio(_)
+                | Event::Found { .. }
+                | Event::Connected { .. }
+                | Event::PeripheralFrame { .. }
+                | Event::PeripheralDisconnected { .. },
+            ) => {}
             Err(TryRecvError::Empty) => {
                 if let Some(client) = client {
                     for request in presence.due(Instant::now()) {
@@ -258,3 +353,6 @@ async fn run(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

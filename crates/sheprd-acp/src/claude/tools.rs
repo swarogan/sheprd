@@ -148,10 +148,26 @@ fn path(input: &Value) -> Option<&str> {
 
 /// The question of an `AskUserQuestion` call that asks exactly one.
 pub(super) fn question(input: &Value) -> Option<&str> {
-    match input.get("questions")?.as_array()?.as_slice() {
-        [only] => only.get("question")?.as_str(),
-        _ => None,
-    }
+    (question_count(input) == 1)
+        .then(|| question_at(input, 0))
+        .flatten()
+}
+
+/// The text of question `index` of an `AskUserQuestion` call.
+pub(super) fn question_at(input: &Value, index: usize) -> Option<&str> {
+    input
+        .get("questions")?
+        .get(index)?
+        .get("question")?
+        .as_str()
+}
+
+/// How many questions an `AskUserQuestion` call asks.
+pub(super) fn question_count(input: &Value) -> usize {
+    input
+        .get("questions")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len)
 }
 
 /// Claude's to-do list as the plan.

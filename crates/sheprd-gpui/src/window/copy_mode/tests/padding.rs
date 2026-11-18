@@ -34,7 +34,7 @@ fn copy_mode_badge_sits_over_the_cells_inside_the_terminal_padding(cx: &mut Test
     let (right, bottom) = view.read_with(cx, |view, _| {
         let rect = view.live.surface.as_ref().unwrap().panes[0].rect;
         assert_eq!(view.bounds.left(), terminal.left() + px(16.));
-        assert_eq!(view.bounds.top(), terminal.top() + px(4.));
+        assert_eq!(view.bounds.bottom(), terminal.bottom() - px(12.));
         (
             view.bounds.left() + px(f32::from(rect.x + rect.width) * view.cell_width),
             view.bounds.top()

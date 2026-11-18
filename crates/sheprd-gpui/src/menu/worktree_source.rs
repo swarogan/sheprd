@@ -172,6 +172,11 @@ pub(crate) struct WorktreeSource {
     /// The row a creation is running for, kept from the moment it is picked
     /// until the daemon answers.
     pub(super) pending: Option<Pending>,
+    /// The branch actually submitted, independent of edits while waiting.
+    pub(super) create_branch: Option<String>,
+    /// A refused creation's branch and diagnostic, awaiting a fresh list.
+    pub(super) checking: Option<(String, String)>,
+    pub(super) reuse_notice: Option<String>,
     _subscriptions: [Subscription; 2],
 }
 
@@ -275,7 +280,7 @@ impl WorktreeSource {
 
     /// A creation is under way, so the list must not start another.
     pub(super) fn busy(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.checking.is_some()
     }
 
     /// Keep what the daemon listed that no workspace has open yet.
@@ -407,6 +412,9 @@ impl SheprdWindow {
             checkouts: Default::default(),
             branches: Default::default(),
             pending: None,
+            checking: None,
+            create_branch: None,
+            reuse_notice: None,
             _subscriptions: [subscription, naming],
         });
         // Both are cheap and local, so their counts are ready before a tab is

@@ -4,6 +4,8 @@ add-device-title = Add Device
 add-device-close = Close
 # The rail's entries. Cloud providers and WSL keep their own names.
 add-device-source-host = SSH host
+# Another computer's Sheprd, found over Bluetooth.
+add-device-source-nearby = Nearby Sheprd
 add-device-source-catalog = Add provider
 # The heading over the rail's cloud providers.
 add-device-cloud-heading = CLOUD

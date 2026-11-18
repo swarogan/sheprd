@@ -161,7 +161,7 @@ impl SheprdWindow {
     /// Each header the spaces list shows, by endpoint index, with its row in
     /// the folded list, where every header is one row. `devices` and `query`
     /// list the headers as render does.
-    fn listed_headers(&self, devices: bool, query: &str) -> Vec<(usize, usize)> {
+    pub(super) fn listed_headers(&self, devices: bool, query: &str) -> Vec<(usize, usize)> {
         self.displayed_devices()
             .into_iter()
             .filter(|&(index, endpoint)| {

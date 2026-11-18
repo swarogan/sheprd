@@ -17,6 +17,10 @@ settings-remote-health-not-running = Not running: { $reason }
 settings-remote-service-failed = Could not change the service: { $error }
 settings-remote-revoke-failed = Could not revoke the device: { $error }
 settings-remote-retry = Retry
+# Shown while the service runs a build without a developer ID and the
+# macOS firewall is on.
+settings-remote-firewall = Phones will be blocked after this build changes
+settings-remote-firewall-note = The macOS firewall is on, and this build of the daemon is not signed with a developer ID, so macOS approves only this exact build. After a rebuild, the next restart of the Mac or of the daemon blocks phones until someone clicks Allow at this computer. Run remote control from a signed release to keep the approval.
 
 settings-remote-section-service = Service
 settings-remote-keep-running-note = Phones keep working and notifications keep coming. Pairing a new device still needs Sheprd.
@@ -46,9 +50,12 @@ settings-remote-relays = Reach this computer from any network
 settings-remote-relays-none = No relay. Phones reach this computer on your network, or over Tailscale when it runs.
 settings-remote-relays-note = Paired phones go through a relay when they have no direct path. A relay sees only encrypted traffic. A phone learns of a new relay the next time it connects directly.
 settings-remote-relay-listening = Listening
+settings-remote-relay-listening-rtt = Listening · { $ms } ms
 settings-remote-relay-connecting = Connecting…
 settings-remote-relay-failed = Failed: { $error }
 settings-remote-relay-unreported = The daemon has not reported on it yet.
+# $tags is the relay's tags from remote.relays, joined with commas.
+settings-remote-relay-tags = Tags: { $tags }
 settings-remote-relay-remove = Remove
 settings-remote-relay-remove-label = Remove { $relay }
 settings-remote-relay-add = Add a relay

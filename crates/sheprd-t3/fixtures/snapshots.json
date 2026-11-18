@@ -1,0 +1,779 @@
+[
+ {
+  "_tag": "Chunk",
+  "requestId": "1",
+  "values": [
+   {
+    "kind": "snapshot",
+    "snapshot": {
+     "schemaVersion": 2,
+     "snapshotSequence": 43,
+     "threads": [
+      {
+       "createdBy": "agent",
+       "creationSource": "mcp",
+       "id": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "projectId": "4e50c501-307a-4fd9-84b9-6f6e0391c8ae",
+       "title": "Echo test",
+       "providerInstanceId": "fakeacp",
+       "modelSelection": {
+        "instanceId": "fakeacp",
+        "model": "default"
+       },
+       "runtimeMode": "full-access",
+       "interactionMode": "default",
+       "branch": null,
+       "worktreePath": null,
+       "pullRequests": [],
+       "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91"
+       },
+       "forkedFrom": null,
+       "activeProviderThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "latestRunId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "latestRunRequestedAt": "2026-11-16T04:48:00.500Z",
+       "latestRunStartedAt": "2026-11-16T04:48:00.571Z",
+       "latestRunCompletedAt": "2026-11-16T04:48:00.714Z",
+       "latestRunStopRequested": false,
+       "activeRunId": null,
+       "activityRunStartedAt": null,
+       "activityRunStatus": null,
+       "blockedOnThreadWait": false,
+       "status": "completed",
+       "lastError": null,
+       "lastErrorClass": null,
+       "lastErrorCode": null,
+       "usageLimitResetAt": null,
+       "pendingRuntimeRequest": null,
+       "pendingGuestMessageCount": 0,
+       "latestVisibleMessage": null,
+       "latestUserMessageAt": "2026-11-16T04:48:00.500Z",
+       "latestUserAuthoredMessageAt": null,
+       "hasActionableProposedPlan": false,
+       "pendingBackgroundTasks": [],
+       "providerInstanceHistory": [
+        "fakeacp"
+       ],
+       "goal": null,
+       "itemCount": 5,
+       "visibleItemCount": 5,
+       "createdAt": "2026-11-16T04:48:00.487Z",
+       "updatedAt": "2026-11-16T04:48:00.714Z",
+       "archivedAt": null,
+       "settledOverride": null,
+       "settledAt": null,
+       "unsettledAt": null,
+       "snoozedUntil": null,
+       "snoozedAt": null,
+       "limitRecovery": null,
+       "pinnedAt": null,
+       "autoSettleDisabledAt": null,
+       "pinOrderKey": null,
+       "lastVisitedAt": "2026-11-16T04:48:00.499Z",
+       "opens": null,
+       "titleRegeneration": null,
+       "deletedAt": null
+      }
+     ],
+     "archivedThreads": [],
+     "projects": [
+      {
+       "id": "4e50c501-307a-4fd9-84b9-6f6e0391c8ae",
+       "title": "Sandbox",
+       "workspaceRoot": "/tmp/t3-sandbox/work",
+       "repositoryIdentity": null,
+       "defaultModelSelection": null,
+       "defaultThreadEnvMode": null,
+       "autoPull": false,
+       "faviconPath": null,
+       "projectIcon": null,
+       "scripts": [],
+       "pinnedAt": null,
+       "archivedAt": null,
+       "createdAt": "2026-11-16T04:48:00.094Z",
+       "updatedAt": "2026-11-16T04:48:00.094Z"
+      }
+     ]
+    }
+   },
+   {
+    "kind": "snapshot",
+    "snapshot": {
+     "schemaVersion": 2,
+     "snapshotSequence": 43,
+     "threads": [],
+     "archivedThreads": [],
+     "projects": [
+      {
+       "id": "4e50c501-307a-4fd9-84b9-6f6e0391c8ae",
+       "title": "Sandbox",
+       "workspaceRoot": "/tmp/t3-sandbox/work",
+       "repositoryIdentity": null,
+       "defaultModelSelection": null,
+       "defaultThreadEnvMode": null,
+       "autoPull": false,
+       "faviconPath": null,
+       "projectIcon": null,
+       "scripts": [],
+       "pinnedAt": null,
+       "archivedAt": null,
+       "createdAt": "2026-11-16T04:48:00.094Z",
+       "updatedAt": "2026-11-16T04:48:00.094Z"
+      }
+     ]
+    },
+    "resolvedRepositoryIdentityRoots": [
+     "/tmp/t3-sandbox/work"
+    ]
+   }
+  ]
+ },
+ {
+  "_tag": "Chunk",
+  "requestId": "2",
+  "values": [
+   {
+    "kind": "snapshot",
+    "snapshotSequence": 43,
+    "projection": {
+     "thread": {
+      "createdBy": "agent",
+      "creationSource": "mcp",
+      "id": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+      "projectId": "4e50c501-307a-4fd9-84b9-6f6e0391c8ae",
+      "title": "Echo test",
+      "providerInstanceId": "fakeacp",
+      "modelSelection": {
+       "instanceId": "fakeacp",
+       "model": "default"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "activeProviderThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+      "lineage": {
+       "parentThreadId": null,
+       "relationshipToParent": null,
+       "rootThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91"
+      },
+      "forkedFrom": null,
+      "createdAt": "2026-11-16T04:48:00.487Z",
+      "updatedAt": "2026-11-16T04:48:00.714Z",
+      "archivedAt": null,
+      "settledOverride": null,
+      "settledAt": null,
+      "snoozedUntil": null,
+      "snoozedAt": null,
+      "lastVisitedAt": "2026-11-16T04:48:00.499Z",
+      "deletedAt": null
+     },
+     "runs": [
+      {
+       "id": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "ordinal": 1,
+       "providerInstanceId": "fakeacp",
+       "modelSelection": {
+        "instanceId": "fakeacp",
+        "model": "default"
+       },
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "userMessageId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "rootNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "activeAttemptId": "run-attempt:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:attempt:1",
+       "status": "completed",
+       "queuePosition": null,
+       "requestedAt": "2026-11-16T04:48:00.500Z",
+       "startedAt": "2026-11-16T04:48:00.571Z",
+       "completedAt": "2026-11-16T04:48:00.714Z",
+       "checkpointId": "checkpoint:scope:checkpoint-scope%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aname%3Aroot:name:1",
+       "contextHandoffId": null,
+       "workspacePreparation": {
+        "type": "root"
+       }
+      }
+     ],
+     "attempts": [
+      {
+       "id": "run-attempt:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:attempt:1",
+       "nativeThreadId": "fake-1",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "attemptOrdinal": 1,
+       "rootNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "providerInstanceId": "fakeacp",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": null,
+       "reason": "initial",
+       "status": "completed",
+       "startedAt": "2026-11-16T04:48:00.571Z",
+       "completedAt": "2026-11-16T04:48:00.701Z"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "parentNodeId": null,
+       "rootNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "kind": "root_turn",
+       "status": "completed",
+       "countsForRun": true,
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": null,
+       "nativeItemRef": null,
+       "runtimeRequestId": null,
+       "checkpointScopeId": "checkpoint-scope:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:name:root",
+       "startedAt": "2026-11-16T04:48:00.571Z",
+       "completedAt": "2026-11-16T04:48:00.714Z"
+      },
+      {
+       "id": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Atool%3Aread-1073741826",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "parentNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "rootNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "kind": "tool_call",
+       "status": "completed",
+       "countsForRun": true,
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+       "nativeItemRef": {
+        "driver": "acpRegistry",
+        "nativeId": "read-1073741826",
+        "strength": "strong"
+       },
+       "runtimeRequestId": null,
+       "checkpointScopeId": null,
+       "startedAt": "2026-11-16T04:48:00.683Z",
+       "completedAt": "2026-11-16T04:48:00.684Z"
+      },
+      {
+       "id": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "parentNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "rootNodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "kind": "assistant_message",
+       "status": "completed",
+       "countsForRun": false,
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+       "nativeItemRef": {
+        "driver": "acpRegistry",
+        "nativeId": "fake-1:turn:1:assistant:0",
+        "strength": "weak"
+       },
+       "runtimeRequestId": null,
+       "checkpointScopeId": null,
+       "startedAt": "2026-11-16T04:48:00.685Z",
+       "completedAt": "2026-11-16T04:48:00.687Z"
+      }
+     ],
+     "subagents": [],
+     "providerSessions": [
+      {
+       "id": "provider-session:provider-instance:fakeacp:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:0a8189a3-3416-4840-a313-a4069a5afd06",
+       "driver": "acpRegistry",
+       "providerInstanceId": "fakeacp",
+       "status": "ready",
+       "cwd": "/tmp/t3-sandbox/work",
+       "model": "default",
+       "capabilities": {
+        "sessions": {
+         "supportsMultipleProviderThreadsPerSession": false,
+         "supportsModelSwitchInSession": false,
+         "supportsProviderSwitchingViaHandoff": true,
+         "supportsRuntimeModeSwitchInSession": false,
+         "pendingRequestsSurviveRestart": false
+        },
+        "threads": {
+         "canCreateEmptyThread": true,
+         "canReadThreadSnapshot": true,
+         "canRollbackThread": true,
+         "canForkThread": false,
+         "canForkFromTurn": false,
+         "canForkFromSubagentThread": false,
+         "exposesNativeThreadId": true
+        },
+        "turns": {
+         "exposesNativeTurnId": false,
+         "emitsTurnStarted": true,
+         "emitsTurnCompleted": true,
+         "supportsInterrupt": true,
+         "supportsActiveSteering": false,
+         "supportsSteeringByInterruptRestart": true,
+         "supportsQueuedMessages": true,
+         "terminalStatusQuality": "strong"
+        },
+        "streaming": {
+         "streamsAssistantText": true,
+         "streamsReasoning": true,
+         "streamsToolOutput": true,
+         "streamsPlanText": false,
+         "emitsMessageCompleted": true
+        },
+        "tools": {
+         "exposesToolItemIds": true,
+         "emitsToolStarted": true,
+         "emitsToolCompleted": true,
+         "emitsToolOutput": true,
+         "supportsMcpTools": true,
+         "supportsDynamicToolCallbacks": false
+        },
+        "approvals": {
+         "supportsCommandApproval": true,
+         "supportsFileReadApproval": true,
+         "supportsFileChangeApproval": true,
+         "supportsApplyPatchApproval": false,
+         "approvalsHaveNativeRequestIds": false,
+         "approvalCallbacksAreLiveOnly": true,
+         "approvalsCanOriginateFromSubagents": false
+        },
+        "planning": {
+         "emitsPlanUpdated": true,
+         "emitsTodoList": true,
+         "emitsProposedPlan": false,
+         "supportsStructuredQuestions": true,
+         "planDeltasHaveItemIds": false
+        },
+        "subagents": {
+         "supportsSubagents": false,
+         "exposesSubagentThreadIds": false,
+         "emitsSubagentLifecycle": false,
+         "canWaitForSubagents": false,
+         "canCloseSubagents": false,
+         "canForkSubagentThread": false
+        },
+        "context": {
+         "acceptsSystemContext": false,
+         "acceptsDeveloperContext": false,
+         "acceptsSyntheticUserContext": true,
+         "canGenerateSummaries": true,
+         "canConsumeHandoffSummaries": true,
+         "supportsDeltaHandoff": true,
+         "supportsFullThreadHandoff": true,
+         "maxRecommendedHandoffChars": null
+        },
+        "checkpointing": {
+         "appCanCheckpointFilesystem": true,
+         "supportsNestedCheckpointScopes": true,
+         "providerCanRollbackConversation": true,
+         "providerRollbackReturnsSnapshot": true,
+         "providerCanReadConversationSnapshot": true
+        },
+        "identity": {
+         "nativeThreadIds": "strong",
+         "nativeTurnIds": "weak",
+         "nativeItemIds": "weak",
+         "nativeRequestIds": "weak"
+        },
+        "runtimePolicy": {
+         "enforcement": "client-boundary"
+        }
+       },
+       "createdAt": "2026-11-16T04:48:00.566Z",
+       "updatedAt": "2026-11-16T04:48:00.566Z",
+       "lastError": null
+      }
+     ],
+     "providerThreads": [
+      {
+       "id": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "driver": "acpRegistry",
+       "providerInstanceId": "fakeacp",
+       "providerSessionId": "provider-session:provider-instance:fakeacp:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:0a8189a3-3416-4840-a313-a4069a5afd06",
+       "appThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "ownerNodeId": null,
+       "nativeThreadRef": {
+        "driver": "acpRegistry",
+        "nativeId": "fake-1",
+        "strength": "strong"
+       },
+       "nativeConversationHeadRef": null,
+       "status": "idle",
+       "firstRunOrdinal": 1,
+       "lastRunOrdinal": 1,
+       "handoffIds": [],
+       "forkedFrom": null,
+       "pendingBackgroundTasks": [],
+       "contextUsage": null,
+       "nativeMetadata": {
+        "itemIdentityVersion": 2
+       },
+       "goal": null,
+       "createdAt": "2026-11-16T04:48:00.500Z",
+       "updatedAt": "2026-11-16T04:48:00.701Z"
+      }
+     ],
+     "providerTurns": [
+      {
+       "id": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "runAttemptId": "run-attempt:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:attempt:1",
+       "nativeTurnRef": {
+        "driver": "acpRegistry",
+        "nativeId": "fake-1:turn:1",
+        "strength": "weak"
+       },
+       "ordinal": 1,
+       "status": "completed",
+       "startedAt": "2026-11-16T04:48:00.673Z",
+       "completedAt": "2026-11-16T04:48:00.687Z",
+       "turnTokenUsage": {
+        "usageScope": "main_agent",
+        "hasSubagents": false,
+        "usageStatus": "unavailable"
+       }
+      }
+     ],
+     "runtimeRequests": [],
+     "messages": [
+      {
+       "createdBy": "agent",
+       "creationSource": "mcp",
+       "id": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "role": "user",
+       "text": "Say hello and read the README",
+       "attachments": [],
+       "streaming": false,
+       "createdAt": "2026-11-16T04:48:00.500Z",
+       "updatedAt": "2026-11-16T04:48:00.500Z"
+      },
+      {
+       "createdBy": "agent",
+       "creationSource": "provider",
+       "id": "message:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "role": "assistant",
+       "text": "Echo: <t3_code_instructions>\n## T3 Code interaction mode: Default\n\nPrefer making reasonable assumptions and carrying out the user's request. Ask a concise question only when a missing user decision would ma",
+       "attachments": [],
+       "streaming": false,
+       "createdAt": "2026-11-16T04:48:00.685Z",
+       "updatedAt": "2026-11-16T04:48:00.687Z"
+      }
+     ],
+     "plans": [],
+     "turnItems": [
+      {
+       "id": "turn-item:message:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": null,
+       "nativeItemRef": null,
+       "parentItemId": null,
+       "ordinal": 1000001,
+       "status": "completed",
+       "title": null,
+       "startedAt": "2026-11-16T04:48:00.500Z",
+       "completedAt": "2026-11-16T04:48:00.500Z",
+       "updatedAt": "2026-11-16T04:48:00.500Z",
+       "createdBy": "agent",
+       "creationSource": "mcp",
+       "type": "user_message",
+       "messageId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "inputIntent": "turn_start",
+       "text": "Say hello and read the README",
+       "attachments": []
+      },
+      {
+       "id": "turn-item:provider:acpRegistry:native-item:workspace-preparation%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": null,
+       "nativeItemRef": null,
+       "parentItemId": null,
+       "ordinal": 1000002,
+       "status": "completed",
+       "title": "Workspace ready",
+       "startedAt": "2026-11-16T04:48:00.500Z",
+       "completedAt": "2026-11-16T04:48:00.520Z",
+       "updatedAt": "2026-11-16T04:48:00.520Z",
+       "type": "command_execution",
+       "input": "Preparing workspace",
+       "outputOmitted": true,
+       "exitCode": 0
+      },
+      {
+       "id": "turn-item:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Atool%3Aread-1073741826",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Atool%3Aread-1073741826",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+       "nativeItemRef": {
+        "driver": "acpRegistry",
+        "nativeId": "read-1073741826",
+        "strength": "strong"
+       },
+       "parentItemId": null,
+       "ordinal": 1000003,
+       "status": "completed",
+       "title": "Read README.md",
+       "startedAt": "2026-11-16T04:48:00.683Z",
+       "completedAt": "2026-11-16T04:48:00.684Z",
+       "updatedAt": "2026-11-16T04:48:00.684Z",
+       "type": "dynamic_tool",
+       "toolName": "Read",
+       "input": {
+        "path": "README.md"
+       },
+       "outputOmitted": true
+      },
+      {
+       "id": "turn-item:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+       "nativeItemRef": {
+        "driver": "acpRegistry",
+        "nativeId": "fake-1:turn:1:assistant:0",
+        "strength": "weak"
+       },
+       "parentItemId": null,
+       "ordinal": 1000004,
+       "status": "completed",
+       "title": null,
+       "startedAt": "2026-11-16T04:48:00.685Z",
+       "completedAt": "2026-11-16T04:48:00.687Z",
+       "updatedAt": "2026-11-16T04:48:00.687Z",
+       "type": "assistant_message",
+       "messageId": "message:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "text": "Echo: <t3_code_instructions>\n## T3 Code interaction mode: Default\n\nPrefer making reasonable assumptions and carrying out the user's request. Ask a concise question only when a missing user decision would ma",
+       "streaming": false
+      },
+      {
+       "id": "turn-item:provider:acpRegistry:native-item:checkpoint%3Acheckpoint%3Ascope%3Acheckpoint-scope%253Athread%253Amcp%25253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%253Aname%253Aroot%3Aname%3A1",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "providerTurnId": null,
+       "nativeItemRef": null,
+       "parentItemId": null,
+       "ordinal": 1000005,
+       "status": "completed",
+       "title": null,
+       "startedAt": "2026-11-16T04:48:00.714Z",
+       "completedAt": "2026-11-16T04:48:00.714Z",
+       "updatedAt": "2026-11-16T04:48:00.714Z",
+       "type": "checkpoint",
+       "checkpointId": "checkpoint:scope:checkpoint-scope%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aname%3Aroot:name:1",
+       "scopeId": "checkpoint-scope:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:name:root",
+       "files": []
+      }
+     ],
+     "checkpointScopes": [
+      {
+       "id": "checkpoint-scope:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:name:root",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "parentScopeId": null,
+       "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "kind": "root_run",
+       "ordinalWithinParent": 0,
+       "advancesAppRunCount": true,
+       "cwd": "/tmp/t3-sandbox/work",
+       "createdAt": "2026-11-16T04:48:00.520Z"
+      }
+     ],
+     "checkpoints": [
+      {
+       "id": "checkpoint:scope:checkpoint-scope%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aname%3Aroot:name:0",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "scopeId": "checkpoint-scope:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:name:root",
+       "runId": null,
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "parentCheckpointId": null,
+       "ordinalWithinScope": 0,
+       "appRunOrdinal": null,
+       "ref": "refs/t3/orchestration-v2/checkpoints/ZWNiNWFiMGJhY2QxZGQwYjEwNmFjYjExNjMyMDVmZmI/ordinal/0",
+       "status": "ready",
+       "files": [],
+       "capturedAt": "2026-11-16T04:48:00.520Z"
+      },
+      {
+       "id": "checkpoint:scope:checkpoint-scope%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aname%3Aroot:name:1",
+       "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "scopeId": "checkpoint-scope:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:name:root",
+       "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+       "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+       "parentCheckpointId": "checkpoint:scope:checkpoint-scope%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aname%3Aroot:name:0",
+       "ordinalWithinScope": 1,
+       "appRunOrdinal": 1,
+       "ref": "refs/t3/orchestration-v2/checkpoints/ZWNiNWFiMGJhY2QxZGQwYjEwNmFjYjExNjMyMDVmZmI/ordinal/1",
+       "status": "ready",
+       "files": [],
+       "capturedAt": "2026-11-16T04:48:00.714Z"
+      }
+     ],
+     "contextHandoffs": [],
+     "contextTransfers": [],
+     "visibleTurnItems": [
+      {
+       "position": 0,
+       "visibility": "local",
+       "sourceThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "sourceItemId": "turn-item:message:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "item": {
+        "id": "turn-item:message:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+        "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+        "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 1000001,
+        "status": "completed",
+        "title": null,
+        "startedAt": "2026-11-16T04:48:00.500Z",
+        "completedAt": "2026-11-16T04:48:00.500Z",
+        "updatedAt": "2026-11-16T04:48:00.500Z",
+        "createdBy": "agent",
+        "creationSource": "mcp",
+        "type": "user_message",
+        "messageId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "inputIntent": "turn_start",
+        "text": "Say hello and read the README",
+        "attachments": []
+       }
+      },
+      {
+       "position": 1,
+       "visibility": "local",
+       "sourceThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "sourceItemId": "turn-item:provider:acpRegistry:native-item:workspace-preparation%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+       "item": {
+        "id": "turn-item:provider:acpRegistry:native-item:workspace-preparation%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+        "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+        "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+        "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 1000002,
+        "status": "completed",
+        "title": "Workspace ready",
+        "startedAt": "2026-11-16T04:48:00.500Z",
+        "completedAt": "2026-11-16T04:48:00.520Z",
+        "updatedAt": "2026-11-16T04:48:00.520Z",
+        "type": "command_execution",
+        "input": "Preparing workspace",
+        "outputOmitted": true,
+        "exitCode": 0
+       }
+      },
+      {
+       "position": 2,
+       "visibility": "local",
+       "sourceThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "sourceItemId": "turn-item:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Atool%3Aread-1073741826",
+       "item": {
+        "id": "turn-item:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Atool%3Aread-1073741826",
+        "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+        "nodeId": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Atool%3Aread-1073741826",
+        "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+        "providerTurnId": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+        "nativeItemRef": {
+         "driver": "acpRegistry",
+         "nativeId": "read-1073741826",
+         "strength": "strong"
+        },
+        "parentItemId": null,
+        "ordinal": 1000003,
+        "status": "completed",
+        "title": "Read README.md",
+        "startedAt": "2026-11-16T04:48:00.683Z",
+        "completedAt": "2026-11-16T04:48:00.684Z",
+        "updatedAt": "2026-11-16T04:48:00.684Z",
+        "type": "dynamic_tool",
+        "toolName": "Read",
+        "input": {
+         "path": "README.md"
+        },
+        "outputOmitted": true
+       }
+      },
+      {
+       "position": 3,
+       "visibility": "local",
+       "sourceThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "sourceItemId": "turn-item:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+       "item": {
+        "id": "turn-item:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+        "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+        "nodeId": "node:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+        "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+        "providerTurnId": "provider-turn:provider:acpRegistry:native-turn:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1",
+        "nativeItemRef": {
+         "driver": "acpRegistry",
+         "nativeId": "fake-1:turn:1:assistant:0",
+         "strength": "weak"
+        },
+        "parentItemId": null,
+        "ordinal": 1000004,
+        "status": "completed",
+        "title": null,
+        "startedAt": "2026-11-16T04:48:00.685Z",
+        "completedAt": "2026-11-16T04:48:00.687Z",
+        "updatedAt": "2026-11-16T04:48:00.687Z",
+        "type": "assistant_message",
+        "messageId": "message:provider:acpRegistry:native-item:provider-instance%3Afakeacp%3Afake-1%3Aturn%3A1%3Aassistant%3A0",
+        "text": "Echo: <t3_code_instructions>\n## T3 Code interaction mode: Default\n\nPrefer making reasonable assumptions and carrying out the user's request. Ask a concise question only when a missing user decision would ma",
+        "streaming": false
+       }
+      },
+      {
+       "position": 4,
+       "visibility": "local",
+       "sourceThreadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+       "sourceItemId": "turn-item:provider:acpRegistry:native-item:checkpoint%3Acheckpoint%3Ascope%3Acheckpoint-scope%253Athread%253Amcp%25253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%253Aname%253Aroot%3Aname%3A1",
+       "item": {
+        "id": "turn-item:provider:acpRegistry:native-item:checkpoint%3Acheckpoint%3Ascope%3Acheckpoint-scope%253Athread%253Amcp%25253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%253Aname%253Aroot%3Aname%3A1",
+        "threadId": "mcp:a25d344c-e7a9-41ec-a6b4-33cb6f752f91",
+        "runId": "run:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:ordinal:1",
+        "nodeId": "node:run:run%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1:root",
+        "providerThreadId": "provider-thread:provider:acpRegistry:native-thread:pending%3Arun%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aordinal%3A1",
+        "providerTurnId": null,
+        "nativeItemRef": null,
+        "parentItemId": null,
+        "ordinal": 1000005,
+        "status": "completed",
+        "title": null,
+        "startedAt": "2026-11-16T04:48:00.714Z",
+        "completedAt": "2026-11-16T04:48:00.714Z",
+        "updatedAt": "2026-11-16T04:48:00.714Z",
+        "type": "checkpoint",
+        "checkpointId": "checkpoint:scope:checkpoint-scope%3Athread%3Amcp%253Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91%3Aname%3Aroot:name:1",
+        "scopeId": "checkpoint-scope:thread:mcp%3Aa25d344c-e7a9-41ec-a6b4-33cb6f752f91:name:root",
+        "files": []
+       }
+      }
+     ],
+     "updatedAt": "2026-11-16T04:48:00.714Z"
+    }
+   }
+  ]
+ }
+]

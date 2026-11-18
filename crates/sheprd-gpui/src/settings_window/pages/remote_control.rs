@@ -29,7 +29,7 @@ mod relays;
 
 pub(in crate::settings_window) use relays::Offered;
 #[cfg(test)]
-pub(in crate::settings_window) use relays::{Standing, public_title};
+pub(in crate::settings_window) use relays::{Standing, public_title, relay_line};
 
 /// The page's state while it shows.
 #[derive(Default)]
@@ -237,6 +237,26 @@ impl SettingsWindow {
         cx.notify();
     }
 
+    /// The device list's Share GitHub sign-in switch, sent at once: it
+    /// grants nothing new without the phone asking, and turning it off only
+    /// stops further sign-ins.
+    pub(in crate::settings_window) fn share_remote_github(
+        &mut self,
+        device: DeviceId,
+        share: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let view = cx.entity().downgrade();
+        Supervisor::share_github(cx, device, share, move |result, cx| {
+            let _ = view.update(cx, |view, cx| {
+                if let Err(error) = result {
+                    view.error = Some(fl!("remote-github-share-failed", error = error.localize()));
+                }
+                cx.notify();
+            });
+        });
+    }
+
     /// The bind dropdown's choice at `index`.
     pub(in crate::settings_window) fn pick_remote_bind(
         &mut self,
@@ -299,6 +319,12 @@ impl SettingsWindow {
                 None,
             ))
             .child(switch_row)
+            .when(Supervisor::approval_per_build(cx), |page| {
+                page.child(
+                    ui::row(theme, "remote-firewall", fl!("settings-remote-firewall"))
+                        .description(fl!("settings-remote-firewall-note")),
+                )
+            })
             .child(
                 ui::row(
                     theme,
@@ -660,21 +686,22 @@ impl SettingsWindow {
             .map(<[Device]>::to_vec)
             .unwrap_or_default();
         let now = crate::remote::now_ms();
-        let rows =
-            devices.iter().enumerate().map(|(index, device)| {
-                let id = device.id.clone();
-                let asking = self.remote.revoking.as_ref() == Some(&device.id);
-                let cancel = div()
-                    .id(("remote-device-cancel", index))
-                    .debug_selector(move || format!("remote-device-{index}-cancel"))
-                    .role(Role::Button)
-                    .px(px(8.))
-                    .cursor_pointer()
-                    .child(fl!("settings-remote-device-cancel"))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.remote.revoking = None;
-                        cx.notify();
-                    }));
+        let rows = devices.iter().enumerate().map(|(index, device)| {
+            let id = device.id.clone();
+            let sharing = (device.id.clone(), device.share_github);
+            let asking = self.remote.revoking.as_ref() == Some(&device.id);
+            let cancel = div()
+                .id(("remote-device-cancel", index))
+                .debug_selector(move || format!("remote-device-{index}-cancel"))
+                .role(Role::Button)
+                .px(px(8.))
+                .cursor_pointer()
+                .child(fl!("settings-remote-device-cancel"))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.remote.revoking = None;
+                    cx.notify();
+                }));
+            let row =
                 ui::row(
                     theme,
                     format!("remote-device-{index}"),
@@ -715,9 +742,28 @@ impl SettingsWindow {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.revoke_remote_device(id.clone(), cx)
                         })),
-                )
+                );
+            let (device_id, shared) = sharing;
+            let github = ui::row(
+                theme,
+                format!("remote-device-{index}-github-row"),
+                fl!("remote-github-share"),
+            )
+            .description(fl!("remote-github-share-note"))
+            .control(
+                ui::toggle(theme, format!("remote-device-{index}-github"), shared, true)
+                    .aria_label(fl!("remote-github-share"))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.share_remote_github(device_id.clone(), !shared, cx)
+                    })),
+            );
+            div()
+                .flex()
+                .flex_col()
+                .child(row)
+                .child(div().ps(px(16.)).child(github))
                 .into_any_element()
-            });
+        });
         let summary = match (self.config.remote.enabled, devices.len()) {
             (false, _) => fl!("settings-remote-while-running"),
             (true, 0) => fl!("settings-remote-devices-none"),

@@ -1,5 +1,6 @@
 import AppIntents
 import SheprdRemoteCore
+import SheprdVoice
 
 /// A paired computer, for Siri and Shortcuts.
 struct ComputerEntity: AppEntity {

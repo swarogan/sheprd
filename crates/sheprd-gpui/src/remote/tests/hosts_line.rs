@@ -23,6 +23,7 @@ fn a_phones_machines_read_by_where_they_stand() {
         connected: false,
         via: None,
         hosts: Vec::new(),
+        share_github: true,
     };
     assert_eq!(hosts_line(&device), None);
     device.hosts = vec![

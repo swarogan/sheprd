@@ -1,4 +1,5 @@
 import SheprdRemoteCore
+import SheprdNearby
 import SwiftUI
 
 /// A capsule at the top of Home and Workspaces when a computer nearby has

@@ -16,8 +16,17 @@ fn main() -> ExitCode {
         }
     };
     tracing_subscriber::fmt().with_target(false).init();
+    let check = options.check;
     match run(options) {
+        Ok(()) if check => {
+            tracing::info!("the relay can start with these secrets");
+            ExitCode::SUCCESS
+        }
         Ok(()) => ExitCode::SUCCESS,
+        Err(error) if check => {
+            tracing::error!(%error, "the relay cannot start with these secrets");
+            ExitCode::FAILURE
+        }
         Err(error) => {
             tracing::error!(%error, "the relay stopped");
             ExitCode::FAILURE

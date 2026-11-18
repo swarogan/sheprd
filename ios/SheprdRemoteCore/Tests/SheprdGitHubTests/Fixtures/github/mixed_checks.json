@@ -1,0 +1,98 @@
+{
+ "data": {
+  "repository": {
+   "b0": {
+    "nodes": [
+     {
+      "author": {
+       "login": "ana"
+      },
+      "commits": {
+       "nodes": [
+        {
+         "commit": {
+          "statusCheckRollup": {
+           "contexts": {
+            "nodes": [
+             {
+              "__typename": "CheckRun",
+              "conclusion": "FAILURE",
+              "databaseId": 80,
+              "detailsUrl": "https://github.com/acme/app/actions/runs/8/job/80",
+              "name": "lint",
+              "status": "COMPLETED"
+             },
+             {
+              "__typename": "CheckRun",
+              "conclusion": null,
+              "databaseId": 81,
+              "detailsUrl": "https://github.com/acme/app/actions/runs/8/job/81",
+              "name": "build",
+              "status": "IN_PROGRESS"
+             },
+             {
+              "__typename": "CheckRun",
+              "conclusion": "FAILURE",
+              "databaseId": 990,
+              "detailsUrl": "https://vercel.example/acme/app",
+              "name": "deploy-preview",
+              "status": "COMPLETED"
+             },
+             {
+              "__typename": "CheckRun",
+              "conclusion": "NEUTRAL",
+              "databaseId": null,
+              "detailsUrl": null,
+              "name": "optional",
+              "status": "COMPLETED"
+             },
+             {
+              "__typename": "CheckRun",
+              "conclusion": "SKIPPED",
+              "databaseId": null,
+              "detailsUrl": null,
+              "name": "docs",
+              "status": "COMPLETED"
+             },
+             {
+              "__typename": "StatusContext",
+              "context": "ci/legacy",
+              "state": "FAILURE",
+              "targetUrl": "http://ci.example/1"
+             },
+             {
+              "__typename": "StatusContext",
+              "context": "ci/pending",
+              "state": "PENDING",
+              "targetUrl": "https://ci.example/2"
+             }
+            ],
+            "pageInfo": {
+             "hasNextPage": true
+            }
+           }
+          }
+         }
+        }
+       ]
+      },
+      "headRefName": "feature",
+      "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+      "headRepositoryOwner": {
+       "login": "acme"
+      },
+      "isDraft": false,
+      "mergeStateStatus": "UNSTABLE",
+      "mergeable": "MERGEABLE",
+      "number": 44,
+      "reviewDecision": "APPROVED",
+      "state": "OPEN",
+      "title": "Pull request 44",
+      "url": "https://github.com/acme/app/pull/44"
+     }
+    ]
+   },
+   "nameWithOwner": "acme/app"
+  }
+ }
+}

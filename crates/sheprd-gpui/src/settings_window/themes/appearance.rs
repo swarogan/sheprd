@@ -2,7 +2,7 @@
 use super::{ROW_HEIGHT, Scope, SettingsWindow, grid};
 use crate::direction::Logical;
 use crate::{
-    config::{Theme, ThemeName, corners},
+    config::{Theme, corners},
     herdr_settings,
     i18n::fl,
     settings_window::ui,
@@ -108,24 +108,8 @@ impl SettingsWindow {
                                             }
                                              let choice = this.themes.filtered[index].clone();
                                              let name = &choice.name;
-                                            let draft =
-                                                this.theme_intent.as_ref().is_some_and(|intent| {
-                                                    intent.choice.scope == choice.scope
-                                                        && match choice.scope {
-                                                            Scope::App => {
-                                                                ThemeName::side(&intent.choice.name, this.themes.editing_light) == name
-                                                            }
-                                                            Scope::Herdr => intent.choice.name == *name,
-                                                        }
-                                                });
-                                             let saved = match choice.scope {
-                                                 Scope::App => name == this.edited_theme(),
-                                                Scope::Herdr => {
-                                                    this.shared.as_ref().is_some_and(|shared| {
-                                                         shared.theme_name == *name
-                                                    })
-                                                }
-                                            };
+                                            let draft = this.theme_card_draft(&choice);
+                                            let saved = this.theme_card_saved(&choice);
                                              let source = match choice.scope {
                                                 Scope::Herdr => fl!("settings-theme-kind-herdr"),
                                                 Scope::App
@@ -164,7 +148,8 @@ impl SettingsWindow {
                                                 .flex_col()
                                                 .rounded(px(corners::CONTROL))
                                                 .border_2()
-                                                .border_color(rgb(if this.themes.selected == Some(index) { this.theme.primary() } else { this.theme.active }))
+                                                .border_color(rgb(if draft || saved { this.theme.primary() } else { this.theme.active }))
+                                                .when(this.themes.selected == Some(index), |el| el.bg(rgb(this.theme.active)))
                                                  .when(choice.scope.editable(), |el| el.cursor_pointer())
                                                 .hover(|el| el.bg(rgb(this.theme.active)))
                                                 .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {

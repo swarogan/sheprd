@@ -13,6 +13,8 @@
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
+	# sheprd.org/relay reads `ok` here to tell a new relay is ready.
+	header /healthz Access-Control-Allow-Origin "*"
 	# /v1/info, the dashboard, and the WebSocket fallback for networks
 	# that block UDP. The relay sees ciphertext only.
 	reverse_proxy relay:8080

@@ -24,7 +24,12 @@ fn tool_result(id: &str, content: Value, failed: bool) -> Value {
     })
 }
 
-fn can_use_tool(request_id: &str, tool: &str, input: Value, suggestions: Value) -> Value {
+pub(super) fn can_use_tool(
+    request_id: &str,
+    tool: &str,
+    input: Value,
+    suggestions: Value,
+) -> Value {
     json!({
         "type": "control_request",
         "request_id": request_id,
@@ -39,7 +44,7 @@ fn can_use_tool(request_id: &str, tool: &str, input: Value, suggestions: Value) 
 }
 
 /// The permission request an out sends the session: its id and params.
-fn permission_request(out: &Out) -> (i64, &Value) {
+pub(super) fn permission_request(out: &Out) -> (i64, &Value) {
     match out {
         Out::Session(Inbound::Request {
             id: wire::RequestId::Number(id),
@@ -50,7 +55,7 @@ fn permission_request(out: &Out) -> (i64, &Value) {
     }
 }
 
-fn chosen(id: i64, option: &str) -> Inbound {
+pub(super) fn chosen(id: i64, option: &str) -> Inbound {
     Inbound::Response {
         id: wire::RequestId::Number(id),
         result: Ok(json!({"outcome": {"outcome": "selected", "optionId": option}})),

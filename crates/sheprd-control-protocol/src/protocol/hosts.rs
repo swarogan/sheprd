@@ -70,6 +70,9 @@ pub enum HostOp {
         action: PortAction,
     },
     Usage,
+    /// The agent the Agent button would start a chat with now, by plan
+    /// usage on the selected host, and the room each installed agent has.
+    UsagePick,
     System,
     /// The Dependabot alerts the Security section last read.
     Security,
@@ -256,6 +259,52 @@ pub struct UsageWindow {
     pub resets_in_seconds: Option<u64>,
 }
 
+/// The agent a new chat would start with by plan usage. Boxed in [`Reply`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UsagePick {
+    pub host: String,
+    /// The agent a new chat starts with; absent when no agent is installed
+    /// or chats cannot start on the host.
+    pub agent: Option<String>,
+    /// The agent last used, when its plan was too short to keep it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instead_of: Option<String>,
+    /// Why, in a sentence, when `instead_of` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Every installed agent, in the order the host lists them.
+    pub candidates: Vec<AgentRoom>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// How much room one agent's plan has, from its tightest usage window.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AgentRoom {
+    pub agent: String,
+    pub room: RoomState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub used_percent: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_in_seconds: Option<u64>,
+    /// When the window runs out at the rate used so far, if before it resets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs_out_in_seconds: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoomState {
+    /// Under its limits and not on pace to reach them.
+    Ample,
+    /// No usage reading for the agent.
+    Unknown,
+    /// Close to a limit, or on pace to reach one before it resets.
+    Tight,
+    /// A limit is reached.
+    Spent,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LoadInfo {
     pub host: String,
@@ -321,6 +370,7 @@ pub enum Reply {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
+    UsagePick(Box<UsagePick>),
     System {
         load: Option<Box<LoadInfo>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

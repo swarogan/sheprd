@@ -15,5 +15,5 @@ cd -- "$release_root"
 out=target/$1/release
 mkdir -p "$out"
 xcrun swiftc -O -swift-version 6 -target "$arch-apple-macos${MACOSX_DEPLOYMENT_TARGET:-14.2}" \
-    macos/sheprd-nearby/main.swift macos/sheprd-nearby/Framing.swift macos/sheprd-nearby/Bonjour.swift -o "$out/sheprd-nearby"
+    macos/sheprd-nearby/main.swift macos/sheprd-nearby/Framing.swift macos/sheprd-nearby/Bonjour.swift macos/sheprd-nearby/Central.swift -o "$out/sheprd-nearby"
 printf '%s\n' "$out/sheprd-nearby"

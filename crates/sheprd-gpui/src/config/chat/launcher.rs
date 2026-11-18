@@ -44,8 +44,11 @@ macro_rules! chat_launchers {
 }
 
 chat_launchers! {
-    /// The agents slide out beside "+" while the pointer is over it.
+    /// One Agent button after "+": the chat starts with the agent last
+    /// started, and its composer offers the others.
     #[default]
+    Agent => "agent", "chat-launcher-agent";
+    /// The agents slide out beside "+" while the pointer is over it.
     Plus => "plus", "chat-launcher-plus";
     /// The agents stand right after "+".
     Beside => "beside", "chat-launcher-beside";

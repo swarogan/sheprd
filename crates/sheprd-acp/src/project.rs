@@ -84,6 +84,12 @@ impl Projector {
         }
     }
 
+    /// A projector for another agent's conversation, which knows nothing of
+    /// this one but keeps its entry ids growing.
+    pub(crate) fn restart(&self) -> Self {
+        Self::after(EntryId(self.next))
+    }
+
     fn next_id(&mut self) -> EntryId {
         self.next += 1;
         EntryId(self.next)

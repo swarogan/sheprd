@@ -18,6 +18,9 @@ pub(super) fn defaults(command: Command) -> &'static [&'static str] {
         FocusDown => &["cmd-alt-down"],
         NextPane => &["cmd-alt-]"],
         PreviousPane => &["cmd-alt-["],
+        // Cmd-Tab is the system app switcher; Ctrl-Tab is the Mac's tab cycle.
+        RecentPane => &["ctrl-tab"],
+        RecentPaneReverse => &["ctrl-shift-tab"],
         Back => &["cmd-["],
         Forward => &["cmd-]"],
         Zoom => &["cmd-shift-enter"],

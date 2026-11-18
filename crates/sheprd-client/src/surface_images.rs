@@ -9,7 +9,7 @@
 
 use crate::protocol::{
     PaneSurfaceFrame, SurfaceGraphicsAsset, SurfaceGraphicsAssetKey, SurfaceGraphicsFormat,
-    SurfaceGraphicsScene,
+    SurfaceGraphicsScene, SurfaceGraphicsSource,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -37,15 +37,24 @@ static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Debug)]
 pub struct SurfaceImage {
     serial: u64,
+    lineage: u64,
     data: Arc<[u8]>,
 }
 
 impl SurfaceImage {
-    fn new(data: Vec<u8>) -> Self {
+    fn new(data: Vec<u8>, lineage: Option<u64>) -> Self {
+        let serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
         Self {
-            serial: NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
+            serial,
+            lineage: lineage.unwrap_or(serial),
             data: Arc::from(data),
         }
+    }
+
+    /// Continuous same-source, same-size replacements share this identity.
+    /// A missing placement or a new store starts a new lineage.
+    pub fn lineage(&self) -> u64 {
+        self.lineage
     }
 
     pub fn serial(&self) -> u64 {
@@ -83,7 +92,7 @@ impl FromIterator<SurfaceGraphicsAsset> for SurfaceImages {
         let images = assets
             .into_iter()
             .filter(|asset| valid_asset(&asset.key, &asset.data))
-            .map(|asset| (asset.key, SurfaceImage::new(asset.data)))
+            .map(|asset| (asset.key, SurfaceImage::new(asset.data, None)))
             .collect();
         Self { images }
     }
@@ -124,6 +133,9 @@ fn referenced(scene: &SurfaceGraphicsScene) -> HashSet<SurfaceGraphicsAssetKey> 
 pub struct ImageStore {
     images: HashMap<SurfaceGraphicsAssetKey, SurfaceImage>,
     bytes: usize,
+    /// Sources placed by the previous received scene, never retained-only keys.
+    /// Conflicting sizes or lineages make a source ineligible for handover.
+    placed: HashMap<SurfaceGraphicsSource, (u32, u32, Option<u64>)>,
     /// Keys the newest received surface references.
     latest: HashSet<SurfaceGraphicsAssetKey>,
     /// Keys the newest emitted surface references; its consumer may still
@@ -152,6 +164,28 @@ impl ImageStore {
         let assets = std::mem::take(&mut scene.assets);
         self.latest = referenced(scene);
         let mut changed = self.prune();
+        // Only bytes this scene places continue a lineage: a retained-only
+        // delivery would otherwise bridge a scene that showed nothing there.
+        let placed_now: HashSet<&SurfaceGraphicsAssetKey> = scene
+            .placements
+            .iter()
+            .map(|placement| &placement.asset)
+            .collect();
+        // A retained image placed after a gap or another lineage must not
+        // fall back to a frame from before that discontinuity.
+        for key in &placed_now {
+            let Some(image) = self.images.get_mut(*key) else {
+                continue;
+            };
+            let continued = self
+                .placed
+                .get(&key.source)
+                .is_some_and(|previous| previous.2.is_none_or(|lineage| lineage == image.lineage));
+            if !continued {
+                image.lineage = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
+                changed = true;
+            }
+        }
         for asset in assets {
             if self.images.contains_key(&asset.key) || !self.latest.contains(&asset.key) {
                 continue;
@@ -167,8 +201,37 @@ impl ImageStore {
                 continue;
             }
             self.bytes += asset.data.len();
-            self.images.insert(asset.key, SurfaceImage::new(asset.data));
+            let lineage = self
+                .placed
+                .get(&asset.key.source)
+                .filter(|_| placed_now.contains(&asset.key))
+                .and_then(|previous| {
+                    (previous.0 == asset.key.image_width && previous.1 == asset.key.image_height)
+                        .then_some(previous.2)
+                        .flatten()
+                });
+            self.images
+                .insert(asset.key, SurfaceImage::new(asset.data, lineage));
             changed = true;
+        }
+        // Placements were capped above, so this map has at most MAX_PLACEMENTS
+        // entries, including unresolved sources that cannot pass on a lineage.
+        self.placed.clear();
+        for placement in &scene.placements {
+            let key = &placement.asset;
+            let placed = (
+                key.image_width,
+                key.image_height,
+                self.images.get(key).map(SurfaceImage::lineage),
+            );
+            self.placed
+                .entry(key.source.clone())
+                .and_modify(|previous| {
+                    if *previous != placed {
+                        previous.2 = None;
+                    }
+                })
+                .or_insert(placed);
         }
         changed
     }

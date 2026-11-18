@@ -1,0 +1,72 @@
+{
+ "data": {
+  "repository": {
+   "b0": {
+    "nodes": [
+     {
+      "author": {
+       "login": "ana"
+      },
+      "commits": {
+       "nodes": [
+        {
+         "commit": {
+          "statusCheckRollup": null
+         }
+        }
+       ]
+      },
+      "headRefName": "main",
+      "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+      "headRepositoryOwner": {
+       "login": "someone"
+      },
+      "isDraft": false,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 50,
+      "reviewDecision": "APPROVED",
+      "state": "OPEN",
+      "title": "Pull request 50",
+      "url": "https://github.com/acme/app/pull/50"
+     },
+     {
+      "author": {
+       "login": "ana"
+      },
+      "commits": {
+       "nodes": [
+        {
+         "commit": {
+          "statusCheckRollup": {
+           "contexts": {
+            "nodes": [],
+            "pageInfo": {
+             "hasNextPage": false
+            }
+           }
+          }
+         }
+        }
+       ]
+      },
+      "headRefName": "main",
+      "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+      "headRepositoryOwner": {
+       "login": "fork-owner"
+      },
+      "isDraft": false,
+      "mergeStateStatus": "BEHIND",
+      "mergeable": "MERGEABLE",
+      "number": 51,
+      "reviewDecision": null,
+      "state": "OPEN",
+      "title": "Pull request 51",
+      "url": "https://github.com/acme/app/pull/51"
+     }
+    ]
+   },
+   "nameWithOwner": "acme/app"
+  }
+ }
+}

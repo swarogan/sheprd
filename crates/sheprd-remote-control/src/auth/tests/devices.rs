@@ -38,6 +38,7 @@ fn approving_stores_the_device_privately_and_it_reloads() {
             connected: true,
             via: None,
             hosts: Vec::new(),
+            share_github: true,
         }]
     );
     // No temporary file is left beside the store.

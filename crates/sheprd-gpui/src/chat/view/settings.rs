@@ -14,6 +14,8 @@ use sheprd_chat_protocol::{
     display,
 };
 
+mod agent;
+
 /// The settings the header shows a button for, in order.
 const AT_HAND: [OptionCategory; 3] = [
     OptionCategory::Model,
@@ -194,7 +196,7 @@ impl SheprdWindow {
                         if choices.len() > SEARCHABLE)
                 }),
             Menu::Shortcuts => true,
-            Menu::Modes | Menu::Settings => false,
+            Menu::Agent | Menu::Modes | Menu::Settings => false,
         };
         let shortcuts = opening && menu == Menu::Shortcuts;
         // The shortcuts' popover keeps its field while it fades out.
@@ -360,8 +362,9 @@ impl SheprdWindow {
             }))
     }
 
-    /// The composer's setting buttons: one per setting at hand, the agent's
-    /// older modes when it has no mode setting, then one for the rest.
+    /// The composer's setting buttons: the agent while the chat may still
+    /// switch, one per setting at hand, the agent's older modes when it has
+    /// no mode setting, then one for the rest.
     pub(super) fn render_chat_settings_buttons(
         &self,
         chat: &ChatPane,
@@ -377,7 +380,10 @@ impl SheprdWindow {
                 .size(px(10.))
                 .text_color(rgb(theme.subtext()))
         };
-        let mut buttons = Vec::new();
+        let mut buttons: Vec<_> = self
+            .render_chat_agent_button(chat, cx)
+            .into_iter()
+            .collect();
         for category in AT_HAND {
             let Some(option) = transcript.option(category) else {
                 continue;
@@ -408,18 +414,20 @@ impl SheprdWindow {
             }
             let id = option.id.clone();
             let pane = pane_id.clone();
-            let compact = layout_for(self.config.chat.layout).compact_settings()
-                && matches!(option.kind, OptionKind::Select { .. });
             let selector = format!("chat-setting-{}", option.id);
             let button = self
                 .chat_header_button(selector.clone().into())
                 .tooltip(self.chat_setting_hint(&option.name, &option.current_name()))
                 .child(self.chat_setting_icon(&selector, category_icon(category)))
-                // The mark and tooltip still say what a squeezed button sets.
-                .when(compact, |button| button.flex_shrink_1().min_w(px(46.)))
+                // A button squeezed by a single-line footer, or alone on a
+                // wrapped line narrower than it, truncates its label; the
+                // mark and tooltip still say what it sets.
+                .flex_shrink_1()
+                .min_w(px(46.))
                 .child(
                     div()
-                        .when(compact, |label| label.min_w_0().flex_shrink_1())
+                        .min_w_0()
+                        .flex_shrink_1()
                         .max_w(px(200.))
                         .truncate()
                         .child(safe_text(&option.current_name(), 80)),
@@ -590,6 +598,7 @@ impl SheprdWindow {
         };
         let mut rows: Vec<AnyElement> = Vec::new();
         match menu {
+            Menu::Agent => rows.extend(self.chat_agent_rows(chat, row, cx)),
             // Drawn by `render_chat_shortcuts`, which animates it.
             Menu::Shortcuts => return div().into_any_element(),
             Menu::Modes => {

@@ -171,5 +171,76 @@ class DomainTest(unittest.TestCase):
             self.assertEqual(chosen_domain(file.read()), "203-0-113-7.sslip.io")
 
 
+PAGE_SCRIPT = os.path.join(ROOT, "website", "site", "relay", "deploy.js")
+
+
+def page_rendered(domain: str) -> str:
+    """The user data sheprd.org/relay sends, from deploy.js's render."""
+    sources = [os.path.join(ROOT, "deploy", "relay", name) for name in ("cloud-init.yml", "compose.yml", "Caddyfile")]
+    script = (
+        "const fs = require('fs');"
+        f"const page = require({json.dumps(PAGE_SCRIPT)});"
+        "const [a, b, c, d] = process.argv.slice(1);"
+        "process.stdout.write(page.render(...[a, b, c].map(p => fs.readFileSync(p, 'utf8')), d));"
+    )
+    return subprocess.run(
+        ["node", "-e", script, *sources, domain], check=True, capture_output=True, text=True
+    ).stdout
+
+
+def script_rendered(domain: str) -> str:
+    """The user data create-droplet.sh sends, from its own sed command."""
+    here = os.path.join(ROOT, "deploy", "relay")
+    shell = (
+        'compose=$(base64 < "$1/compose.yml" | tr -d \'\\n\')\n'
+        'caddyfile=$(base64 < "$1/Caddyfile" | tr -d \'\\n\')\n'
+        'sed -e "s|__COMPOSE_B64__|$compose|" -e "s|__CADDYFILE_B64__|$caddyfile|" '
+        '-e "s|__RELAY_DOMAIN__|$2|" "$1/cloud-init.yml"\n'
+    )
+    return subprocess.run(
+        ["bash", "-c", shell, "render", here, domain], check=True, capture_output=True, text=True
+    ).stdout
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class DeployPageTest(unittest.TestCase):
+    def test_the_page_sends_what_create_droplet_sends(self) -> None:
+        for domain in ("", "nyc3.relay.example.org"):
+            with self.subTest(domain=domain):
+                self.assertEqual(page_rendered(domain), script_rendered(domain))
+
+    def test_the_page_addresses_relays_as_the_script_prints_them(self) -> None:
+        script = (
+            f"const page = require({json.dumps(PAGE_SCRIPT)});"
+            "console.log(page.relayAddress('203.0.113.7', 'nyc3', ''));"
+            "console.log(page.relayAddress('203.0.113.7', 'nyc3', 'relay.example.org'));"
+            "for (const v of [' Relay.Example.org. ', '', 'bad name', 'a.b;rm', '-x.org'])"
+            " console.log(JSON.stringify(page.normalizedSuffix(v)));"
+        )
+        lines = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual(lines, [
+            "https://203-0-113-7.sslip.io",
+            "https://nyc3.relay.example.org",
+            '"relay.example.org"', '""', "null", "null", "null",
+        ])
+
+
+class DeployPageSourceTest(unittest.TestCase):
+    def test_the_page_reads_the_files_create_droplet_reads_from_main(self) -> None:
+        with open(PAGE_SCRIPT, encoding="utf-8") as file:
+            page = file.read()
+        self.assertIn("https://raw.githubusercontent.com/sheprd-labs/sheprd/main/deploy/relay/", page)
+        for name in ("cloud-init.yml", "compose.yml", "Caddyfile"):
+            with self.subTest(file=name):
+                self.assertIn(f"'{name}'", page)
+                self.assertTrue(os.path.isfile(os.path.join(ROOT, "deploy", "relay", name)))
+        with open(os.path.join(ROOT, "deploy", "relay", "create-droplet.sh"), encoding="utf-8") as file:
+            script = file.read()
+        for setting in ("--image ubuntu-24-04-x64", "--tag-name sheprd-relay", "s-1vcpu-1gb"):
+            with self.subTest(setting=setting):
+                self.assertIn(setting, script)
+        self.assertIn("const IMAGE = 'ubuntu-24-04-x64';", page)
+        self.assertIn("const TAG = 'sheprd-relay';", page)
+
 if __name__ == "__main__":
     unittest.main()

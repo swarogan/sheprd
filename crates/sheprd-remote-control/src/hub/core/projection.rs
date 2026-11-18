@@ -220,6 +220,7 @@ pub(super) fn terminal(
         .map(|(index, record)| TerminalPane {
             cwd: cwd(record),
             focused: index == 0,
+            job: super::job::of(record),
             label: record.name.clone().or_else(|| record.title.clone()),
             pane: pane_id(boot, &record.address),
         })

@@ -5,6 +5,10 @@ pub enum Error {
     // keep-sorted start
     #[error("a nearby frame is not JSON this relay reads")]
     Malformed(#[source] serde_json::Error),
+    #[error("{0} is not beside the app")]
+    Missing(&'static str),
+    #[error("this computer has no state directory")]
+    NoStateDir,
     #[error("the nearby helper has no {0} pipe")]
     Pipe(&'static str),
     #[error("could not start the nearby helper")]

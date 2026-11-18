@@ -16,7 +16,7 @@ const AES_NONCE: [u8; 12] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 fn check(name: &str, value: &Value) {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../ios/SheprdRemoteCore/Tests/SheprdRemoteCoreTests/Fixtures/nearby")
+        .join("../../ios/SheprdRemoteCore/Tests/SheprdNearbyTests/Fixtures/nearby")
         .join(format!("{name}.json"));
     let json = format!("{}\n", serde_json::to_string_pretty(value).unwrap());
     if std::env::var_os("HERDR_UPDATE_FIXTURES").is_some() {

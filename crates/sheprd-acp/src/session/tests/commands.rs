@@ -17,6 +17,7 @@ fn prompts_during_a_turn_queue_and_run_in_order() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "two".to_owned(),
             attachments: Vec::new(),
         },
@@ -24,6 +25,7 @@ fn prompts_during_a_turn_queue_and_run_in_order() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "three".to_owned(),
             attachments: Vec::new(),
         },
@@ -50,6 +52,7 @@ fn prompts_before_the_session_opens_wait_for_it() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "early".to_owned(),
             attachments: Vec::new(),
         },
@@ -71,6 +74,7 @@ fn unqueue_withdraws_a_waiting_prompt() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "two".to_owned(),
             attachments: Vec::new(),
         },
@@ -92,6 +96,7 @@ fn cancel_ends_the_turn_and_drops_the_queue() {
     harness.command(
         0,
         Command::Prompt {
+            origin: None,
             text: "two".to_owned(),
             attachments: Vec::new(),
         },
@@ -123,6 +128,7 @@ fn bad_prompts_are_rejected_with_a_reason() {
     let empty = harness.command(
         1,
         Command::Prompt {
+            origin: None,
             text: "  \n".to_owned(),
             attachments: Vec::new(),
         },
@@ -130,6 +136,7 @@ fn bad_prompts_are_rejected_with_a_reason() {
     let long = harness.command(
         1,
         Command::Prompt {
+            origin: None,
             text: "x".repeat(sheprd_chat_protocol::MAX_PROMPT_SIZE + 1),
             attachments: Vec::new(),
         },
@@ -151,6 +158,7 @@ fn a_resent_command_is_acknowledged_without_running_twice() {
     for _ in 0..2 {
         harness.input(Input::Command {
             command: Command::Prompt {
+                origin: None,
                 text: "once".to_owned(),
                 attachments: Vec::new(),
             },
@@ -204,6 +212,7 @@ fn the_queue_is_bounded() {
         harness.command(
             0,
             Command::Prompt {
+                origin: None,
                 text: format!("queued {n}"),
                 attachments: Vec::new(),
             },

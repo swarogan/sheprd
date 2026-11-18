@@ -16,6 +16,7 @@ pub(super) fn status(connected: usize) -> Status {
         devices: 2,
         connected,
         relays: Default::default(),
+        github_asks: 0,
     }
 }
 
@@ -29,6 +30,7 @@ fn device(id: &str) -> Device {
         connected: false,
         via: None,
         hosts: Vec::new(),
+        share_github: true,
     }
 }
 
@@ -218,5 +220,7 @@ fn a_failed_change_waits_for_retry(cx: &mut TestAppContext) {
 }
 
 mod changes;
+mod firewall;
+mod github;
 mod indicators;
 mod restart;

@@ -615,8 +615,11 @@ original actor, or source repository to be the owner. An owner rerun only change
 `github.triggering_actor`; approval does not change the other identities.
 Pushes and manual dispatches remain restricted to owner-triggered `main` runs.
 The final **Format, lint, and test** gate requires successful platform checks for
-code changes, and the macOS optimized builds on pull requests, and permits
-skipped platform jobs only for confirmed non-code edits. It also requires the
+code changes, the Windows GUI tests and the macOS optimized builds when their
+inputs change (the GUI tests always on main; the macOS builds on pull requests
+only), and the workflow audit, and permits skipped platform jobs only for
+confirmed non-code edits. Pull requests run macOS's default-features leg only;
+main runs both. Draft pull requests run nothing until marked ready for review. It also requires the
 Python-only **Website and docs** job whenever the website, a Markdown file, or
 code changed, so a website-only pull request runs that job and no native one
 (`scripts/ci-changes.sh` decides both).

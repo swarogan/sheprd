@@ -44,6 +44,7 @@ fn the_worker_greets_and_delivers_in_order() {
 fn commands_follow_the_greeting_and_resent_ones_go_first() {
     let program = Program::new();
     let resent = command(Command::Prompt {
+        origin: None,
         text: "a".into(),
         attachments: Vec::new(),
     });

@@ -6,7 +6,7 @@
 
 mod error;
 pub(crate) mod github;
-mod local;
+pub(crate) mod local;
 mod mailbox;
 
 pub(crate) use error::Error;
@@ -119,6 +119,19 @@ async fn ask_sheprd(
 /// How long a phone's change to a Herdr 2 tab waits for Sheprd, which
 /// makes it at once.
 const LAYOUT_WAIT: Duration = Duration::from_secs(10);
+/// A workspace close may have to end many terminals before the desktop
+/// answers the phone.
+const WORKSPACE_CLOSE_WAIT: Duration = Duration::from_secs(30);
+/// Removing a linked checkout can take a while on a large repository.
+const WORKTREE_REMOVE_WAIT: Duration = Duration::from_secs(70);
+
+fn layout_wait(op: &layout::Op) -> Duration {
+    match op {
+        layout::Op::CloseWorkspace { .. } => WORKSPACE_CLOSE_WAIT,
+        layout::Op::RemoveWorktree { .. } => WORKTREE_REMOVE_WAIT,
+        _ => LAYOUT_WAIT,
+    }
+}
 
 /// Asks Sheprd to make `op` at the pane of `terminal` in its saved Herdr 2
 /// tab `tab`, and waits until it has.
@@ -128,6 +141,7 @@ pub(crate) async fn change_layout(
     terminal: String,
     op: layout::Op,
 ) -> Result<Option<String>, ApiError> {
+    let wait = layout_wait(&op);
     let mut pending = state
         .changes
         .ask_layout(tab, terminal.clone(), op.clone(), Instant::now())
@@ -151,7 +165,7 @@ pub(crate) async fn change_layout(
             }
         }
     };
-    match tokio::time::timeout(LAYOUT_WAIT, answer).await {
+    match tokio::time::timeout(wait, answer).await {
         Ok(Err(error)) => Err(error),
         Ok(Ok(Some(layout::Answer::Done))) => Ok(None),
         Ok(Ok(Some(layout::Answer::Split(created)))) if created.len() <= layout::MAX_TERMINAL => {
@@ -240,3 +254,6 @@ pub(crate) async fn check_log(
         _ => Err(mismatch()),
     }
 }
+
+#[cfg(test)]
+mod tests;

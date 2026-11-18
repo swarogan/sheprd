@@ -1,3 +1,4 @@
+import SheprdGitHub
 import SheprdRemoteCore
 import SwiftUI
 
@@ -13,17 +14,37 @@ private enum Loading<Value> {
 /// what it sends. The one thing it sends back is a prompt, after asking.
 struct ChangesScreen: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
     let key: WorkspaceKey
     @State private var scope = ChangeScope.uncommitted
     @State private var files = Loading<ChangeList>.waiting
-    @State private var checks: PullRequestChecks?
+    @State private var readChecks: PullRequestChecks?
+    /// The branch's pull request when GitHub answered: title, state, review.
+    @State private var readPullRequest: GitHubPullRequest?
     @State private var checksError: String?
+    /// Who answered the checks: GitHub, or the computer when no lease
+    /// answered.
+    @State private var readOrigin: ReadOrigin?
+    /// `GitHubDirect.signOuts` when the checks were asked for: GitHub's
+    /// answer from before a sign-out may have used that account, and is
+    /// not shown.
+    @State private var checksSignOuts = 0
     @State private var checksGeneration = UUID()
     @State private var sending: PullRequestCheck?
     #if DEBUG
     /// The simulator loop's `-openDiff PATH` opens that file's diff.
     @State private var debugFile: ChangedFile?
     #endif
+
+    /// Whether the checks shown came from GitHub before the phone signed
+    /// out.
+    private var checksStale: Bool {
+        readOrigin == .github && checksSignOuts != GitHubDirect.shared.signOuts
+    }
+
+    private var checks: PullRequestChecks? { checksStale ? nil : readChecks }
+    private var pullRequest: GitHubPullRequest? { checksStale ? nil : readPullRequest }
+    private var checksOrigin: ReadOrigin? { checksStale ? nil : readOrigin }
 
     private var machine: Fleet.Machine? {
         model.fleet.machines.first { $0.id == key.device }
@@ -48,6 +69,23 @@ struct ChangesScreen: View {
         var number: UInt64?
         var branch: String?
         var cwd: String?
+        /// The repository GitHub is asked about, which the computer may
+        /// name only after it has read the checkout.
+        var github: Home.GitHubRepository?
+        /// Which computers lend which hosts, which may arrive after the
+        /// first home: a direct read becomes possible then.
+        var lenders: [String]
+        /// Read every minute while the app is active, and not otherwise.
+        var active: Bool
+        /// Signing out reads again at once, with whatever token is left.
+        var signOuts: Int
+    }
+
+    /// Each computer and the GitHub hosts it lends, in a stable order.
+    private var lenderKeys: [String] {
+        model.fleet.machines.flatMap { machine in
+            (machine.home?.githubHosts ?? []).map { "\(machine.id)/\($0.host)" }
+        }.sorted()
     }
 
     var body: some View {
@@ -61,13 +99,19 @@ struct ChangesScreen: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             }
-            if let checks, !checks.checks.isEmpty { checksSection(checks) }
+            if scope == .branch, let checks {
+                PullRequestHeader(checks: checks, pullRequest: pullRequest, workspace: workspace, origin: checksOrigin) {
+                    sending = $0
+                }
+            } else if let checks, !checks.checks.isEmpty {
+                checksSection(checks)
+            }
             if let checksError {
                 Section("Pull request checks") {
                     Text(checksError).foregroundStyle(.secondary)
                 }
             }
-            if machine?.home?.github == false {
+            if machine?.home?.github == false, checksOrigin != .github {
                 Section {
                     Text("Standalone GitHub reads are not enabled on this computer. Its owner can sign in with gh and enable remote GitHub CLI reads there.")
                         .foregroundStyle(.secondary)
@@ -81,7 +125,20 @@ struct ChangesScreen: View {
         .refreshable { await reload() }
         .task(id: Reading(scope: scope, status: machine?.status)) { await loadFiles() }
         .task(id: ChecksReading(status: machine?.status, number: workspace?.pullRequest?.number,
-                               branch: workspace?.branch, cwd: workspace?.cwd)) { await loadChecks() }
+                               branch: workspace?.branch, cwd: workspace?.cwd,
+                               github: workspace?.github, lenders: lenderKeys,
+                               active: phase == .active, signOuts: GitHubDirect.shared.signOuts)) {
+            if checksStale { forgetChecks() }
+            // Reads on appearing and every minute while in front, as the
+            // pull request's screen does; leaving the screen or the app
+            // cancels the loop.
+            guard phase == .active else { return }
+            while !Task.isCancelled {
+                await loadChecks()
+                try? await Task.sleep(for: PullRequestDetailScreen.refresh)
+            }
+        }
+        .onAppear { GitHubDirect.shared.watchSignIn() }
         .sheet(item: $sending) { check in SendLogSheet(key: key, check: check) }
         #if DEBUG
         .navigationDestination(item: $debugFile) { FileDiffScreen(key: key, scope: scope, file: $0) }
@@ -133,22 +190,44 @@ struct ChangesScreen: View {
         let branch = workspace?.branch
         let cwd = workspace?.cwd
         let number = workspace?.pullRequest?.number
+        let github = workspace?.github
+        let signOuts = GitHubDirect.shared.signOuts
         checksError = nil
+        let fleet = model.fleet
+        let ask: @Sendable () async throws -> PullRequestChecks = {
+            try await fleet.call(device) { client, token in try await client.checks(workspace: id, bearer: token) }
+        }
         do {
-            let read = try await model.fleet.call(device) { client, token in
-                try await client.checks(workspace: id, bearer: token)
+            let read = if let workspace {
+                try await GitHubReads.reader.branchPullRequest(
+                    workspace: workspace, computer: machine?.computer.name ?? "", source: fleet.gitHubLenders, askComputer: ask
+                )
+            } else {
+                Sourced(BranchPullRequest(checks: try await ask()), from: .computer(machine?.computer.name ?? ""))
             }
             guard !Task.isCancelled, checksGeneration == generation,
                   branch == workspace?.branch, cwd == workspace?.cwd,
-                  number == workspace?.pullRequest?.number else { return }
-            checks = read
+                  number == workspace?.pullRequest?.number, github == workspace?.github else { return }
+            // GitHub's answer begun before a sign-out may have used that
+            // account: the read that sign-out started stands instead.
+            if read.origin == .github, signOuts != GitHubDirect.shared.signOuts { return }
+            readChecks = read.value.checks
+            readPullRequest = read.value.pullRequest
+            readOrigin = read.origin
+            checksSignOuts = signOuts
         } catch {
             guard !Task.isCancelled, checksGeneration == generation,
                   branch == workspace?.branch, cwd == workspace?.cwd,
-                  number == workspace?.pullRequest?.number else { return }
-            checks = nil
+                  number == workspace?.pullRequest?.number, github == workspace?.github else { return }
+            forgetChecks()
             checksError = error.localizedDescription
         }
+    }
+
+    private func forgetChecks() {
+        readChecks = nil
+        readPullRequest = nil
+        readOrigin = nil
     }
 
     @ViewBuilder private var filesSection: some View {
@@ -198,12 +277,28 @@ struct ChangesScreen: View {
             }
         } header: {
             Text(verbatim: checks.number.map { "Checks on #\($0)" } ?? "Checks")
+        } footer: {
+            ViaComputer(origin: checksOrigin, direct: workspace?.github != nil)
+        }
+    }
+}
+
+/// "via NAME" under an answer the computer gave where GitHub could have:
+/// the phone fell back to it quietly.
+private struct ViaComputer: View {
+    var origin: ReadOrigin?
+    /// The workspace names a GitHub repository the phone could read.
+    var direct: Bool
+
+    var body: some View {
+        if direct, case let .computer(name)? = origin, !name.isEmpty {
+            Text("via \(name)").font(.caption2).foregroundStyle(.secondary)
         }
     }
 }
 
 /// A file's name, folder, and line counts.
-private struct FileRow: View {
+struct FileRow: View {
     var file: ChangedFile
 
     var body: some View {
@@ -303,8 +398,6 @@ private struct FileDiffScreen: View {
     let scope: ChangeScope
     let file: ChangedFile
     @State private var diff = Loading<FileDiff>.waiting
-    /// The screen's width, which colored lines fill however short.
-    @State private var width: CGFloat?
 
     var body: some View {
         content
@@ -322,20 +415,7 @@ private struct FileDiffScreen: View {
         case let .loaded(diff) where diff.lines.isEmpty:
             ContentUnavailableView("Nothing to show", systemImage: "doc.text", description: Text(diff.note ?? ""))
         case let .loaded(diff):
-            ScrollView([.vertical, .horizontal]) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    // First, so nobody reads to the end to learn there is more.
-                    if let note = diff.note {
-                        Label(note, systemImage: "scissors").font(.footnote).foregroundStyle(.secondary)
-                            .padding(12).frame(width: width, alignment: .leading)
-                    }
-                    ForEach(Array(diff.lines.enumerated()), id: \.offset) { _, line in DiffLineRow(line: line) }
-                }
-                .frame(minWidth: width, alignment: .leading)
-            }
-            .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
-            // Both axes would otherwise center a diff shorter than the screen.
-            .defaultScrollAnchor(.topLeading)
+            DiffView(diff: diff)
         }
     }
 
@@ -353,6 +433,31 @@ private struct FileDiffScreen: View {
         } catch {
             diff = .failed(error.localizedDescription)
         }
+    }
+}
+
+/// A diff's lines, scrolling both ways; also shows a pull request's
+/// patches from GitHub.
+struct DiffView: View {
+    let diff: FileDiff
+    /// The screen's width, which colored lines fill however short.
+    @State private var width: CGFloat?
+
+    var body: some View {
+        ScrollView([.vertical, .horizontal]) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                // First, so nobody reads to the end to learn there is more.
+                if let note = diff.note {
+                    Label(note, systemImage: "scissors").font(.footnote).foregroundStyle(.secondary)
+                        .padding(12).frame(width: width, alignment: .leading)
+                }
+                ForEach(Array(diff.lines.enumerated()), id: \.offset) { _, line in DiffLineRow(line: line) }
+            }
+            .frame(minWidth: width, alignment: .leading)
+        }
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
+        // Both axes would otherwise center a diff shorter than the screen.
+        .defaultScrollAnchor(.topLeading)
     }
 }
 
@@ -396,9 +501,18 @@ private struct SendLogSheet: View {
     let key: WorkspaceKey
     let check: PullRequestCheck
     @State private var excerpt = Loading<String>.waiting
+    @State private var excerptOrigin: ReadOrigin?
     @State private var pane: String?
     @State private var sendingNow = false
     @State private var problem: String?
+
+    private var machine: Fleet.Machine? {
+        model.fleet.machines.first { $0.id == key.device }
+    }
+
+    private var workspace: Home.Workspace? {
+        machine?.home?.workspaces.first { $0.id == key.workspace }
+    }
 
     private var chats: [ChatItem] {
         model.fleet.chatItems.filter { $0.computer.device == key.device && $0.workspace.id == key.workspace }
@@ -424,8 +538,12 @@ private struct SendLogSheet: View {
                             .pickerStyle(.inline)
                         }
                     }
-                    Section("Log excerpt") {
+                    Section {
                         Text(text).font(.caption.monospaced()).textSelection(.enabled)
+                    } header: {
+                        Text("Log excerpt")
+                    } footer: {
+                        ViaComputer(origin: excerptOrigin, direct: workspace?.github != nil)
                     }
                     if let problem { Section { Text(problem).foregroundStyle(.red) } }
                 }
@@ -438,7 +556,8 @@ private struct SendLogSheet: View {
                     Button("Send") { send() }.disabled(!ready || sendingNow)
                 }
             }
-            .task { await load() }
+            // Signing out hides a log GitHub gave and reads it again.
+            .task(id: GitHubDirect.shared.signOuts) { await load() }
         }
     }
 
@@ -449,12 +568,29 @@ private struct SendLogSheet: View {
     private func load() async {
         pane = pane ?? chats.first?.chat.pane
         guard let job = check.job else { return }
+        let signOuts = GitHubDirect.shared.signOuts
+        if excerptOrigin == .github {
+            excerpt = .waiting
+            excerptOrigin = nil
+        }
         let (device, id) = (key.device, key.workspace)
+        let fleet = model.fleet
+        let ask: @Sendable () async throws -> CheckLogExcerpt = {
+            try await fleet.call(device) { client, token in try await client.checkLog(job: job, workspace: id, bearer: token) }
+        }
         do {
-            excerpt = .loaded(try await model.fleet.call(device) { client, token in
-                try await client.checkLog(job: job, workspace: id, bearer: token)
-            }.excerpt)
+            let read = if let workspace {
+                try await GitHubReads.reader.checkLog(
+                    job: job, workspace: workspace, computer: machine?.computer.name ?? "", source: fleet.gitHubLenders, askComputer: ask
+                )
+            } else {
+                Sourced(try await ask(), from: .computer(machine?.computer.name ?? ""))
+            }
+            guard !Task.isCancelled, signOuts == GitHubDirect.shared.signOuts else { return }
+            excerpt = .loaded(read.value.excerpt)
+            excerptOrigin = read.origin
         } catch {
+            guard !Task.isCancelled, signOuts == GitHubDirect.shared.signOuts else { return }
             excerpt = .failed(error.localizedDescription)
         }
     }
@@ -475,6 +611,35 @@ private struct SendLogSheet: View {
             } catch {
                 problem = error.localizedDescription
             }
+        }
+    }
+}
+
+/// The phone's own GitHub reads, shared by every screen so leases, rate
+/// limits, and ETags hold across them.
+enum GitHubReads {
+    static let reader = PullRequestReader.live()
+}
+
+extension Fleet {
+    /// The paired computers as lenders of GitHub tokens: the hosts each
+    /// one's latest home lends, and when it last answered, now for those
+    /// online. A computer no longer paired is not among them, so what it
+    /// lent is forgotten at the next read.
+    var gitHubLenders: Lenders {
+        let lenders = machines.map { machine in
+            let online = if case .online = machine.status { true } else { false }
+            return GitHubLender(device: machine.id, name: machine.computer.name, home: machine.home, reached: online ? .now : machine.updated)
+        }
+        return Lenders(lenders: lenders) { [self] device, host in try await lease(host, from: device) }
+    }
+
+    private func lease(_ host: GitHubHost, from device: String) async throws -> LeaseFetch {
+        do {
+            let answer: LeaseAnswer = try await call(device) { client, token in try await client.githubToken(host: host.name, bearer: token) }
+            return .lease(answer)
+        } catch let RemoteError.status(status, _) {
+            return .status(status)
         }
     }
 }

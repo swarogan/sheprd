@@ -36,6 +36,7 @@ pub(super) fn status() -> Status {
         devices: 2,
         connected: 1,
         relays: Default::default(),
+        github_asks: 0,
     }
 }
 
@@ -50,6 +51,7 @@ fn devices() -> Vec<Device> {
             connected: true,
             via: None,
             hosts: Vec::new(),
+            share_github: true,
         },
         Device {
             id: DeviceId("d2".into()),
@@ -60,6 +62,7 @@ fn devices() -> Vec<Device> {
             connected: false,
             via: None,
             hosts: Vec::new(),
+            share_github: true,
         },
     ]
 }

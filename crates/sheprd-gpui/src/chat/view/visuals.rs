@@ -41,11 +41,26 @@ impl SheprdWindow {
         voice: Voice,
         cx: &mut Context<Self>,
     ) -> Div {
+        // A spotlight looks for the message that asked for it.
+        let target = self
+            .chats
+            .pane(pane_id)
+            .filter(|chat| {
+                chat.effects
+                    .playing(crate::motion::now())
+                    .is_some_and(|playing| playing.entry == entry)
+            })
+            .map(|chat| chat.effects.target.clone());
         div()
             .flex()
             .flex_col()
             .gap(px(6.))
             .min_w_0()
+            .when_some(target, |message, target| {
+                message.on_children_prepainted(move |bounds, _, _| {
+                    target.set(bounds.into_iter().reduce(|all, part| all.union(&part)));
+                })
+            })
             .children(parts.iter().enumerate().map(|(index, part)| {
                 // Each part scopes its own links' element ids.
                 let part = match part {
@@ -65,6 +80,24 @@ impl SheprdWindow {
                             None => div().into_any_element(),
                         }
                     }
+                    Part::Bubble(effect, blocks) => {
+                        let order = parts[..index]
+                            .iter()
+                            .filter(|part| matches!(part, Part::Bubble(..)))
+                            .count();
+                        match self.chat_text_scope(pane_id, entry, Region::Body(index)) {
+                            Some(scope) => self
+                                .render_chat_bubble(
+                                    pane_id, entry, order, *effect, blocks, visuals, &scope, voice,
+                                    cx,
+                                )
+                                .into_any_element(),
+                            None => div().into_any_element(),
+                        }
+                    }
+                    Part::Screen(effect) => self
+                        .render_chat_screen_replay(pane_id, entry, *effect, cx)
+                        .into_any_element(),
                     Part::Widget(document) => self
                         .render_chat_widget(pane_id, entry, index, document, cx)
                         .into_any_element(),

@@ -1,6 +1,8 @@
-//! `notes`, `worktree`, `checkpoint`, `scripts`, `teleport`, and `fan-out`.
+//! `notes`, `memory`, `worktree`, `checkpoint`, `scripts`, `teleport`, and
+//! `fan-out`.
 mod checkpoint;
 mod here;
+mod memory;
 mod scripts;
 #[cfg(test)]
 mod tests;
@@ -17,6 +19,7 @@ use crate::{
     },
 };
 pub(super) use checkpoint::checkpoint;
+pub(super) use memory::memory;
 use std::fmt::Write as _;
 
 /// The display boundary for errors of the commands this process runs itself:

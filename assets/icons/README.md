@@ -107,7 +107,7 @@ desktop margins must not be baked into these images. The paw fits both masks.
 ## Interface and service marks
 
 `plus.svg`, `close.svg`, `pencil.svg`, `trash.svg`, `chevron-up.svg`,
-`chevron-down.svg`, `git-branch.svg`, `sessions.svg`, `file.svg`, `teleport.svg`,
+`chevron-down.svg`, `collapse-all.svg`, `expand-all.svg`, `git-branch.svg`, `sessions.svg`, `file.svg`, `teleport.svg`,
 `teleport-back.svg`, `zoom.svg`, the `window-*.svg` controls, `pull-request.svg`,
 `issue.svg`, `beads.svg`, `user.svg`, `cpu.svg`, and `brain.svg` are original
 interface artwork.

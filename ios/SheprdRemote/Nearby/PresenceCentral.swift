@@ -1,6 +1,7 @@
 import CoreBluetooth
 import Foundation
 import SheprdRemoteCore
+import SheprdNearby
 import os
 
 private let log = Logger(subsystem: "so.pen.herdr.remote", category: "presence")

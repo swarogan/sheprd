@@ -33,8 +33,9 @@ pub struct CoreTerminal {
     /// An observer's core and when it last read the terminal's size there;
     /// an active view sets the size itself.
     sizing: Option<(Arc<Core>, Instant)>,
-    /// When the synchronized update the emulator holds began.
-    sync_since: Option<Instant>,
+    /// When the synchronized update the emulator holds began, and how many
+    /// had ended then: one read can end an update and begin the next.
+    sync_since: Option<(Instant, u64)>,
     /// The rows the view was last told wrap onto the next.
     wraps: Vec<bool>,
 }
@@ -153,7 +154,11 @@ impl CoreTerminal {
             self.sync_since = None;
             return;
         }
-        let since = *self.sync_since.get_or_insert_with(Instant::now);
+        let ended = self.emulator.syncs_ended();
+        let since = match self.sync_since {
+            Some((since, seen)) if seen == ended => since,
+            _ => self.sync_since.insert((Instant::now(), ended)).0,
+        };
         if since.elapsed() >= SYNC_TIMEOUT {
             self.emulator.end_sync();
             self.sync_since = None;
@@ -230,6 +235,8 @@ impl sheprd_backend::Terminal for CoreTerminal {
             // request changed (a scroll, a clear) is still shown.
             Some(End::Closed(_)) => {
                 let mut updates = Vec::new();
+                // No byte can end a held update now: show what it held.
+                self.emulator.end_sync();
                 self.push_view(&mut updates);
                 return Ok(updates);
             }
@@ -237,7 +244,7 @@ impl sheprd_backend::Terminal for CoreTerminal {
         }
         // A held update is released on time even when no bytes follow it.
         let timeout = match self.sync_since {
-            Some(since) => {
+            Some((since, _)) => {
                 timeout.min((since + SYNC_TIMEOUT).saturating_duration_since(Instant::now()))
             }
             None => timeout,
@@ -246,6 +253,11 @@ impl sheprd_backend::Terminal for CoreTerminal {
         let chunk = self.attachment.read(timeout)?;
         self.emulator.feed(&chunk.bytes);
         self.release_stale_sync();
+        if chunk.end.is_some() {
+            // The program or the connection is gone, so no later byte or
+            // read can end its synchronized update: show what it held.
+            self.emulator.end_sync();
+        }
         let mut updates: Vec<SurfaceUpdate> = self
             .emulator
             .take_events()

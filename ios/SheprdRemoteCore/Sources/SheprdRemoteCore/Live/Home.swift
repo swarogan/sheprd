@@ -33,13 +33,17 @@ public struct Home: Codable, Hashable, Sendable {
     /// fetched only when it changes (`ShortcutSync`); older computers leave
     /// it out.
     public var shortcutsMs: UInt64?
+    /// The GitHub accounts this computer lends this phone, one per host
+    /// (`GitHubLeases`); older computers leave it out, and lend none.
+    public var githubHosts: [GitHubAccount]?
 
     enum CodingKeys: String, CodingKey {
         case api, computer, fingerprint, github, connected, waiting, load, working, version, workspaces, tags
         case shortcutsMs = "shortcuts_ms"
+        case githubHosts = "github_hosts"
     }
 
-    public init(api: Int? = nil, computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, version: String? = nil, workspaces: [Workspace], tags: Tags? = nil, shortcutsMs: UInt64? = nil) {
+    public init(api: Int? = nil, computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, version: String? = nil, workspaces: [Workspace], tags: Tags? = nil, shortcutsMs: UInt64? = nil, githubHosts: [GitHubAccount]? = nil) {
         self.api = api
         self.computer = computer
         self.fingerprint = fingerprint
@@ -51,6 +55,7 @@ public struct Home: Codable, Hashable, Sendable {
         self.workspaces = workspaces
         self.tags = tags
         self.shortcutsMs = shortcutsMs
+        self.githubHosts = githubHosts
     }
 
     /// A computer's tags and when they were last edited, also the body and
@@ -105,12 +110,16 @@ public struct Home: Codable, Hashable, Sendable {
         public var unopenedCommits: Int?
         public var chats: [ChatRow]
         public var terminals: [TerminalRow]
+        /// The GitHub repository and branch its pull request would be on,
+        /// which the phone reads directly with a leased token; older
+        /// computers, and checkouts of other hosts, leave it out.
+        public var github: GitHubRepository? = nil
 
         /// Its pull request is merged, so the work here is done.
         public var merged: Bool { pullRequest?.tone == .merged }
 
         enum CodingKeys: String, CodingKey {
-            case id, label, branch, cwd, worktree, session, chats, terminals
+            case id, label, branch, cwd, worktree, session, chats, terminals, github
             case pullRequest = "pull_request"
             case unopenedCommits = "unopened_commits"
         }
@@ -135,6 +144,12 @@ public struct Home: Codable, Hashable, Sendable {
         public var number: UInt64
         public var url: String
         public var tone: Tone
+
+        public init(number: UInt64, url: String, tone: Tone) {
+            self.number = number
+            self.url = url
+            self.tone = tone
+        }
 
         /// What the badge says, before a theme colors it.
         public enum Tone: String, Codable, Hashable, Sendable {
@@ -168,6 +183,12 @@ public struct Home: Codable, Hashable, Sendable {
         public var questions: Int
         /// The start of the agent's latest answer, on one line.
         public var lastText: String?
+        /// The start of the first prompt, for a chat its agent has not
+        /// titled; absent before one is sent, and from older computers.
+        public var firstPrompt: String? = nil
+        /// What the chat's agent said of where it stands when the person
+        /// asked; absent until then, and from older computers.
+        public var rowSummary: RowSummary? = nil
         public var turnStartedMs: UInt64?
         /// When the latest turn ended; absent from older computers.
         public var lastTurnEndedMs: UInt64?
@@ -176,6 +197,8 @@ public struct Home: Codable, Hashable, Sendable {
         enum CodingKeys: String, CodingKey {
             case connected, status, question, questions
             case lastText = "last_text"
+            case firstPrompt = "first_prompt"
+            case rowSummary = "row_summary"
             case turnStartedMs = "turn_started_ms"
             case lastTurnEndedMs = "last_turn_ended_ms"
             case usagePercent = "usage_percent"
@@ -228,7 +251,43 @@ public struct Home: Codable, Hashable, Sendable {
             public var label: String?
             public var cwd: String?
             public var focused: Bool
+            /// What runs in front of its shell; absent when the computer's
+            /// Herdr does not say, as Herdr 1 does not, and from older
+            /// computers.
+            public var job: Job? = nil
             public var id: String { pane }
+        }
+
+        /// What a terminal pane runs in front of its shell.
+        public enum Job: Codable, Hashable, Sendable {
+            /// Its shell waits at a prompt.
+            case idle
+            /// A program runs: its command line, on one bounded line.
+            case running(command: String)
+            /// A state this app does not know yet, from a newer computer.
+            case other
+
+            private enum CodingKeys: String, CodingKey { case state, command }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                switch try container.decode(String.self, forKey: .state) {
+                case "idle": self = .idle
+                case "running": self = .running(command: try container.decode(String.self, forKey: .command))
+                default: self = .other
+                }
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                switch self {
+                case .idle: try container.encode("idle", forKey: .state)
+                case let .running(command):
+                    try container.encode("running", forKey: .state)
+                    try container.encode(command, forKey: .command)
+                case .other: try container.encode("other", forKey: .state)
+                }
+            }
         }
 
         public struct DetectedAgent: Codable, Hashable, Sendable {

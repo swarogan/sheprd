@@ -9,8 +9,10 @@ use crate::{auth::devices::RelayKeys, relay::Info};
 fn info() -> Info {
     Info {
         identity: "identity".into(),
+        labels: Default::default(),
         relays: vec!["https://relay.example.org".into()],
         route: "route".into(),
+        rtt_ms: std::collections::BTreeMap::new(),
     }
 }
 
@@ -18,7 +20,7 @@ fn info() -> Info {
 fn the_offer_names_the_relays_and_its_token_opens_one_pairing_dial() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, _) = open(dir.path());
-    auth.set_relay_offer(info());
+    auth.set_relay_offer(Some(info()));
     let phone = Phone::new(3, 4);
     let (started, revealed) = exchange(&mut auth, &phone, T0);
     let finished = phone.finish(&started, &revealed).unwrap();
@@ -46,7 +48,7 @@ fn a_computer_without_relays_offers_none() {
 fn the_relay_keys_a_phone_claims_with_are_stored_when_approved() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, offer) = open(dir.path());
-    auth.set_relay_offer(info());
+    auth.set_relay_offer(Some(info()));
     let phone = Phone::new(3, 4);
     let (started, revealed) = exchange(&mut auth, &phone, T0);
     let finished = phone.finish(&started, &revealed).unwrap();

@@ -18,12 +18,21 @@
 //                 {"type":"frame","central":"UUID","data":"base64"}
 //                 {"type":"presence_frame","central":"UUID","data":"base64"}
 //                 {"type":"stop"}   (pairing's advertisement only)
+//                 {"type":"scan","on":true|false}   (Central.swift)
+//                 {"type":"connect","peripheral":"UUID"}
+//                 {"type":"disconnect","peripheral":"UUID"}
+//                 {"type":"peripheral_frame","peripheral":"UUID","data":"base64"}
 // To Sheprd:    {"type":"state","state":"powered_on|powered_off|unauthorized|unsupported|resetting|unknown"}
 //                 {"type":"frame","central":"UUID","data":"base64"}
 //                 {"type":"presence_frame","central":"UUID","data":"base64"}
 //                 {"type":"disconnected","central":"UUID"}
 //                 {"type":"idle","seconds":N}   (every 30 s while presence is on)
 //                 {"type":"error","message":"…"}
+//                 {"type":"central_state","state":"…"}   (Central.swift)
+//                 {"type":"found","peripheral":"UUID","name":"…","fp":"16 hex"}
+//                 {"type":"connected","peripheral":"UUID"}
+//                 {"type":"peripheral_frame","peripheral":"UUID","data":"base64"}
+//                 {"type":"peripheral_disconnected","peripheral":"UUID"}
 
 import CoreBluetooth
 import CoreGraphics
@@ -226,10 +235,10 @@ extension Nearby: CBPeripheralManagerDelegate {}
 
 let bluetooth = !CommandLine.arguments.contains("--no-bluetooth")
 // Top-level code runs on the main thread, but Swift 5 does not infer its actor.
-let (nearby, bonjour) = MainActor.assumeIsolated {
+let (nearby, bonjour, scanner) = MainActor.assumeIsolated {
     let nearby = Nearby()
     if bluetooth { nearby.start() }
-    return (nearby, Bonjour())
+    return (nearby, Bonjour(), Central())
 }
 
 // Commands from Sheprd, one JSON object per line, read off the main
@@ -240,6 +249,7 @@ Thread.detachNewThread {
         let type = object["type"] as? String, name = object["name"] as? String, fingerprint = object["fp"] as? String
         let port = (object["port"] as? String).flatMap { Int($0) } ?? 0
         let central = (object["central"] as? String).flatMap(UUID.init(uuidString:))
+        let peripheral = (object["peripheral"] as? String).flatMap(UUID.init(uuidString:))
         let data = (object["data"] as? String).flatMap { Data(base64Encoded: $0) }
         let on = object["on"] as? Bool ?? false
         DispatchQueue.main.async {
@@ -255,6 +265,10 @@ Thread.detachNewThread {
                     if bluetooth { nearby.stop() }
                 case "frame": if let central, let data { nearby.send(data, to: central, presence: false) }
                 case "presence_frame": if let central, let data { nearby.send(data, to: central, presence: true) }
+                case "scan": if bluetooth { scanner.scan(on) }
+                case "connect": if bluetooth, let peripheral { scanner.connect(peripheral) }
+                case "disconnect": if let peripheral { scanner.disconnect(peripheral) }
+                case "peripheral_frame": if let peripheral, let data { scanner.send(data, to: peripheral) }
                 default: break
                 }
             }

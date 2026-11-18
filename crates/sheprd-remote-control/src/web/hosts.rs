@@ -1,11 +1,17 @@
 //! The other hosts a phone may be paired with from this computer
 //! (`control::hosts`): `GET /api/v2/hosts` lists them with where the phone
 //! stands with each, and `POST /api/v2/hosts/{host}/pair` hands over the
-//! key the phone made for one, which Sheprd enrolls on that host. Both
-//! need the phone's session; a phone only ever sees its own.
+//! key the phone made for one, which Sheprd enrolls on that host.
+//! `POST /api/v2/hosts/relay` hands over the phone's relay keys for another
+//! of its computers, signed with its key there, for Sheprd to carry
+//! (`control::host_relay`); posting the same request again reads where it
+//! stands. All need the phone's session; a phone only ever sees its own.
 
 use super::{ApiError, Device, Shared, api::with_auth, render::now_ms};
-use crate::control::hosts::{HostId, HostLink, HostState};
+use crate::control::{
+    host_relay,
+    hosts::{HostId, HostLink, HostState},
+};
 use axum::{
     Json,
     extract::{Path, State},
@@ -38,6 +44,18 @@ pub(super) async fn pair(
 ) -> Result<Json<HostState>, ApiError> {
     let state = with_auth(&state, move |auth| {
         Ok(auth.ask_host(&device, &HostId(host), &request.public_key, now_ms())?)
+    })
+    .await?;
+    Ok(Json(state))
+}
+
+pub(super) async fn relay(
+    State(state): State<Shared>,
+    Device(device): Device,
+    Json(request): Json<host_relay::Request>,
+) -> Result<Json<host_relay::State>, ApiError> {
+    let state = with_auth(&state, move |auth| {
+        Ok(auth.ask_host_relay(&device, request, now_ms())?)
     })
     .await?;
     Ok(Json(state))

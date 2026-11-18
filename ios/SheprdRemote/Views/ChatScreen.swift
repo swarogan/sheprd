@@ -5,7 +5,8 @@ import UIKit
 /// Chat B: the latest turn as a document (the prompt as a heading, steps
 /// folded to one line, the answer, then its diffs folded to a line each),
 /// the running step pinned under the header, earlier turns summed up, and
-/// questions in a bottom sheet.
+/// questions in a bottom sheet. Once the prompt scrolls off the top, its
+/// first three lines stay pinned there.
 struct ChatScreen: View {
     @Environment(AppModel.self) private var model
     let key: PaneKey
@@ -90,6 +91,12 @@ struct ChatScreen: View {
             }
         }
         .onAppear {
+            #if DEBUG
+            if key == .sample {
+                store = ChatStore(key: key, sample: .sample)
+                return
+            }
+            #endif
             store = model.fleet.openChat(key)
             model.recentDevice = key.device
             #if DEBUG
@@ -144,6 +151,8 @@ private struct ChatDocument: View {
     @State private var dismissedQuestion: PermissionId?
     /// A link the agent wrote, shown in full before it opens.
     @State private var pendingLink: URL?
+    /// The latest prompt has scrolled up past the top of the chat.
+    @State private var promptAbove = false
 
     /// Lines stay this wide at most on an iPad or an unfolded iPhone, so
     /// the answer reads like a page rather than a banner.
@@ -155,78 +164,96 @@ private struct ChatDocument: View {
         let earlier = entries[..<start]
         let latest = entries[start...]
         let tools = latest.compactMap { if case let .tool(tool) = $0.kind { tool } else { nil } }
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if !earlier.isEmpty || transcript.truncated {
-                    DisclosureGroup {
-                        LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(Array(earlier)) { EntryView(entry: $0) }
-                        }
-                    } label: {
-                        let turns = earlier.filter { if case .user = $0.kind { true } else { false } }.count
-                        Text("Earlier in this chat · \(turns) turn\(turns == 1 ? "" : "s")")
-                            .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                }
-                if case let .user(text, _) = latest.first?.kind {
-                    HStack(alignment: .top, spacing: 10) {
-                        Rectangle().fill(.tint).frame(width: 3)
-                        Text(text).font(.title3.weight(.semibold)).textSelection(.enabled)
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                if !tools.isEmpty {
-                    DisclosureGroup {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(tools, id: \.callId) { ToolRow(tool: $0) }
-                        }
-                        .padding(.top, 6)
-                    } label: {
-                        Label(stepsLine(tools), systemImage: "list.bullet.indent")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Divider()
-                }
-                ForEach(Array(latest.dropFirst())) { entry in
-                    if case .tool = entry.kind {} else { EntryView(entry: entry) }
-                }
-                ForEach(tools.flatMap(diffs), id: \.path) { diff in
-                    DiffBlock(path: diff.path, old: diff.old, new: diff.new)
-                }
-                if !transcript.queued.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Queued").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(transcript.queued, id: \.id) { queued in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Image(systemName: "clock").foregroundStyle(.secondary)
-                                Text(queued.text).font(.subheadline).lineLimit(3)
-                                if !queued.attachments.isEmpty {
-                                    Label("\(queued.attachments.count)", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Button { unqueue(queued) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Remove from the queue")
+        let prompt: String? = if case let .user(text, _) = latest.first?.kind { text } else { nil }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if !earlier.isEmpty || transcript.truncated {
+                        DisclosureGroup {
+                            LazyVStack(alignment: .leading, spacing: 12) {
+                                ForEach(Array(earlier)) { EntryView(entry: $0) }
                             }
-                            .padding(10)
-                            .background(.fill.quinary, in: .rect(cornerRadius: 12))
+                        } label: {
+                            let turns = earlier.filter { if case .user = $0.kind { true } else { false } }.count
+                            Text("Earlier in this chat · \(turns) turn\(turns == 1 ? "" : "s")")
+                                .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                         }
                     }
+                    if let prompt {
+                        HStack(alignment: .top, spacing: 10) {
+                            Rectangle().fill(.tint).frame(width: 3)
+                            Text(prompt).font(.title3.weight(.semibold)).textSelection(.enabled)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .id(PinnedPrompt.anchor)
+                        // Below the viewport (reading earlier turns) is not
+                        // "above": only a prompt scrolled past pins.
+                        .onGeometryChange(for: Bool.self) { $0.frame(in: .scrollView).maxY < 0 } action: { promptAbove = $0 }
+                    }
+                    if !tools.isEmpty {
+                        DisclosureGroup {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(tools, id: \.callId) { ToolRow(tool: $0) }
+                            }
+                            .padding(.top, 6)
+                        } label: {
+                            Label(stepsLine(tools), systemImage: "list.bullet.indent")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        Divider()
+                    }
+                    ForEach(Array(latest.dropFirst())) { entry in
+                        if case .tool = entry.kind {} else { EntryView(entry: entry) }
+                    }
+                    ForEach(tools.flatMap(diffs), id: \.path) { diff in
+                        DiffBlock(path: diff.path, old: diff.old, new: diff.new)
+                    }
+                    if !transcript.queued.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Queued").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                            ForEach(transcript.queued, id: \.id) { queued in
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Image(systemName: "clock").foregroundStyle(.secondary)
+                                    Text(queued.text).font(.subheadline).lineLimit(3)
+                                    if !queued.attachments.isEmpty {
+                                        Label("\(queued.attachments.count)", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Button { unqueue(queued) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Remove from the queue")
+                                }
+                                .padding(10)
+                                .background(.fill.quinary, in: .rect(cornerRadius: 12))
+                            }
+                        }
+                    }
+                    ForEach(store.outgoing) { outgoing in
+                        OutgoingRow(outgoing: outgoing, computer: computerName, agent: transcript.agent)
+                    }
+                    if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
                 }
-                ForEach(store.outgoing) { outgoing in
-                    OutgoingRow(outgoing: outgoing, computer: computerName, agent: transcript.agent)
-                }
-                if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
+                .animation(.snappy, value: store.outgoing)
+                .frame(maxWidth: Self.readableWidth, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
             }
-            .animation(.snappy, value: store.outgoing)
-            .frame(maxWidth: Self.readableWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 24)
+            .defaultScrollAnchor(.bottom)
+            // A picture opened full screen swipes through the chat's others.
+            .environment(\.chatPictures, transcript.pictures.map(GalleryPicture.init))
+            .opacity(store.stale ? 0.6 : 1)
+            .overlay(alignment: .top) {
+                if let prompt, promptAbove {
+                    PinnedPrompt(text: prompt) {
+                        withAnimation(.snappy) { proxy.scrollTo(PinnedPrompt.anchor, anchor: .top) }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: promptAbove && prompt != nil)
         }
-        .defaultScrollAnchor(.bottom)
-        .opacity(store.stale ? 0.6 : 1)
         .safeAreaInset(edge: .bottom) {
             // The running turn's status sits where the turn grows, just
             // above the composer, not over the earlier answers at the top.
@@ -258,7 +285,6 @@ private struct ChatDocument: View {
         }
         .sheet(item: question) { permission in
             QuestionSheet(key: key, permission: permission)
-                .presentationDetents([.medium, .large])
         }
     }
 
@@ -286,6 +312,33 @@ private struct ChatDocument: View {
 
     private func unqueue(_ queued: Queued) {
         Task { problem = await model.fleet.send(.unqueue(queued.id), to: key) }
+    }
+}
+
+/// The latest prompt, three lines at most, over the top of the chat while
+/// its heading is scrolled away; a tap scrolls back to it.
+private struct PinnedPrompt: View {
+    static let anchor = "latest-prompt"
+    let text: String
+    let reveal: () -> Void
+
+    var body: some View {
+        Button(action: reveal) {
+            HStack(alignment: .top, spacing: 10) {
+                Rectangle().fill(.tint).frame(width: 3)
+                Text(text).font(.subheadline.weight(.semibold)).lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: ChatDocument.readableWidth + 40)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .accessibilityLabel("Your prompt: \(text)")
+        .accessibilityHint("Scrolls to it")
     }
 }
 
@@ -346,48 +399,5 @@ private struct RunningCapsule: View {
         .glassEffect(.regular, in: .capsule)
         .frame(maxWidth: ChatDocument.readableWidth)
         .padding(.horizontal, 16)
-    }
-}
-
-/// Questions A: a bottom sheet in thumb reach, full-width options, the
-/// "always" ones set apart.
-private struct QuestionSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    let key: PaneKey
-    let permission: Permission
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(permission.title).font(.title3.weight(.semibold))
-            let always = permission.options.filter { $0.kind == .allowAlways || $0.kind == .rejectAlways }
-            ForEach(permission.options.filter { !always.contains($0) }) { option in
-                if option.kind == .allowOnce {
-                    Button { answer(option) } label: { Text(option.name).frame(maxWidth: .infinity) }
-                        .buttonStyle(.glassProminent).controlSize(.large).tint(Home.AgentStatus.blocked.color)
-                } else {
-                    Button { answer(option) } label: { Text(option.name).frame(maxWidth: .infinity) }
-                        .buttonStyle(.glass).controlSize(.large)
-                }
-            }
-            if !always.isEmpty {
-                Divider()
-                ForEach(always) { option in
-                    Button(option.name) { answer(option) }.font(.subheadline)
-                }
-            }
-        }
-        .padding(24)
-    }
-
-    /// The sheet leaves once the answer is allowed; a refused answer
-    /// brings the question back, and the sync bar says why.
-    private func answer(_ option: PermissionOption) {
-        Task {
-            guard await OwnerCheck.allows(option) else { return }
-            let fleet = model.fleet
-            Task { _ = await fleet.send(.answer(permission: permission.id, option: option.id), to: key) }
-            dismiss()
-        }
     }
 }

@@ -60,6 +60,10 @@ pub(super) fn replace(locale: &Locale) {
 #[cfg(test)]
 thread_local! {
     static CURRENT: std::cell::RefCell<Option<Arc<Catalog>>> = const { std::cell::RefCell::new(None) };
+    /// Each catalog this thread has loaded. Tests switch locales once per
+    /// message they check, and parsing every file again for each switch was
+    /// most of their time.
+    static LOADED: std::cell::RefCell<Vec<(Locale, Arc<Catalog>)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(test)]
@@ -76,7 +80,18 @@ pub(super) fn direction() -> Direction {
 
 #[cfg(test)]
 pub(super) fn replace(locale: &Locale) {
-    if let Some(catalog) = load(locale) {
-        CURRENT.set(Some(Arc::new(catalog)));
-    }
+    let cached = LOADED.with_borrow(|loaded| {
+        loaded
+            .iter()
+            .find(|(loaded, _)| loaded == locale)
+            .map(|(_, catalog)| catalog.clone())
+    });
+    let Some(catalog) = cached.or_else(|| {
+        let catalog = Arc::new(load(locale)?);
+        LOADED.with_borrow_mut(|loaded| loaded.push((locale.clone(), catalog.clone())));
+        Some(catalog)
+    }) else {
+        return;
+    };
+    CURRENT.set(Some(catalog));
 }

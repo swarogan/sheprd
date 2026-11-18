@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import SheprdGitHub
 import SheprdRemoteCore
 
 /// The last state of every computer and of recently opened chats, so the
@@ -53,6 +54,26 @@ struct Cache: Sendable {
 
     func save(home: Home, device: String) {
         write(home, to: computerFolder(device).appending(path: "home.json"))
+    }
+
+    /// The pull request lists last read from GitHub, so the Pull Requests
+    /// tab shows them at once while it reads them again.
+    func pullRequestLists() -> PullRequestLists? {
+        read(PullRequestLists.self, at: pullRequestListsFile)
+    }
+
+    /// Keeps `lists`; `nil` forgets them, as signing out does.
+    func save(pullRequestLists lists: PullRequestLists?) {
+        let file = pullRequestListsFile
+        guard let lists else {
+            Self.writes.async { try? FileManager.default.removeItem(at: file) }
+            return
+        }
+        write(lists, to: file)
+    }
+
+    private var pullRequestListsFile: URL {
+        folder.appending(path: "github/pull-requests.json")
     }
 
     /// When this phone saw the computer's chats answer.

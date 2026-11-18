@@ -64,7 +64,7 @@ extension Home {
             let id = workspace.worktree?.key ?? "workspace/\(workspace.id)"
             if groups[id] == nil {
                 order.append(id)
-                groups[id] = (workspace.worktree?.label ?? workspace.label, [], [])
+                groups[id] = (workspace.repositoryName, [], [])
             }
             if workspace.worktree?.linked == true {
                 groups[id]?.linked.append(workspace)

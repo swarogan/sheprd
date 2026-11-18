@@ -37,12 +37,15 @@ fn a_live_agent_is_not_gone_and_an_ended_one_is() {
 fn a_tool_left_in_the_agents_group_keeps_the_agent_from_being_gone() {
     let id: EndpointId = ID.parse().unwrap();
     let dir = tempfile::tempdir().unwrap();
-    // The agent exits at once; the tool it started lives on in its group.
-    let agent = spawned("sleep 30 & echo $! ; exit 0");
+    // The agent starts a tool that lives on in its group, then waits for its
+    // input to close, so it is recorded while alive: an exited agent is a
+    // zombie whose birth cannot be read until it is reaped.
+    let agent = spawned("sleep 30 & echo $! ; read _ ; exit 0");
     let pid = agent.process.id();
     agent_started(dir.path(), &id, pid).unwrap();
     let mut line = String::new();
     std::io::BufRead::read_line(&mut std::io::BufReader::new(agent.output), &mut line).unwrap();
+    drop(agent.input);
     agent.process.wait().unwrap();
     assert!(!previous_agent_gone(dir.path(), &id).unwrap());
     let tool = rustix::process::Pid::from_raw(line.trim().parse().unwrap()).unwrap();

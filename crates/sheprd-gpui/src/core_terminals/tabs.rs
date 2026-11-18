@@ -257,6 +257,7 @@ impl SheprdWindow {
     /// to, closes panes whose program ended in a split, and titles each tab
     /// after its pane in use, as a Herdr tab is titled after its program.
     pub(super) fn poll_core_panes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.observe_recent_focus(window, cx);
         if let Some((tab, terminal)) = self.core_terminals.focused_pane(window, cx)
             && let Some(shown) = self.core_terminals.tabs.get_mut(&tab)
             && shown.activate(terminal)

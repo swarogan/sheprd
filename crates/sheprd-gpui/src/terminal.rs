@@ -1,5 +1,6 @@
 mod accessibility;
 mod links;
+mod rows;
 mod selection;
 pub(crate) mod splits;
 pub(crate) use accessibility::Transcript;
@@ -7,6 +8,7 @@ pub(crate) use links::{
     ExternalUrl, PaneLink, RowLink, RowTarget, escape_into, escaped_len, file_target,
     frame_hyperlink_at, frame_link_at, link_at, pane_hyperlink_at, pane_link_at,
 };
+pub(crate) use rows::bottom_rows;
 pub(crate) use selection::{MAX_SELECTION_BYTES, Selection};
 
 use crate::{config::Theme, keymap::PaneKey};
@@ -14,6 +16,7 @@ use gpui::{
     Bounds, KeyDownEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollEvent,
     TouchPhase, point, px, size,
 };
+use rows::whole_rows;
 use sheprd_client::protocol::{
     CellData, ClientKeyCode, ClientKeyKind, ClientMouseGeometry, ClientMouseKind,
     ClientMousePosition, ClientPaneInputEvent, ClientSurfaceSize, CursorState, FrameData,
@@ -495,7 +498,7 @@ pub fn cell_colors(cell: &CellData, theme: &Theme) -> (u32, u32) {
 
 pub fn viewport(width: f32, height: f32, cell_width: f32, cell_height: f32) -> ClientSurfaceSize {
     let cols = (width / cell_width.max(1.)).floor().clamp(1., 4096.) as u16;
-    let rows = (height / cell_height.max(1.)).floor().clamp(1., 4096.) as u16;
+    let rows = whole_rows(height, cell_height).clamp(1., 4096.) as u16;
     ClientSurfaceSize {
         cols,
         rows: rows.min((1_000_000 / u32::from(cols)) as u16),

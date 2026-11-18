@@ -1,0 +1,61 @@
+# One push relay, for one APNs environment, behind Caddy, which gets the
+# TLS certificate itself:
+#
+#   PUSH_RELAY_DOMAIN=push-sandbox.sheprd.org docker compose up -d
+#
+# The relay reads its secrets from ./secrets (README.md, "Secrets") and keeps
+# revocations in ./data, so they survive a restart.
+name: sheprd-push-relay
+
+services:
+  relay:
+    # The droplet's start.sh sets PUSH_RELAY_IMAGE to the digest whose cosign
+    # signature it verified. By hand, :latest is pulled unverified; pin a
+    # verified digest instead (README.md, "The image").
+    image: ${PUSH_RELAY_IMAGE:-ghcr.io/sheprd-labs/sheprd-push-relay:latest}
+    restart: unless-stopped
+    # Caddy is the only way in, so the caller's address comes from the
+    # X-Forwarded-For it sets; rate limits are per address.
+    command:
+      - --secrets
+      - /secrets
+      - --listen
+      - 0.0.0.0:8080
+      - --store
+      - sqlite:/data/revocations.db
+      - --behind-proxy
+    # No ports: only Caddy, on the compose network, can reach it.
+    expose: ["8080"]
+    volumes:
+      # Owned by the image's user, 65532, and private to it (start.sh).
+      - ./secrets:/secrets:ro
+      - ./data:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: local
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    # caddy:2-alpine, pinned by digest so a push to the tag cannot change
+    # what runs; Dependabot moves it.
+    image: caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
+    restart: unless-stopped
+    depends_on: [relay]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUSH_RELAY_DOMAIN: ${PUSH_RELAY_DOMAIN:?set PUSH_RELAY_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -28,6 +28,9 @@ fn every_app_variant_has_a_message() {
     let path = PathBuf::from("/tmp/remote/control.plist");
     let mut errors = vec![
         app::Error::Control(control::Error::NoAnswer),
+        app::Error::GitHubHost {
+            host: "https://ghe.example.com".into(),
+        },
         app::Error::IdleDays,
         app::Error::NoStateDir,
         app::Error::PairingAddress,
@@ -58,6 +61,25 @@ fn every_app_variant_has_a_message() {
         }),
     );
     assert_localized(&errors);
+}
+
+#[test]
+fn every_relay_label_variant_has_a_message() {
+    use sheprd_remote_control::relay_label::Error;
+    let errors = [
+        Error::Blank { field: "name" },
+        Error::Control { field: "tag" },
+        Error::Length {
+            field: "description",
+            max: 256,
+        },
+        Error::Tags,
+    ];
+    assert_localized(&errors);
+    assert_localized(&errors.map(|source| app::Error::RelayLabel {
+        relay: "https://fra3.example.org".into(),
+        source,
+    }));
 }
 
 #[test]

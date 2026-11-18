@@ -50,6 +50,10 @@ fn chat(pane: &TerminalPane, tab: &str, boot: &str, records: &[Terminal]) -> Opt
             .map(|status| status.app.clone())
             .filter(|name| !name.is_empty()),
         endpoint,
+        named: pane
+            .label
+            .as_deref()
+            .is_some_and(|label| !label.trim().is_empty()),
         pane: pane.pane.clone(),
         status: projection::status(record),
         tab: tab.to_owned(),

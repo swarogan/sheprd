@@ -88,7 +88,10 @@ impl SheprdWindow {
                         && !picker.filtered.is_empty()
                         && !picker.search.read(cx).is_composing()
                 }))
+            // Only a Herdr 1 workspace's close waits on its Git check; a kept
+            // workspace closes through the app and never starts one.
             && (action != WorkspaceAction::Close
+                || target.keeper != sheprd_session::Keeper::Herdr1
                 || self.menu.close_check.as_ref().is_some_and(|check| {
                     check.allows(
                         self.menu
@@ -327,7 +330,7 @@ impl SheprdWindow {
                 }))
                 .children(deletion.and_then(|deletion| self.archive_note(target, deletion, cx))),
         };
-        if action == WorkspaceAction::Close {
+        if action == WorkspaceAction::Close && target.keeper == sheprd_session::Keeper::Herdr1 {
             body = body.child(
                 div()
                     .debug_selector(|| "close-git-status".into())
@@ -361,7 +364,12 @@ impl SheprdWindow {
             // Dismissing only closes the panel; the daemon keeps the queued work.
             let waiting = match self.dispatch_job.as_ref().filter(|_| dispatching) {
                 Some(job) => fl!("workspace-dialog-job-waiting", status = job.status()),
-                None => fl!("workspace-dialog-daemon-waiting"),
+                None => self
+                    .menu
+                    .worktree
+                    .as_ref()
+                    .and_then(|source| source.reuse_notice.clone())
+                    .unwrap_or_else(|| fl!("workspace-dialog-daemon-waiting")),
             };
             body = body.child(
                 div()

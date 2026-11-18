@@ -36,6 +36,7 @@ pub(crate) mod mutes;
 mod phone;
 mod processes;
 mod programs;
+pub(crate) mod recent;
 mod recovery;
 mod requests;
 mod screen;
@@ -45,6 +46,8 @@ mod sidebar;
 mod split;
 mod start;
 mod tabs;
+#[cfg(test)]
+mod testing;
 mod view;
 mod work_requests;
 mod worker;
@@ -463,7 +466,15 @@ impl CoreTerminals {
     /// none is reported until it answers again.
     pub(crate) fn reported(&self, host: &Host, terminal: &TerminalId) -> Option<&TerminalInfo> {
         self.backend_of(host)?;
-        self.infos_of(host)?.get(terminal)
+        self.listed(host, terminal)
+    }
+
+    /// `host`'s last list of `terminal`, found by its address or by its name.
+    /// A restart that finds the stand-in shell still live reuses it under the
+    /// name it was spawned with, so the window holds a name no address key
+    /// answers to; every other pane is held by the address the core gave it.
+    fn listed(&self, host: &Host, terminal: &TerminalId) -> Option<&TerminalInfo> {
+        self.infos_of(host)?.named(terminal)
     }
 
     /// The session over the core whose workspaces `scope` names, while the
@@ -485,49 +496,6 @@ impl CoreTerminals {
             .get(&tab)
             .filter(|shown| shown.holds_chats())
             .map(|shown| shown.active.clone())
-    }
-
-    /// Shows `panes` as `tab`, a mirror when `observe`, with what herdr-core
-    /// reports of `infos`, as a restored tab and a finished list would.
-    #[cfg(test)]
-    pub(crate) fn show_for_test(
-        &mut self,
-        tab: TabId,
-        panes: Panes,
-        observe: bool,
-        infos: Vec<TerminalInfo>,
-    ) {
-        let mut shown = TabPanes::new(Host::Local, panes, observe);
-        for info in infos {
-            self.infos.insert(info);
-        }
-        shown.keep_root(&self.infos);
-        self.tabs.insert(tab, shown);
-    }
-
-    /// Takes `identity` as what Git answered for the folder `cwd`.
-    #[cfg(test)]
-    pub(crate) fn seed_checkout_for_test(
-        &mut self,
-        cwd: &str,
-        identity: Option<sheprd_vcs::git::Identity>,
-    ) {
-        self.checkouts.seed(cwd, identity);
-    }
-
-    /// The latest terminal waiting to start, as no core answers in tests.
-    #[cfg(all(test, feature = "cloud"))]
-    pub(crate) fn last_wanted_for_test(&self) -> Option<(&Purpose, &Spawn)> {
-        let (purpose, _, spawn, _) = self.wanted.back()?;
-        Some((purpose, spawn))
-    }
-
-    /// Places `tab` in `workspace` of `scope`, as showing the workspace does.
-    #[cfg(test)]
-    pub(crate) fn place_for_test(&mut self, tab: TabId, scope: Scope, workspace: &str) {
-        if let Some(shown) = self.tabs.get_mut(&tab) {
-            shown.workspace = Some((scope, workspace.to_owned()));
-        }
     }
 
     /// Whether `tab` is a herdr-core tab that holds chats: it drives its

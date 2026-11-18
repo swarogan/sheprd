@@ -1,0 +1,11 @@
+{
+ "data": {
+  "repository": null
+ },
+ "errors": [
+  {
+   "message": "Resource protected by organization SAML enforcement.",
+   "type": "FORBIDDEN"
+  }
+ ]
+}

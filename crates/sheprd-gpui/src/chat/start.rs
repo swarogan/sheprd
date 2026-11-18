@@ -33,6 +33,85 @@ const PROGRAM: &str = if cfg!(windows) {
 } else {
     "herdr-acp"
 };
+/// Lets the chat switch to another installed agent whenever it is idle.
+/// Only a program that offers it is asked: one on an SSH host, or an older
+/// one found on `PATH` here, would refuse the option and start nothing.
+pub(crate) const CHOOSE: &str = "--choose";
+/// The most of the program's help read to find [`CHOOSE`] in it.
+const HELP_LIMIT: u64 = 64 * 1024;
+/// How long the program has to print its help: a wrapper that keeps its
+/// output open must not leave the question unanswered.
+const HELP_DEADLINE: Duration = Duration::from_secs(3);
+
+/// Whether a new chat may switch agents.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum AgentChoice {
+    /// It keeps the agent it starts with, as a program without
+    /// [`CHOOSE`] runs every chat.
+    #[default]
+    Fixed,
+    /// It starts with [`CHOOSE`].
+    Open,
+}
+
+impl AgentChoice {
+    /// The choice `program` offers, from its `--help`. Blocking for up to
+    /// [`HELP_DEADLINE`]: run it off the UI thread.
+    pub(crate) fn of(program: &Path) -> Self {
+        Self::of_within(program, HELP_DEADLINE)
+    }
+
+    /// [`Self::of`], giving up as [`Self::Fixed`] after `deadline`.
+    pub(crate) fn of_within(program: &Path, deadline: Duration) -> Self {
+        use std::io::Read as _;
+        let mut command = sheprd_client::new_command(program);
+        command
+            .arg("--help")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        let Ok(mut child) = command.spawn() else {
+            return Self::Fixed;
+        };
+        let (sender, receiver) = std::sync::mpsc::channel();
+        if let Some(stdout) = child.stdout.take() {
+            // Read apart, so the deadline holds while the read blocks. A
+            // child the program started may keep the pipe open past the
+            // kill below; the read then ends when that child does.
+            let _ = std::thread::Builder::new()
+                .name("acp-help".to_owned())
+                .spawn(move || {
+                    let mut help = Vec::new();
+                    let _ = stdout.take(HELP_LIMIT).read_to_end(&mut help);
+                    let _ = sender.send(help);
+                });
+        }
+        let help = receiver.recv_timeout(deadline).unwrap_or_default();
+        let _ = child.kill();
+        let _ = child.wait();
+        Self::from_help(&help)
+    }
+
+    /// The choice a program whose help reads `help` offers.
+    pub(crate) fn from_help(help: &[u8]) -> Self {
+        if help
+            .windows(CHOOSE.len())
+            .any(|word| word == CHOOSE.as_bytes())
+        {
+            Self::Open
+        } else {
+            Self::Fixed
+        }
+    }
+
+    /// The option that asks for it, if any.
+    pub(crate) fn option(self) -> Option<&'static str> {
+        match self {
+            Self::Fixed => None,
+            Self::Open => Some(CHOOSE),
+        }
+    }
+}
 /// How long a start may wait for the daemon to make its tab.
 const DEADLINE: Duration = Duration::from_secs(15);
 
@@ -43,6 +122,8 @@ pub enum Error {
     AgentMissing(Agent),
     #[error("ACP chats are off in Settings")]
     Disabled,
+    #[error("the chat's command cannot be typed into a shell")]
+    Line,
     #[error("Sheprd is not connected")]
     NotConnected,
     #[error("this pane has no supported chat route")]
@@ -103,12 +184,40 @@ pub(crate) fn locate_in(exe: Option<&Path>, path: Option<&std::ffi::OsStr>) -> O
 /// PowerShell Herdr gives panes. A leading space keeps it out of the history
 /// of shells that honor that. The shell stays when the chat quits, so an
 /// agent that failed to start leaves its message on screen.
-pub(crate) fn command_line(agent: Agent) -> String {
+pub(crate) fn command_line(agent: Agent, choice: AgentChoice) -> String {
+    let choose = choice
+        .option()
+        .map_or_else(String::new, |option| format!("{option} "));
     if cfg!(windows) {
-        format!("& $env:{PROGRAM_ENV} {agent}")
+        format!("& $env:{PROGRAM_ENV} {choose}{agent}")
     } else {
-        format!(" sh -c 'exec \"${PROGRAM_ENV}\" {agent}'")
+        format!(" sh -c 'exec \"${PROGRAM_ENV}\" {choose}{agent}'")
     }
+}
+
+/// [`command_line`] for a shell Herdr opened without the program in its
+/// environment, such as a new worktree's root pane: its path and the
+/// `[chat.env]` variables ride in the line. Read by `sh`, so not for
+/// Windows panes; `None` when a word holds a quote or control character.
+pub(crate) fn shell_line(
+    agent: Agent,
+    program: &Path,
+    choice: AgentChoice,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Option<String> {
+    let assignments: Vec<String> = env
+        .iter()
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect();
+    let mut words = Vec::with_capacity(assignments.len() + 4);
+    if !assignments.is_empty() {
+        words.push("env");
+        words.extend(assignments.iter().map(String::as_str));
+    }
+    words.push(program.to_str()?);
+    words.extend(choice.option());
+    words.push(agent.name());
+    sheprd_client::quoted_line(&words)
 }
 
 /// The line typed into a new tab on an SSH host: the first `herdr-acp`
@@ -174,13 +283,23 @@ impl SheprdWindow {
             return;
         }
         self.chats.program = Program::Looking;
-        let found = cx.background_executor().spawn(async { locate() });
+        let executor = cx.background_executor().clone();
+        let found = executor.spawn(async { locate() });
         cx.spawn(async move |this, cx| {
             let found = found.await;
             let _ = this.update(cx, |this, cx| {
-                this.chats.program = found.map_or(Program::Missing, Program::Found);
+                this.chats.program = found.clone().map_or(Program::Missing, Program::Found);
+                this.refresh_landing_chats();
                 cx.notify();
             });
+            // Chats start as soon as the program is found; until its help
+            // says it offers the choice, they keep the agent they start with.
+            if let Some(program) = found {
+                let choice = executor
+                    .spawn(async move { AgentChoice::of(&program) })
+                    .await;
+                let _ = this.update(cx, |this, _| this.chats.program_choice = choice);
+            }
         })
         .detach();
     }
@@ -199,6 +318,19 @@ impl SheprdWindow {
         }
     }
 
+    /// [`Self::can_start_chat`], counting a local program still looked for,
+    /// whose start then says so, rather than offering no chat meanwhile.
+    pub(crate) fn may_start_chat(&self) -> bool {
+        if !self.config.features.acp_chats {
+            return false;
+        }
+        match self.chat_route() {
+            Some(super::Route::Local) => self.chats.program != Program::Missing,
+            Some(super::Route::Ssh(_) | super::Route::Remote(_)) => true,
+            None => false,
+        }
+    }
+
     pub(super) fn chat_route(&self) -> Option<super::Route> {
         self.endpoints
             .get(self.selected_endpoint)
@@ -211,6 +343,27 @@ impl SheprdWindow {
                         .flatten()
                 })
             })
+    }
+
+    /// The line that starts a chat with `agent` in a shell Herdr already
+    /// opened on the selected host, such as a new worktree's root pane.
+    pub(crate) fn chat_line(&self, agent: Agent) -> Result<String, Error> {
+        if !self.config.features.acp_chats {
+            return Err(Error::Disabled);
+        }
+        if self.chat_agent_missing(agent) {
+            return Err(Error::AgentMissing(agent));
+        }
+        match self.chat_route().ok_or(Error::NotLocal)? {
+            super::Route::Ssh(_) | super::Route::Remote(_) => Ok(remote_command_line(agent)),
+            super::Route::Local => shell_line(
+                agent,
+                self.chats.program.found()?,
+                self.chats.program_choice,
+                &self.config.chat.env,
+            )
+            .ok_or(Error::Line),
+        }
     }
 
     pub(crate) fn chat_starting(&self) -> bool {
@@ -375,7 +528,7 @@ impl SheprdWindow {
                 let line = if starting.remote {
                     remote_command_line(starting.agent)
                 } else {
-                    command_line(starting.agent)
+                    command_line(starting.agent, self.chats.program_choice)
                 };
                 self.type_script_line(&starting.boot, &pane, &line)?;
                 Ok(tab)

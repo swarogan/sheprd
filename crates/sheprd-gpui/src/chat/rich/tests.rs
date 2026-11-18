@@ -5,6 +5,7 @@ use crate::chat::visual::{Error, Visuals};
 mod code;
 mod display_math;
 mod prose;
+mod sizes;
 
 #[test]
 fn inline_and_display_math_keep_their_place_and_identity_while_streaming() {

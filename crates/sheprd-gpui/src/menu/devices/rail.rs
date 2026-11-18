@@ -4,6 +4,7 @@
 //! so switching back and forth does not lose what was typed.
 
 use super::super::Page;
+use super::NearbySetup;
 use crate::SheprdWindow;
 use crate::i18n::fl;
 use gpui::{prelude::*, *};
@@ -22,6 +23,9 @@ pub(in crate::menu) const HEIGHT: f32 = 620.;
 pub(in crate::menu) enum Source {
     /// SSH hosts.
     Host,
+    /// Another computer's Sheprd nearby over Bluetooth, on another
+    /// network; listed only on macOS, whose helper can scan.
+    Nearby,
     /// WSL distributions on this machine, listed only on Windows.
     Wsl,
     #[cfg(feature = "cloud")]
@@ -36,6 +40,7 @@ impl Source {
     pub(in crate::menu) fn of(page: Page) -> Option<Self> {
         match page {
             Page::AddDevice => Some(Self::Host),
+            Page::AddNearby => Some(Self::Nearby),
             Page::AddWsl => Some(Self::Wsl),
             #[cfg(feature = "coder")]
             Page::AddCoder => Some(Self::Cloud(crate::cloud::CloudProvider::Coder)),
@@ -50,6 +55,7 @@ impl Source {
     fn name(self) -> String {
         match self {
             Self::Host => fl!("add-device-source-host"),
+            Self::Nearby => fl!("add-device-source-nearby"),
             // A product's name.
             Self::Wsl => "WSL".to_owned(), // i18n: data
             #[cfg(feature = "cloud")]
@@ -62,6 +68,7 @@ impl Source {
     fn icon(self) -> &'static str {
         match self {
             Self::Host => "icons/terminal.svg",
+            Self::Nearby => "icons/devices.svg",
             Self::Wsl => "icons/computer.svg",
             #[cfg(feature = "cloud")]
             Self::Cloud(provider) => crate::cloud::icon(provider),
@@ -73,6 +80,7 @@ impl Source {
     fn id(self) -> &'static str {
         match self {
             Self::Host => "add-device-source-host",
+            Self::Nearby => "add-device-source-nearby",
             Self::Wsl => "add-device-source-wsl",
             #[cfg(feature = "azure")]
             Self::Cloud(crate::cloud::CloudProvider::Azure) => "add-device-source-azure",
@@ -142,6 +150,9 @@ impl SheprdWindow {
     /// then **Add provider** while any is left out.
     pub(in crate::menu) fn rail_sources(&self) -> Vec<Source> {
         let mut sources = vec![Source::Host];
+        if cfg!(target_os = "macos") {
+            sources.push(Source::Nearby);
+        }
         if cfg!(windows) {
             sources.push(Source::Wsl);
         }
@@ -168,6 +179,13 @@ impl SheprdWindow {
                 })
                 .filter(|count| *count > 0)
                 .map_or(State::None, State::Nearby),
+            Source::Nearby => self
+                .menu
+                .nearby_setup
+                .as_ref()
+                .map(NearbySetup::found)
+                .filter(|count| *count > 0)
+                .map_or(State::None, State::Nearby),
             Source::Wsl => State::None,
             // The rail lists only providers in use.
             #[cfg(feature = "cloud")]
@@ -189,6 +207,14 @@ impl SheprdWindow {
         }
         self.menu.error = None;
         match source {
+            Source::Nearby => {
+                if self.menu.nearby_setup.is_some() {
+                    self.menu.page = Some(Page::AddNearby);
+                    window.focus(&self.menu.focus.clone(), cx);
+                } else {
+                    self.open_add_nearby(window, cx);
+                }
+            }
             Source::Wsl => {
                 if self.menu.wsl_setup.is_some() {
                     self.menu.page = Some(Page::AddWsl);

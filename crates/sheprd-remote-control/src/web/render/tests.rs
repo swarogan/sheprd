@@ -27,6 +27,7 @@ mod turn_patch;
 
 pub(super) fn row(pane: &str) -> ChatRow {
     ChatRow {
+        named: true,
         pane: pane.into(),
         tab: "t1".into(),
         endpoint: "0123456789abcdef0123456789abcdef".parse().unwrap(),
@@ -53,6 +54,7 @@ pub(super) fn question(title: &str) -> Permission {
     Permission {
         call_id: None,
         id: PermissionId(7),
+        question: None,
         title: title.into(),
         options: vec![
             PermissionOption {

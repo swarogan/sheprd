@@ -12,7 +12,7 @@ mod notifier;
 mod options;
 
 pub use crate::push::Privacy;
-pub use options::{Certificate, Invocation, Options, ParseError, USAGE, parse};
+pub use options::{Certificate, Invocation, Options, ParseError, Relay, USAGE, parse};
 
 use crate::{
     Result,
@@ -64,7 +64,9 @@ pub(crate) fn registrations_for_tests(
 pub async fn run(options: Options) -> Result<()> {
     std::fs::create_dir_all(&options.state_dir)?;
     let bind = options.bind;
-    let relayed = !options.relays.is_empty();
+    // Relays may be shared with this computer while it runs, so loopback,
+    // where relay sessions are served, is always certified.
+    let relayed = true;
     let (authority, resolver, names) = match &options.certificate {
         Certificate::Own => {
             let names = Names::current().bound_to(bind);
@@ -89,7 +91,12 @@ pub async fn run(options: Options) -> Result<()> {
     let push = Vapid::load_or_create(&options.state_dir)
         .and_then(|vapid| Sender::new(vapid, PUSH_SUBJECT))
         .ok();
-    let auth = Auth::load(&options.state_dir, Limits::default())?;
+    let mut auth = Auth::load(&options.state_dir, Limits::default())?;
+    // Desktops paired over Bluetooth log in over SSH through the relays.
+    match crate::ssh_access::SshAccess::of_user() {
+        Ok(access) => auth.set_ssh_access(access),
+        Err(error) => tracing::info!(error = %error, "desktops cannot be let in over SSH"),
+    }
     let apps = auth.apps();
     let apns = crate::apns::Sender::load(&options.state_dir).map_err(crate::apns::Error::from)?;
     // Only origins this computer's own authority serves may be remembered.
@@ -106,13 +113,15 @@ pub async fn run(options: Options) -> Result<()> {
     )?;
     let (pull_requests, _) = watch::channel(Arc::new(Default::default()));
     let load = crate::load::start();
-    let relay = if options.relays.is_empty() {
-        None
-    } else {
-        Some(Arc::new(crate::relay::Relays::load(
-            &options.state_dir,
-            options.relays.clone(),
-        )?))
+    // Kept even with no relay set, for ones another computer shares later.
+    // Only a computer told to listen on relays fails without its keys.
+    let relay = match crate::relay::Relays::load(&options.state_dir, options.relays.clone()) {
+        Ok(relay) => Some(Arc::new(relay)),
+        Err(error) if options.relays.is_empty() => {
+            tracing::warn!(%error, "Could not load the relay keys; relays shared later are ignored");
+            None
+        }
+        Err(error) => return Err(error.into()),
     };
     let state = Arc::new(State {
         apns,
@@ -125,6 +134,10 @@ pub async fn run(options: Options) -> Result<()> {
         fingerprint,
         github: crate::native::changes::github::Reader::new(options.github_cli),
         hub,
+        lending: crate::native::github::Lending::new(
+            options.github_hosts.clone(),
+            sheprd_github::cli::token_for,
+        ),
         live_activities: options.live_activities,
         load,
         look: web::Look::load(&options.state_dir),
@@ -160,6 +173,8 @@ pub async fn run(options: Options) -> Result<()> {
     // pictures.
     state.uploads.remove_leftovers();
     tokio::spawn(notifier::run(state.clone()));
+    tokio::spawn(crate::native::github::checkouts::follow(state.clone()));
+    tokio::spawn(crate::native::github::follow_gh_hosts(state.clone()));
     if state.github.enabled() {
         tokio::spawn(crate::native::changes::github::badges(state.clone()));
     }
@@ -183,8 +198,6 @@ pub async fn run(options: Options) -> Result<()> {
     }
     let router = web::router(state.clone());
     if let Some(relay) = &state.relay {
-        // Nearby offers say how to claim through the relays too.
-        state.auth().set_relay_offer(relay.info());
         // The phone reaches a relay session at `https://127.0.0.1:PORT`
         // through its loopback proxy: the certificate for that address,
         // which `certified` has issued whatever the bind address.

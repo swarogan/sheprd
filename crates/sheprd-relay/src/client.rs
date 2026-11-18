@@ -13,6 +13,9 @@ use p256::ecdsa::{Signature, SigningKey, signature::Signer as _};
 use quinn::{ClientConfig, Connection, Endpoint, RecvStream, SendStream};
 use std::{net::SocketAddr, sync::Arc};
 
+mod reach;
+pub use reach::{first_reachable, reach};
+
 /// Why reaching a relay, or a step on it, failed.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -25,14 +28,26 @@ pub enum Error {
     Connection(#[from] quinn::ConnectionError),
     #[error("the connection offers no TLS exporter to prove a key over")]
     Exporter,
+    #[error("the relay's /v1/info could not be read")]
+    Info(#[from] Box<ureq::Error>),
+    #[error("the relay's /v1/info is not what a relay answers")]
+    InfoFormat,
+    #[error("the relay ended this listener")]
+    ListenEnded,
     #[error("the relay sent something that is not its protocol")]
     Malformed,
+    #[error("the relay offers no QUIC")]
+    NoQuic,
     #[error("could not trust the relay's certificate")]
     Pin(#[from] pin::Error),
     #[error("could not read from the relay")]
     Read(#[from] quinn::ReadExactError),
     #[error("the relay answered {0:?}")]
     Refused(Status),
+    #[error("another listener with the same key took this route")]
+    Replaced,
+    #[error("the relay's host name did not resolve")]
+    Resolve(#[source] std::io::Error),
     #[error("could not write to the relay")]
     Write(#[from] quinn::WriteError),
     // keep-sorted end
@@ -99,7 +114,10 @@ async fn expect_ok(recv: &mut RecvStream) -> Result<()> {
 #[derive(Debug)]
 pub struct Listener {
     connection: Connection,
-    recv: RecvStream,
+    /// The control stream's answers. Behind a lock only so [`Listener::closed`]
+    /// can watch it for a reset from `&self` beside [`Listener::next_stream`];
+    /// [`Listener::message`] reaches it through `&mut self` without waiting.
+    recv: tokio::sync::Mutex<RecvStream>,
     route: RouteId,
     send: SendStream,
 }
@@ -112,6 +130,30 @@ pub struct Incoming {
     pub key: Key,
     pub recv: RecvStream,
     pub send: SendStream,
+}
+
+/// A stream the relay opened for a dial, its header not read yet.
+#[derive(Debug)]
+pub struct Pending {
+    recv: RecvStream,
+    send: SendStream,
+}
+
+impl Pending {
+    /// Reads the header the relay puts first: which key dialed.
+    pub async fn incoming(mut self) -> Result<Incoming> {
+        let mut header = [0; 1 + KEY_LEN];
+        self.recv.read_exact(&mut header).await?;
+        let [kind, key @ ..] = header;
+        if kind != INCOMING {
+            return Err(Error::Malformed);
+        }
+        Ok(Incoming {
+            key,
+            recv: self.recv,
+            send: self.send,
+        })
+    }
 }
 
 impl Listener {
@@ -130,7 +172,7 @@ impl Listener {
         expect_ok(&mut recv).await?;
         Ok(Self {
             connection,
-            recv,
+            recv: tokio::sync::Mutex::new(recv),
             route: route(key),
             send,
         })
@@ -145,7 +187,7 @@ impl Listener {
     async fn message(&mut self, message: Message) -> Result<()> {
         let bytes = message.encode().map_err(|_| Error::Malformed)?;
         self.send.write_all(&bytes).await?;
-        expect_ok(&mut self.recv).await
+        expect_ok(self.recv.get_mut()).await
     }
 
     /// Replaces the keys that may dial this computer; sessions of keys left
@@ -159,21 +201,46 @@ impl Listener {
         self.message(Message::PairingKey { key, seconds }).await
     }
 
-    /// The next dial: a stream the relay opened on this connection.
+    /// The next dial: a stream the relay opened on this connection, its
+    /// header read. Not cancel-safe: dropped while the header is arriving,
+    /// it drops that dial. A listener that waits on other events beside it
+    /// takes [`Listener::next_stream`] instead.
     pub async fn accept(&self) -> Result<Incoming> {
-        let (send, mut recv) = self.connection.accept_bi().await?;
-        let mut header = [0; 1 + KEY_LEN];
-        recv.read_exact(&mut header).await?;
-        let [kind, key @ ..] = header;
-        if kind != INCOMING {
-            return Err(Error::Malformed);
-        }
-        Ok(Incoming { key, recv, send })
+        self.next_stream().await?.incoming().await
     }
 
-    /// Resolves when the relay drops this listener or the connection ends.
-    pub async fn closed(&self) -> quinn::ConnectionError {
-        self.connection.closed().await
+    /// The next stream the relay opened, before its header is read.
+    /// Cancel-safe, so it can wait beside timers and other events; read the
+    /// header with [`Pending::incoming`], away from them.
+    pub async fn next_stream(&self) -> Result<Pending> {
+        let (send, recv) = self.connection.accept_bi().await?;
+        Ok(Pending { recv, send })
+    }
+
+    /// The connection's smoothed round-trip time to the relay, which QUIC
+    /// keeps current from its keep-alives: how near the relay is.
+    #[must_use]
+    pub fn rtt(&self) -> std::time::Duration {
+        self.connection.rtt()
+    }
+
+    /// Resolves when the relay drops this listener or the connection ends:
+    /// [`Error::Replaced`] when another listener proved the same key and
+    /// took the route (the relay resets this one's control stream but keeps
+    /// the connection, which may carry other work), [`Error::ListenEnded`]
+    /// when the control stream ends otherwise. Cancel-safe.
+    pub async fn closed(&self) -> Error {
+        let mut recv = self.recv.lock().await;
+        tokio::select! {
+            error = self.connection.closed() => Error::Connection(error),
+            reset = recv.received_reset() => match reset {
+                Ok(Some(code)) if code == quinn::VarInt::from_u32(wire::code::REPLACED) => {
+                    Error::Replaced
+                }
+                Err(quinn::ResetError::ConnectionLost(error)) => Error::Connection(error),
+                Ok(_) | Err(_) => Error::ListenEnded,
+            },
+        }
     }
 }
 

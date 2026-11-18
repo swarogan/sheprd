@@ -1,0 +1,212 @@
+#cloud-config
+# DigitalOcean user data for one push relay droplet (Ubuntu 24.04). It
+# installs Docker, opens only SSH, HTTP, and HTTPS, and writes the compose
+# files and start.sh. create-droplet.sh fills the placeholders; to use this
+# by hand, replace them yourself.
+#
+# No secret is in here: user data can be read back from the droplet's
+# metadata service and DigitalOcean's API. The relay starts once
+# install-secrets.sh has copied them over and run start.sh, which runs only
+# an image whose cosign signature comes from push-relay-image.yml on
+# sheprd-labs/sheprd's main branch, by the digest that signature covers.
+
+package_update: true
+packages: [docker.io, docker-compose-v2, ufw, curl, jq]
+
+write_files:
+  - path: /opt/sheprd-push-relay/compose.yml
+    permissions: "0644"
+    encoding: b64
+    content: __COMPOSE_B64__
+  - path: /opt/sheprd-push-relay/Caddyfile
+    permissions: "0644"
+    encoding: b64
+    content: __CADDYFILE_B64__
+  - path: /opt/sheprd-push-relay/start.sh
+    permissions: "0700"
+    content: |
+      #!/bin/sh
+      set -eu
+      cd /opt/sheprd-push-relay
+      # cosign keeps its Sigstore trust root under HOME, which cloud-init's
+      # runcmd may leave unset.
+      export HOME="${HOME:-/root}"
+      domain="__PUSH_RELAY_DOMAIN__"
+      environment="__PUSH_RELAY_ENVIRONMENT__"
+      # The relay's user in the image (65532, distroless's nonroot) owns its
+      # secrets and data, private to it: the relay refuses a key others can
+      # read.
+      umask 077
+      # One run at a time, from staging new secrets to the relay answering,
+      # so a retried install cannot pull secrets out from under another.
+      take_lock() {
+        exec 9>.lock
+        if ! flock -n 9; then
+          echo "sheprd-push-relay: start.sh is running already; try again once it finishes" >&2
+          return 1
+        fi
+      }
+      # Whether DIR holds every secret, for the APNs environment this relay
+      # serves. One relay serves one environment, and clients reach each by
+      # its own name, so a key for the other one here is a mistake.
+      check_secrets() {
+        for file in apns/config.json apns/AuthKey.p8 relay-key.pem credential-secret; do
+          if [ ! -f "$1/$file" ]; then
+            echo "sheprd-push-relay: no $1/$file; copy the secrets with deploy/push-relay/install-secrets.sh" >&2
+            return 1
+          fi
+        done
+        sandbox=$(jq -r '.sandbox // false' "$1/apns/config.json") || return 1
+        case $environment:$sandbox in
+          production:false | sandbox:true) ;;
+          *)
+            echo "sheprd-push-relay: $1/apns/config.json is for the other APNs environment, and this relay serves $environment" >&2
+            return 1
+            ;;
+        esac
+      }
+      # New secrets, a tar on stdin from install-secrets.sh, into secrets.new.
+      stage_secrets() {
+        rm -rf secrets.new
+        mkdir secrets.new
+        tar -C secrets.new --no-same-owner -xf -
+      }
+      # secrets.new becomes secrets; the old ones wait in secrets.old until
+      # the relay answers with the new ones.
+      swap_secrets() {
+        rm -rf secrets.old
+        if [ -d secrets ]; then mv secrets secrets.old; fi
+        mv secrets.new secrets
+      }
+      restore_secrets() {
+        rm -rf secrets
+        mv secrets.old secrets
+      }
+      refuse_new() {
+        rm -rf secrets.new
+        echo "sheprd-push-relay: the new secrets were refused; the running relay and its secrets are unchanged" >&2
+        exit 1
+      }
+      own() {
+        chown -R 65532:65532 "$@"
+        chmod -R u=rwX,go= "$@"
+      }
+      take_lock || exit 1
+      # install-secrets.sh streams new secrets on stdin with NEW_SECRETS=1.
+      # They replace the old ones only once the files, their environment,
+      # and the relay's own loaders (--check, below) accept them.
+      new="${NEW_SECRETS:-}"
+      if [ -n "$new" ]; then
+        stage_secrets
+        check_secrets secrets.new || refuse_new
+      else
+        mkdir -p secrets/apns
+        check_secrets secrets || exit 1
+      fi
+      mkdir -p data
+      own data
+      # cosign, pinned to the release push-relay-image.yml signs with, and
+      # checked against the SHA-256 in that release's signed
+      # cosign_checksums.txt; deploy/relay pins the same one.
+      cosign_version=v2.6.5
+      arch=$(dpkg --print-architecture)
+      case $arch in
+        amd64) cosign_sha256=c3b4f5410e608af03a5eb0aaac84a4313d8da131248e08ff1759ac70c79d1644 ;;
+        arm64) cosign_sha256=426193b4c5da4d4d643e822f48fe0cc8a476ca1782a272704831f5a0cef716d7 ;;
+        *) echo "sheprd-push-relay: no pinned cosign for $arch" >&2; exit 1 ;;
+      esac
+      cosign=/usr/local/bin/cosign-$cosign_version
+      if ! printf '%s  %s\n' "$cosign_sha256" "$cosign" | sha256sum -c --status 2>/dev/null; then
+        curl -fsSL -o "$cosign.download" \
+          "https://github.com/sigstore/cosign/releases/download/$cosign_version/cosign-linux-$arch"
+        if ! printf '%s  %s\n' "$cosign_sha256" "$cosign.download" | sha256sum -c --status; then
+          rm -f "$cosign.download"
+          echo "sheprd-push-relay: the cosign download does not match its pinned SHA-256" >&2
+          exit 1
+        fi
+        chmod 755 "$cosign.download"
+        mv "$cosign.download" "$cosign"
+      fi
+      # The image to run, as REPOSITORY@sha256:DIGEST. A tag (the default,
+      # :latest) is resolved by verifying it, and the digest the signature
+      # covers is what runs, so a later push to the tag cannot slip in. A
+      # digest an operator pins in PUSH_RELAY_IMAGE is theirs to have
+      # verified, and is used as given.
+      verified_image() {
+        image=${PUSH_RELAY_IMAGE:-ghcr.io/sheprd-labs/sheprd-push-relay:latest}
+        case $image in
+          *@sha256:*) printf '%s' "$image"; return 0 ;;
+        esac
+        case ${image##*/} in
+          *:*) repository=${image%:*} ;;
+          *) repository=$image ;;
+        esac
+        if ! payload=$("$cosign" verify "$image" \
+          --certificate-identity https://github.com/sheprd-labs/sheprd/.github/workflows/push-relay-image.yml@refs/heads/main \
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com); then
+          echo "sheprd-push-relay: $image has no valid signature from sheprd-labs/sheprd's push-relay-image.yml on main; the running relay is unchanged" >&2
+          return 1
+        fi
+        digest=$(printf '%s' "$payload" | jq -r '[.[].critical.image."docker-manifest-digest"] | unique | if length == 1 then .[0] else empty end') || digest=""
+        if ! printf '%s' "$digest" | grep -Eqx 'sha256:[0-9a-f]{64}'; then
+          echo "sheprd-push-relay: cosign verified $image but named no single digest; the running relay is unchanged" >&2
+          return 1
+        fi
+        printf '%s@%s' "$repository" "$digest"
+      }
+      if ! image=$(verified_image); then
+        rm -rf secrets.new
+        exit 1
+      fi
+      if [ -n "$new" ]; then
+        own secrets.new
+        # The relay's own loaders, in the image about to run: an empty or
+        # malformed key fails here, not after the swap.
+        docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+          --network none -v "$PWD/secrets.new:/secrets:ro" "$image" --secrets /secrets --check \
+          || refuse_new
+        swap_secrets
+      fi
+      own secrets
+      (umask 022; printf 'PUSH_RELAY_DOMAIN=%s\nPUSH_RELAY_IMAGE=%s\n' "$domain" "$image" > compose.env)
+      # Set here too: a PUSH_RELAY_IMAGE in the environment would otherwise
+      # win over compose.env's verified digest. The relay reads its secrets
+      # only as it starts, so it is recreated every time, new secrets or
+      # not; pushes carry everything they need and keep working.
+      export PUSH_RELAY_IMAGE="$image"
+      # Whether the relay answers /healthz, asked from Caddy's container:
+      # the relay publishes no port, and its image has no shell.
+      relay_answers() {
+        for _ in $(seq 1 30); do
+          if docker compose --env-file compose.env exec -T caddy \
+            wget -q -T 2 -O - http://relay:8080/healthz 2>/dev/null | grep -qx ok; then
+            return 0
+          fi
+          sleep 1
+        done
+        return 1
+      }
+      docker compose --env-file compose.env up -d --force-recreate relay
+      docker compose --env-file compose.env up -d
+      if ! relay_answers; then
+        if [ -n "$new" ] && [ -d secrets.old ]; then
+          restore_secrets
+          docker compose --env-file compose.env up -d --force-recreate relay
+          echo "sheprd-push-relay: the relay did not answer with the new secrets; it is back on the old ones" >&2
+        else
+          echo "sheprd-push-relay: the relay did not answer; see docker compose --env-file compose.env logs relay" >&2
+        fi
+        exit 1
+      fi
+      rm -rf secrets.old
+      echo "sheprd-push-relay: running $image at https://$domain ($environment)" >&2
+
+runcmd:
+  - ufw default deny incoming
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  - systemctl enable --now docker
+  # Fails with "waiting for secrets" until install-secrets.sh runs it again.
+  - /opt/sheprd-push-relay/start.sh || true

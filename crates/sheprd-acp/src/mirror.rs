@@ -68,7 +68,10 @@ pub(crate) struct Mirror {
 }
 
 impl Mirror {
-    pub(crate) fn new(transcript: Transcript, pane: Option<String>) -> Self {
+    pub(crate) fn new(mut transcript: Transcript, pane: Option<String>) -> Self {
+        // A chat's saved conversation holds the notes Sheprd sent its agent,
+        // which the person never wrote.
+        crate::context::hide(&mut transcript);
         Self {
             clients: HashMap::new(),
             cursor: Cursor::new_epoch(),
@@ -118,7 +121,7 @@ impl Mirror {
                     self.clients.remove(&conn);
                 }
             }
-            Input::Agent(_) | Input::AgentExited { .. } | Input::Shutdown => {}
+            Input::Agent(..) | Input::AgentExited { .. } | Input::Shutdown => {}
         }
     }
 
@@ -127,7 +130,8 @@ impl Mirror {
             .retain(|_, client| client.try_send(message.clone()).is_ok());
     }
 
-    pub(crate) fn update(&mut self, next: Transcript) {
+    pub(crate) fn update(&mut self, mut next: Transcript) {
+        crate::context::hide(&mut next);
         if next == self.transcript {
             return;
         }
@@ -180,6 +184,11 @@ fn changes(previous: &Transcript, next: &Transcript) -> Option<Vec<Change>> {
     for entry in next.entries.iter().skip(retained.len()) {
         changes.push(Change::Push {
             entry: entry.clone(),
+        });
+    }
+    if previous.status != next.status {
+        changes.push(Change::Status {
+            status: next.status.clone(),
         });
     }
     if previous.session != next.session {

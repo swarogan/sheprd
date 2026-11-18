@@ -23,6 +23,7 @@ mod mute;
 mod naming;
 mod pull_requests;
 mod remote_branches;
+mod rename_double_click;
 #[cfg(all(feature = "container", any(target_os = "linux", target_os = "macos")))]
 mod sandbox_dispatch;
 #[cfg(all(
@@ -41,6 +42,8 @@ mod worktree_delete_recovery;
 // Host scripts, which find and start agents, need a POSIX client.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod worktree_landing;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod worktree_landing_rows;
 
 /// Presses the open workspace dialog's submit, for `endpoint::lifecycle_tests`.
 #[cfg(unix)]

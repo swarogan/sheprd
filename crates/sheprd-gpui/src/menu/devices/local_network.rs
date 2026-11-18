@@ -17,6 +17,29 @@ const SETTINGS_URL: &str =
 /// How long a refused host check waits for the user to allow Herdr.
 const PERMISSION_WAIT: Duration = Duration::from_secs(60);
 
+/// Waits while the closure says to, then checks the host again. Blocks.
+type Recheck = fn(setup::Request, &mut dyn FnMut() -> bool) -> crate::Result<HostProbe>;
+
+/// Unit tests never wait out the permission or reach the network: the host
+/// stays refused. GPUI's test executor runs the wait on the test's own
+/// thread, before a cancelled task is dropped, so a real one blocks a test
+/// for the whole `PERMISSION_WAIT`.
+#[cfg(not(test))]
+const RECHECK: Recheck = recheck;
+#[cfg(test)]
+const RECHECK: Recheck = |_, _| Ok(HostProbe::SshFailed(SshFailure::LocalNetworkDenied));
+
+#[cfg_attr(test, allow(dead_code))]
+fn recheck(
+    request: setup::Request,
+    keep_waiting: &mut dyn FnMut() -> bool,
+) -> crate::Result<HostProbe> {
+    match sheprd_client::wait_for_local_network(PERMISSION_WAIT, keep_waiting) {
+        LocalNetworkAccess::Denied => Ok(HostProbe::SshFailed(SshFailure::LocalNetworkDenied)),
+        LocalNetworkAccess::Allowed | LocalNetworkAccess::Unknown => request.probe(),
+    }
+}
+
 impl SheprdWindow {
     /// A button that opens the Local Network settings. Only macOS has them.
     pub(super) fn local_network_settings_button(
@@ -66,15 +89,7 @@ impl SheprdWindow {
         let alive = Arc::new(());
         let watched = Arc::downgrade(&alive);
         let background = cx.background_executor().spawn(async move {
-            let access = sheprd_client::wait_for_local_network(PERMISSION_WAIT, || {
-                watched.strong_count() > 0
-            });
-            let probe = match access {
-                LocalNetworkAccess::Denied => {
-                    Ok(HostProbe::SshFailed(SshFailure::LocalNetworkDenied))
-                }
-                LocalNetworkAccess::Allowed | LocalNetworkAccess::Unknown => request.probe(),
-            };
+            let probe = RECHECK(request, &mut || watched.strong_count() > 0);
             Ok::<_, crate::Error>((claim, probe))
         });
         form.task = Some(cx.spawn(async move |this, cx| {

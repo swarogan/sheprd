@@ -9,6 +9,7 @@ fn pane(id: &str, focused: bool) -> TerminalPane {
         label: None,
         cwd: Some("/code/herdr-gpui".into()),
         focused,
+        job: None,
     }
 }
 

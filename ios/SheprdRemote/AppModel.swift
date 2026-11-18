@@ -2,6 +2,9 @@ import ActivityKit
 import Foundation
 import os
 import SheprdRemoteCore
+import SheprdNearby
+import SheprdRelay
+import SheprdVoice
 import Network
 import UIKit
 
@@ -47,7 +50,7 @@ final class AppModel {
     /// and those typed in Settings. Kept on this phone across launches.
     private(set) var savedRelays = AppModel.loadRelays() {
         didSet {
-            fleet.savedRelays = savedRelays.relays
+            fleet.savedRelays = savedRelays.forEveryComputer
             if let data = try? JSONEncoder().encode(savedRelays) {
                 UserDefaults.standard.set(data, forKey: Self.relaysKey)
             }
@@ -235,6 +238,7 @@ final class AppModel {
     let nearby = NearbyBrowser()
     let collapsed = CollapsedStore()
     let tagFilter = TagFilterStore()
+    let agentScopeStore = AgentScopeStore()
     let shortcuts = ShortcutStore()
     let termKeys = TermKeyStore()
     let bluetooth = NearbyBluetooth()
@@ -254,8 +258,10 @@ final class AppModel {
         tokens = ActivityTokens(sessions: sessions)
         fleet = Fleet(sessions: sessions)
         hostLinks = HostLinks(sessions: sessions)
+        var loaded = false
         do {
             computers = try ComputerStore.load()
+            loaded = true
         } catch {
             log.error("Could not read the paired computers: \(error.localizedDescription, privacy: .public)")
             message = error.localizedDescription
@@ -266,10 +272,14 @@ final class AppModel {
         // Every relay a paired computer named is kept, so it is there to
         // pick from, and to dial, when that computer cannot be asked.
         var relays = savedRelays
-        relays.learn(computers.compactMap(\.relay).flatMap(\.relays))
+        let named = computers.compactMap(\.relay).flatMap(\.relays)
+        // Which old relays were typed is decided only against the paired
+        // computers: read wrong, every relay would look typed.
+        if loaded { relays.settle(named: Set(named)) }
+        relays.learn(named)
         keep(relays)
         // Unchanged, the property's observer did not run.
-        fleet.savedRelays = savedRelays.relays
+        fleet.savedRelays = savedRelays.forEveryComputer
         presence.onAddresses = { [weak self] fingerprint, origins in self?.update(fingerprint, origins: origins) }
         fleet.onRelay = { [weak self] device, record in self?.setRelay(device, record) }
         // Back in range after iOS relaunched the app: tokens may be stale.
@@ -399,11 +409,15 @@ final class AppModel {
         return added
     }
 
-    /// Forgets a relay no paired computer names any more.
+    /// Forgets a relay no paired computer names any more. One a computer
+    /// names stays for it, and is only no longer tried for the others.
     func removeRelay(_ relay: RelayEndpoint) {
-        guard computers(naming: relay).isEmpty else { return }
         var relays = savedRelays
-        relays.remove(relay)
+        if computers(naming: relay).isEmpty {
+            relays.remove(relay)
+        } else {
+            relays.unshare(relay)
+        }
         keep(relays)
     }
 
@@ -430,6 +444,7 @@ final class AppModel {
         collapsed.computers.forget(computer.device)
         shortcuts.offline(computer.device)
         Task { await sessions.forget(computer) }
+        Task { await GitHubReads.reader.tokens.forget(lender: computer.device) }
     }
 
     private func save() {

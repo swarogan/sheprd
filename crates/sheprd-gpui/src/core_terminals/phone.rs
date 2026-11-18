@@ -1,4 +1,5 @@
-//! A phone's split, zoom, or close of a Herdr 2 tab. The remote control
+//! A phone's split, zoom, or close of a Herdr 2 tab, or its change to a
+//! workspace this app keeps for Herdr 2 ([`workspaces`]). The remote control
 //! daemon cannot change the layout, which this app keeps with the tab, so
 //! it asks (`sheprd_remote_control::control::layout`), and the window
 //! holding the tab makes the change as its own commands do. A split is
@@ -13,6 +14,8 @@ use sheprd_remote_control::control::{
     layout::{Answer, Ask, Failure, Op},
 };
 use std::time::{Duration, Instant};
+
+mod workspaces;
 
 /// How long a phone's split may take before it counts as failed: past the
 /// daemon's own wait, so nothing is held for a phone gone.
@@ -87,7 +90,7 @@ impl CoreTerminals {
                 return Some(Change::Renamed(target, name));
             }
             // Not a tab's: the window answers it before asking here.
-            Op::RenameWorkspace { .. } => {
+            Op::RenameWorkspace { .. } | Op::CloseWorkspace { .. } | Op::RemoveWorktree { .. } => {
                 return Some(Change::Answered(Answer::Failed(Failure::Refused)));
             }
             Op::Zoom => {
@@ -159,10 +162,21 @@ impl SheprdWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Option<Answer>> {
-        if let Op::RenameWorkspace { workspace, name } = &ask.op {
-            return self
-                .phone_rename_workspace(workspace, name, cx)
-                .then_some(Some(Answer::Done));
+        match &ask.op {
+            Op::RenameWorkspace { workspace, name } => {
+                return self
+                    .phone_rename_workspace(workspace, name, cx)
+                    .then_some(Some(Answer::Done));
+            }
+            Op::CloseWorkspace { workspace } => {
+                return self
+                    .phone_close_workspace(workspace, window, cx)
+                    .then_some(Some(Answer::Done));
+            }
+            Op::RemoveWorktree { workspace } => {
+                return self.phone_remove_worktree(ask.id, workspace, window, cx);
+            }
+            _ => {}
         }
         let answer = match self.core_terminals.phone_change(ask)? {
             Change::Answered(answer) => Some(answer),
@@ -195,30 +209,6 @@ impl SheprdWindow {
         };
         cx.notify();
         Some(answer)
-    }
-
-    /// Renames a workspace this window keeps for Herdr 2 on this computer;
-    /// false when it keeps none by that id, so another window may.
-    fn phone_rename_workspace(
-        &mut self,
-        workspace: &str,
-        name: &str,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(index) = self.core_host() else {
-            return false;
-        };
-        let scope = crate::browser::scope(&self.endpoints[index]);
-        let kept = cx
-            .try_global::<crate::browser::Store>()
-            .is_some_and(|store| store.kept_workspace(&scope, workspace).is_some());
-        // This computer's, whichever host the window shows.
-        if kept {
-            crate::browser::Store::update(cx, |store| store.rename_kept(&scope, workspace, name));
-            self.refresh_core_session(cx);
-            cx.notify();
-        }
-        kept
     }
 
     /// Tells the daemon how a phone's split went, once it has.

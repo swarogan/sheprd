@@ -101,6 +101,7 @@ fn selection_is_refused_after_claim_and_missing_cli_address_can_be_retried() {
             device_name: "phone".into(),
             code: "123456".into(),
             app: None,
+            ssh: false,
         })),
     );
     let before = pairing.phase().clone();

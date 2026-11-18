@@ -4,6 +4,7 @@
 use super::*;
 use gpui::TestAppContext;
 
+mod relay;
 mod report;
 use sheprd_remote_control::control::hosts::HostPairing;
 use std::sync::Mutex;
@@ -80,6 +81,7 @@ fn a_host_not_allowed_waits_for_the_user_and_a_gone_host_fails(cx: &mut TestAppC
             Incoming {
                 sent: None,
                 pairings: vec![pairing("ssh:lab", true), pairing("ssh:gone", false)],
+                relays: Vec::new(),
                 revokes: None,
             },
         );
@@ -113,6 +115,7 @@ fn a_request_already_running_is_not_started_twice(cx: &mut TestAppContext) {
         let incoming = || Incoming {
             sent: None,
             pairings: vec![pairing("ssh:lab", true)],
+            relays: Vec::new(),
             revokes: None,
         };
         Supervisor::take_incoming(cx, incoming());

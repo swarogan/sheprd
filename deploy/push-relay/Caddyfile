@@ -1,0 +1,22 @@
+{
+	servers {
+		# Only TCP 443 is open on the droplet.
+		protocols h1 h2
+	}
+}
+
+{$PUSH_RELAY_DOMAIN} {
+	# A push is at most a 4 KB payload and a handle; the relay bounds bodies
+	# too, but nothing larger needs to reach it.
+	request_body {
+		max_size 16KB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Caddy replaces X-Forwarded-For with the caller's address, which the
+	# relay's per-address limits read (--behind-proxy). Nothing it logs
+	# names an address or a token.
+	reverse_proxy relay:8080
+}

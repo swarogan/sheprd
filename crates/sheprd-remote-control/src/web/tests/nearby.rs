@@ -149,6 +149,7 @@ async fn a_phone_pairs_nearby_over_the_network_and_the_desktop_sees_its_code() {
             allow: true,
             code,
             hosts: Vec::new(),
+            share_github: true,
         },
     );
     assert!(

@@ -6,14 +6,8 @@ pub enum Error {
     Auth(#[from] crate::auth::Error),
     #[error("the relay could not be reached")]
     Client(#[from] sheprd_relay::client::Error),
-    #[error("the relay's /v1/info could not be read")]
-    Info(#[source] ureq::Error),
-    #[error("the relay's /v1/info is not what a relay answers")]
-    InfoFormat,
-    #[error("the relay offers no QUIC, which this computer listens over")]
-    NoQuic,
-    #[error("the relay's host name did not resolve")]
-    Resolve(#[source] std::io::Error),
+    #[error("a desktop's SSH session failed")]
+    Ssh(#[source] std::io::Error),
     #[error("a stored relay key is not one")]
     StoredKey,
     #[error("the end-to-end tunnel failed")]

@@ -60,6 +60,9 @@ impl SheprdWindow {
         {
             crate::agent_skill::AgentSkill::choose(crate::agent_skill::Choice::Declined, cx);
         }
+        if self.menu.page == Some(Page::AppRename) {
+            crate::app_rename::AppRename::choose(crate::app_rename::Choice::Declined, cx).detach();
+        }
         let application = self.menu.application.as_ref();
         let return_focus = (application.and_then(|menu| menu.return_focus.clone()))
             .or_else(|| self.core_menu_return_focus(cx));
@@ -509,6 +512,7 @@ impl SheprdWindow {
                         | Page::Jira
                         | Page::AzureDevOps
                         | Page::AddDevice
+                        | Page::AddNearby
                         | Page::AddWsl
                         | Page::Usage(_)
                         | Page::RenameDevice
@@ -579,6 +583,7 @@ impl SheprdWindow {
                     page,
                     Page::Install
                         | Page::AgentSkill
+                        | Page::AppRename
                         | Page::VersionMismatch
                         | Page::OpenCheckout
                         | Page::OpenLink
@@ -602,6 +607,7 @@ impl SheprdWindow {
                     page,
                     Page::AppUpdate
                         | Page::AddDevice
+                        | Page::AddNearby
                         | Page::AddWsl
                         | Page::RenameDevice
                         | Page::ForwardPort
@@ -687,6 +693,8 @@ impl SheprdWindow {
             panel = panel.child(dialog);
         } else if page == Page::AddWsl {
             panel = panel.child(self.render_add_wsl(compact_rail, cx));
+        } else if page == Page::AddNearby {
+            panel = panel.child(self.render_add_nearby(compact_rail, cx));
         } else if page == Page::RemoveWsl {
             panel = panel.child(self.render_remove_wsl(cx));
         } else if page == Page::GitHub {
@@ -770,6 +778,8 @@ impl SheprdWindow {
             panel = panel.child(self.render_about(cx));
         } else if page == Page::AgentSkill {
             panel = panel.child(self.render_agent_skill_offer(cx));
+        } else if page == Page::AppRename {
+            panel = panel.child(self.render_app_rename_offer(cx));
         } else if page == Page::VersionMismatch {
             panel = panel.child(self.render_version_mismatch(cx));
         } else if page == Page::WorktreeScript {

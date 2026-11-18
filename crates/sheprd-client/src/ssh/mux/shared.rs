@@ -484,12 +484,10 @@ pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String
     };
     let mut args = vec!["-N".to_owned(), "-T".to_owned()];
     // The user's host key choice comes first, so it wins over the default.
-    args.extend(
-        crate::ssh::HostKeys::of(target)
-            .options()
-            .iter()
-            .map(|&option| option.to_owned()),
-    );
+    args.extend(crate::ssh::target_options(
+        target,
+        crate::ssh::HostKeys::of(target),
+    ));
     for option in [
         "BatchMode=yes",
         "NumberOfPasswordPrompts=0",
@@ -522,7 +520,10 @@ pub(super) fn channel_command(target: &str, remote_command: &str, socket: &Path)
     let mut command = crate::environment::command("ssh");
     // Should the master be gone, the direct connection keeps its host's choice.
     command
-        .args(crate::ssh::HostKeys::of(target).options())
+        .args(crate::ssh::target_options(
+            target,
+            crate::ssh::HostKeys::of(target),
+        ))
         .arg("-o")
         .arg(control_path(socket))
         .args(crate::ssh::POLICY)

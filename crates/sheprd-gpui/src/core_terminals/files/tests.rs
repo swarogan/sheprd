@@ -8,6 +8,7 @@ fn bitmap_is_staged_privately_with_its_format_and_bytes() {
         &ConnectTarget::Local,
         Source::Clipboard(image),
         &AtomicBool::new(false),
+        &mut |_, _| {},
     )
     .unwrap();
     let (target, paths) = prepared.cleanup.take().unwrap();
@@ -39,6 +40,7 @@ fn screenshot_thumbnail_survives_source_removal() {
         &ConnectTarget::Local,
         Request::Paths(vec![source.clone()]),
         &AtomicBool::new(false),
+        &mut |_, _| {},
     )
     .unwrap();
     std::fs::remove_file(&source).unwrap();
@@ -58,7 +60,8 @@ fn cancellation_and_path_validation_happen_before_remote_io() {
         prepare(
             &target,
             Request::Paths(vec!["/file".into()]),
-            &AtomicBool::new(true)
+            &AtomicBool::new(true),
+            &mut |_, _| {},
         ),
         Err(crate::Error::Client(sheprd_client::Error::UploadCancelled))
     ));
@@ -66,7 +69,8 @@ fn cancellation_and_path_validation_happen_before_remote_io() {
         prepare(
             &target,
             Request::Paths(vec!["/control\nname".into()]),
-            &AtomicBool::new(false)
+            &AtomicBool::new(false),
+            &mut |_, _| {},
         )
         .is_err()
     );
@@ -74,7 +78,8 @@ fn cancellation_and_path_validation_happen_before_remote_io() {
         upload(
             &target,
             &vec![PathBuf::from("/file"); 257],
-            &AtomicBool::new(false)
+            &AtomicBool::new(false),
+            |_, _| {},
         )
         .is_err()
     );
@@ -86,6 +91,7 @@ fn a_local_file_is_quoted_without_copying_or_opening_it() {
         &ConnectTarget::Local,
         Request::Paths(vec!["/missing/a b'$(cmd).png".into()]),
         &AtomicBool::new(false),
+        &mut |_, _| {},
     )
     .unwrap();
     assert_eq!(

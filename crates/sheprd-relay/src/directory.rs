@@ -41,6 +41,9 @@ pub const URL: &str = "https://sheprd.org/relays.json";
 /// clients link when no Sheprd relays are available, and next to the
 /// private relay setting.
 pub const SETUP_URL: &str = "https://sheprd.org/docs/relays/";
+/// The page that deploys a relay on DigitalOcean droplets from the browser,
+/// which Settings opens beside the private relay setting.
+pub const DEPLOY_URL: &str = "https://sheprd.org/relay/";
 /// The format this client reads.
 pub const VERSION: u32 = 1;
 /// The largest list a client accepts.

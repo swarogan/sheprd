@@ -6,6 +6,7 @@ menu-page-add-coder-workspace = Add Coder workspace
 menu-page-add-cloud-provider = Add cloud provider
 menu-page-add-wsl-distribution = Add WSL distribution
 menu-page-install-the-agent-skill = Install the agent skill
+menu-page-rename-the-app = Rename the app
 menu-page-menu = Menu
 menu-page-update = Update
 menu-page-automations = Automations

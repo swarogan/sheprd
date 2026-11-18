@@ -1,0 +1,74 @@
+{
+  "data": {
+    "mine": {
+      "issueCount": 3,
+      "nodes": [
+        {
+          "number": 1342,
+          "title": "Read pull requests on the phone‮ with a lent GitHub sign-in",
+          "state": "OPEN",
+          "isDraft": false,
+          "reviewDecision": "CHANGES_REQUESTED",
+          "updatedAt": "2027-01-15T08:01:00Z",
+          "headRefName": "feat/ios-native-github",
+          "author": { "login": "octocat" },
+          "headRepositoryOwner": { "login": "sheprd-labs" },
+          "repository": { "name": "sheprd", "owner": { "login": "sheprd-labs" } },
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "contexts": {
+            "checkRunCountsByState": [
+              { "state": "SUCCESS", "count": 5 },
+              { "state": "FAILURE", "count": 1 },
+              { "state": "TIMED_OUT", "count": 1 },
+              { "state": "IN_PROGRESS", "count": 1 },
+              { "state": "SKIPPED", "count": 3 }
+            ],
+            "statusContextCountsByState": [ { "state": "PENDING", "count": 0 } ]
+          } } } } ] }
+        },
+        {
+          "number": 214,
+          "title": "Docs: GitHub on the phone",
+          "state": "OPEN",
+          "isDraft": true,
+          "reviewDecision": null,
+          "updatedAt": "2027-01-14T09:00:00Z",
+          "headRefName": "docs/phone",
+          "author": { "login": "octocat" },
+          "headRepositoryOwner": { "login": "octocat" },
+          "repository": { "name": "herdr-site", "owner": { "login": "sheprd-labs" } },
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": null } } ] }
+        },
+        {},
+        {
+          "number": 9,
+          "title": "A repository name GitHub would never send",
+          "state": "OPEN",
+          "isDraft": false,
+          "headRefName": "x",
+          "repository": { "name": "../evil", "owner": { "login": "sheprd-labs" } }
+        }
+      ]
+    },
+    "review": {
+      "issueCount": 120,
+      "nodes": [
+        {
+          "number": 57,
+          "title": "Rotate the provider token before it expires",
+          "state": "OPEN",
+          "isDraft": false,
+          "reviewDecision": "REVIEW_REQUIRED",
+          "updatedAt": "2027-01-15T06:30:00Z",
+          "headRefName": "rotate-token",
+          "author": { "login": "monalisa" },
+          "headRepositoryOwner": null,
+          "repository": { "name": "sheprd-apns", "owner": { "login": "sheprd-labs" } },
+          "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "contexts": {
+            "checkRunCountsByState": [ { "state": "SUCCESS", "count": 6 } ],
+            "statusContextCountsByState": [ { "state": "ERROR", "count": 1 } ]
+          } } } } ] }
+        }
+      ]
+    }
+  }
+}

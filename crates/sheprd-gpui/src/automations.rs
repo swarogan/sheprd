@@ -36,6 +36,7 @@ mod tests;
 pub(crate) use actions::Action;
 pub(crate) use dialog::Dialog;
 pub use error::Error;
+pub(crate) use format::bytes;
 pub(crate) use hosts::{Machine, Wanted};
 pub(crate) use logs::{LogSource, LogSources};
 pub(crate) use model::Look;

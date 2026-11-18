@@ -25,7 +25,7 @@ public enum Expected: Hashable, Sendable {
         case let .setMode(id): self = .mode(id)
         case let .setOption(id, value): self = .option(id: id, value: value)
         case let .setAutoAccept(on): self = .autoAccept(on)
-        case let .answer(permission, _): self = .answer(permission)
+        case let .answer(permission, _), let .answerQuestion(permission, _): self = .answer(permission)
         case let .unqueue(id): self = .unqueue(id)
         case .prompt, .cancel: return nil
         }

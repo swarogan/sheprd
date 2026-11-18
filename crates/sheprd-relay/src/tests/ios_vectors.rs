@@ -12,7 +12,7 @@ fn hex(bytes: &[u8]) -> String {
 
 fn check(name: &str, value: &Value) {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../ios/SheprdRemoteCore/Tests/SheprdRemoteCoreTests/Fixtures/relay")
+        .join("../../ios/SheprdRemoteCore/Tests/SheprdRelayTests/Fixtures/relay")
         .join(format!("{name}.json"));
     let text = format!("{}\n", serde_json::to_string_pretty(value).unwrap());
     if std::env::var_os("HERDR_UPDATE_FIXTURES").is_some() {

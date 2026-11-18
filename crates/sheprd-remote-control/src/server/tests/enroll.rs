@@ -145,3 +145,16 @@ fn host_revocations_are_listed_and_cleared() {
         Response::Done
     );
 }
+
+#[test]
+fn relays_read_or_take_an_offer() {
+    assert_eq!(
+        parse(args(&["relays", "--offer"])).unwrap(),
+        Invocation::Relays {
+            state_dir: None,
+            offer: true,
+        }
+    );
+    assert!(parse(args(&["relays", "--nope"])).is_err());
+    assert!(USAGE.contains("relays [--offer]"));
+}

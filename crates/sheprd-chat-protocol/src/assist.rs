@@ -207,3 +207,10 @@ pub fn next_mode(transcript: &Transcript) -> Option<Command> {
         id: mode.id.clone(),
     })
 }
+
+/// Switches the chat to the agent `step` places after (or, negative, before)
+/// the one it runs, while it may still switch.
+pub fn step_agent(transcript: &Transcript, step: isize) -> Option<Command> {
+    let agent = transcript.harnesses.as_ref()?.step(step)?;
+    Some(Command::SetAgent { agent })
+}

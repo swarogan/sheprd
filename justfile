@@ -210,7 +210,7 @@ bundle profile="release" features="":
     # Bluetooth pairing and presence run the Swift helper beside it; without
     # it the app pairs over the network only.
     xcrun swiftc -O -swift-version 6 macos/sheprd-nearby/main.swift macos/sheprd-nearby/Framing.swift \
-        macos/sheprd-nearby/Bonjour.swift -o "$app/Contents/MacOS/sheprd-nearby"
+        macos/sheprd-nearby/Bonjour.swift macos/sheprd-nearby/Central.swift -o "$app/Contents/MacOS/sheprd-nearby"
     # Herdr 2 terminals run in the pinned herdr-core beside it, as releases
     # bundle it. Fetched once per profile; an offline build goes on without.
     core=target/{{profile}}/herdr-core
@@ -349,11 +349,15 @@ relays-sign:
 test-relay-deploy:
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_relay_deploy.py
 
+# The push relay's DigitalOcean user data and secrets scripts.
+test-push-relay-deploy:
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_push_relay_deploy.py
+
 # The relay list editor behind `just relays-*`.
 test-relays:
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_relays.py
 
-ci: format-check check-file-size check-sorted check-i18n check-artwork lint test test-mockup-wait test-pr-closure test-relay-deploy test-relays
+ci: format-check check-file-size check-sorted check-i18n check-artwork lint test test-mockup-wait test-pr-closure test-relay-deploy test-push-relay-deploy test-relays
 
 # Tools are listed in scripts/setup-ci.sh; Docker for lint-linux is only checked.
 # Install the tools local CI-equivalent runs need, on macOS or Ubuntu.

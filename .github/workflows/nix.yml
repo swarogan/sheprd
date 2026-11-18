@@ -13,6 +13,8 @@ on:
         required: true
         type: string
   pull_request:
+    # ready_for_review starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - flake.nix
       - flake.lock
@@ -59,6 +61,7 @@ jobs:
     # Fork PRs use GitHub's approval boundary, as in ci.yml. Called from the
     # release workflow, event_name is its workflow_dispatch.
     if: >-
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       (github.event_name == 'pull_request' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&

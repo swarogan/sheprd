@@ -119,6 +119,7 @@ fn chats() -> Layout {
                 endpoint: EndpointId::random(),
                 agent: Some("claude".into()),
                 title: "Claude".into(),
+                named: true,
                 status: AgentStatus::Idle,
             }],
             terminals: Vec::new(),

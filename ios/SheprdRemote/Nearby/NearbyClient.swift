@@ -1,5 +1,6 @@
 import Foundation
 import SheprdRemoteCore
+import SheprdNearby
 
 /// The two nearby pairing calls over the network. They run before the
 /// phone knows the computer's CA, so this session accepts any certificate:

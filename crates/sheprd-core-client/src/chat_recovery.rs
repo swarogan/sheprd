@@ -194,7 +194,11 @@ pub fn opened(core: &Core, endpoint: &EndpointId, terminal: &str, session: Sessi
     let (previous, version) = read(core, endpoint)?;
     let (generation, lineage) = match previous {
         Some(record) if record.state == State::Closed => return Err(Error::Closed.into()),
-        Some(record) if record.state == State::Live && record.terminal == terminal => {
+        // `Starting` here is this chat's own agent switch (`switching`).
+        Some(record)
+            if matches!(record.state, State::Live | State::Starting)
+                && record.terminal == terminal =>
+        {
             (record.generation, record.previous)
         }
         Some(_) => return Err(Error::Moved.into()),
@@ -220,6 +224,27 @@ pub fn opened(core: &Core, endpoint: &EndpointId, terminal: &str, session: Sessi
         terminal: terminal.to_owned(),
         version: 1,
     };
+    write(core, endpoint, &record, version)
+}
+
+/// The chat on `terminal` is switching agents before its first prompt. Its
+/// record still names the agent and session it switches away from, whose
+/// end recovery would otherwise take for a lost chat and relaunch beside the
+/// new agent. The record waits as `Starting`, which a sweep never relaunches,
+/// until `opened` publishes the new agent's session and child. A chat whose
+/// first session never opened has no record and nothing to fence.
+pub fn switching(core: &Core, endpoint: &EndpointId, terminal: &str) -> Result<()> {
+    let (record, version) = read(core, endpoint)?;
+    let Some(mut record) = record else {
+        return Ok(());
+    };
+    match record.state {
+        State::Closed => return Err(Error::Closed.into()),
+        State::Starting if record.terminal == terminal => return Ok(()),
+        State::Live if record.terminal == terminal => {}
+        _ => return Err(Error::Moved.into()),
+    }
+    record.state = State::Starting;
     write(core, endpoint, &record, version)
 }
 

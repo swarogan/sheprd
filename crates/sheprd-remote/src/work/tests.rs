@@ -8,6 +8,8 @@ mod deadline;
 mod host_paths;
 mod uncertain_start;
 
+mod reuse;
+
 fn git(dir: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
         .arg("-C")

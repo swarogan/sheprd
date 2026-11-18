@@ -1,4 +1,5 @@
 use super::*;
+use crate::chat::start::AgentChoice;
 
 use sheprd_backend::RunState;
 use sheprd_client::protocol::AgentStatus;
@@ -116,8 +117,13 @@ fn a_chat_terminal_runs_the_program_with_its_endpoint_and_label() {
         (ENDPOINT_ENV.to_owned(), B.to_owned()),
         (PANE_ENV.to_owned(), "w1:p1".to_owned()),
     ]);
-    let spawn = spawn(Agent::Codex, Path::new("/opt/herdr-acp"), &endpoint, &extra);
-    assert_eq!(spawn.argv, ["/opt/herdr-acp", "codex"]);
+    let open = (Agent::Codex, AgentChoice::Open);
+    let spawn = spawn(open, Path::new("/opt/herdr-acp"), &endpoint, &extra);
+    assert_eq!(spawn.argv, ["/opt/herdr-acp", "--choose", "codex"]);
+    // A program that does not offer the choice is not asked for it.
+    let fixed = (Agent::Codex, AgentChoice::Fixed);
+    let older = super::spawn(fixed, Path::new("/opt/herdr-acp"), &endpoint, &extra);
+    assert_eq!(older.argv, ["/opt/herdr-acp", "codex"]);
     assert_eq!(
         spawn.env,
         [
@@ -140,7 +146,7 @@ fn a_chat_terminal_runs_the_program_with_its_endpoint_and_label() {
 fn the_terminal_a_chat_is_started_in_is_found_as_that_chat() {
     let endpoint: EndpointId = A.parse().unwrap();
     let spawn = spawn(
-        Agent::Claude,
+        (Agent::Claude, AgentChoice::Open),
         Path::new("herdr-acp"),
         &endpoint,
         &BTreeMap::new(),

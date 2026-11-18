@@ -35,6 +35,20 @@ targets:
       - Shared
     dependencies:
       - package: SheprdRemoteCore
+      # The modules only the app links: GitHub, nearby pairing, relays,
+      # terminal input, and voice commands. The extensions need Core alone.
+      - package: SheprdRemoteCore
+        product: SheprdGitHub
+      - package: SheprdRemoteCore
+        product: SheprdNearby
+      - package: SheprdRemoteCore
+        product: SheprdRelay
+      - package: SheprdRemoteCore
+        product: SheprdTerminal
+      - package: SheprdRemoteCore
+        product: SheprdTunnel
+      - package: SheprdRemoteCore
+        product: SheprdVoice
       - target: SheprdRemoteWidgets
       - target: SheprdRemoteNotifications
       - target: SheprdRemoteShare

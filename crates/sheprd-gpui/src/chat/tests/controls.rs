@@ -169,6 +169,7 @@ fn a_slash_completes_the_agents_commands(cx: &mut TestAppContext) {
     assert_eq!(
         next_command(&mut stream),
         Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: "/review src".into(),
             attachments: Vec::new(),
         }
@@ -188,6 +189,7 @@ fn up_recalls_the_last_prompt(cx: &mut TestAppContext) {
     assert_eq!(
         next_command(&mut stream),
         Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: "first try".into(),
             attachments: Vec::new(),
         }

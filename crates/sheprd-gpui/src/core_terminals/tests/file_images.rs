@@ -25,6 +25,7 @@ fn preparation_reserves_input_order(cx: &mut TestAppContext) {
             &ConnectTarget::Local,
             Request::Paths(vec![PathBuf::from("/before")]),
             &AtomicBool::new(false),
+            &mut |_, _| {},
         ))
         .ok()
         .unwrap();

@@ -21,6 +21,7 @@ fn blocked() -> ServerMessage {
             kind: Default::default(),
             name: "Allow".into(),
         }],
+        question: None,
         title: "Run ls".into(),
     }];
     ServerMessage::Snapshot {

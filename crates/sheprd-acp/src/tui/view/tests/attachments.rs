@@ -18,6 +18,7 @@ fn a_dragged_file_is_attached_and_goes_with_the_prompt() {
     assert_eq!(
         press(&mut view, KeyCode::Enter),
         Some(Out::Command(Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: "look".to_owned(),
             attachments: vec![Attachment {
                 path: file.display().to_string()

@@ -380,6 +380,8 @@ impl SheprdWindow {
                 | Command::GoToFile
                 | Command::WorktreeNotes
                 | Command::LastPane
+                | Command::RecentPane
+                | Command::RecentPaneReverse
                 | Command::Back
                 | Command::Forward
                 | Command::PreviousWorkspace
@@ -396,6 +398,7 @@ impl SheprdWindow {
                 | Command::ToggleStatusBar
                 | Command::ToggleMenuBar
                 | Command::ToggleModPanel
+                | Command::ToggleAllHosts
                 | Command::FocusNextRegion
                 | Command::FocusPreviousRegion
                 | Command::ToggleZenMode

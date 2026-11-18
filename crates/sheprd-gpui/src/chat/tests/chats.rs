@@ -242,6 +242,7 @@ fn a_command_sent_while_away_goes_out_on_reconnect() {
     harness.poll_until(|chats| !chats.pane("p1").unwrap().attached());
     let pane = harness.chats.pane_mut("p1").unwrap();
     pane.send(Command::Prompt {
+        origin: None,
         text: "hi".into(),
         attachments: Vec::new(),
     })
@@ -255,6 +256,7 @@ fn a_command_sent_while_away_goes_out_on_reconnect() {
     assert_eq!(
         command,
         Command::Prompt {
+            origin: None,
             text: "hi".into(),
             attachments: Vec::new(),
         }

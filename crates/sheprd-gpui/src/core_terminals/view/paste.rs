@@ -4,6 +4,7 @@
 
 use super::super::files::{self, Prepared, Request};
 use super::{CoreTerminalView, ToWindow};
+use crate::upload_chips::Upload;
 use gpui::{App, ExternalPaths, Keystroke, Window};
 use sheprd_backend::ClientPaneInputEvent;
 use std::path::PathBuf;
@@ -19,6 +20,10 @@ pub(super) struct Pending {
     held: Vec<ClientPaneInputEvent>,
     bytes: usize,
     fallback: Option<ClientPaneInputEvent>,
+    /// Dropped files being copied to the terminal's host, shown as chips,
+    /// and the share of the batch, in tenths of a percent, last drawn; none
+    /// until the sizes are known.
+    upload: Option<(Upload, Option<u64>)>,
 }
 
 impl Drop for Pending {
@@ -63,7 +68,21 @@ impl CoreTerminalView {
             held: Vec::new(),
             bytes: 0,
             fallback: None,
+            upload: None,
         });
+        tx
+    }
+
+    /// A drop's files copying to the host, answered through the sender.
+    #[cfg(test)]
+    pub(in crate::core_terminals) fn pending_upload_for_test(
+        &self,
+        upload: Upload,
+    ) -> mpsc::SyncSender<crate::Result<Prepared>> {
+        let tx = self.pending_paste_for_test();
+        if let Some(pending) = self.paste_pending.borrow_mut().as_mut() {
+            pending.upload = Some((upload, None));
+        }
         tx
     }
 
@@ -156,18 +175,64 @@ impl CoreTerminalView {
         };
         let (tx, result) = mpsc::sync_channel(1);
         let cancel = Arc::new(AtomicBool::new(false));
+        // Files dropped on a terminal on another host are copied there
+        // first, which can take a while; a WSL distribution maps them.
+        let upload = match &request {
+            Request::Paths(paths) if host_name(&target).is_some() => Some(Upload::new(paths)),
+            _ => None,
+        };
+        let reporter = upload.as_ref().map(Upload::reporter);
         *self.paste_pending.borrow_mut() = Some(Pending {
             cancel: cancel.clone(),
             result,
             held: Vec::new(),
             bytes: 0,
             fallback: None,
+            upload: upload.map(|upload| (upload, None)),
         });
         cx.background_executor()
             .spawn(async move {
-                let _ = tx.send(files::prepare(&target, request, &cancel));
+                if let (Some(reporter), Request::Paths(paths)) = (&reporter, &request) {
+                    reporter.measure(paths);
+                }
+                let prepared = files::prepare(&target, request, &cancel, &mut |sent, _| {
+                    if let Some(reporter) = &reporter {
+                        reporter.sent(sent);
+                    }
+                });
+                let _ = tx.send(prepared);
             })
             .detach();
+        true
+    }
+
+    /// Each file being copied to the host and how far it has come, and the
+    /// line for the batch, while a drop is copying.
+    pub(super) fn with_upload<R>(
+        &self,
+        read: impl FnOnce(&Upload, Option<&str>) -> R,
+    ) -> Option<R> {
+        let pending = self.paste_pending.borrow();
+        let (upload, _) = pending.as_ref()?.upload.as_ref()?;
+        Some(read(upload, self.paste_target.as_ref().and_then(host_name)))
+    }
+
+    /// Whether the copy's chips need drawing again: the sizes became known,
+    /// or the batch moved a tenth of a percent since they were last drawn,
+    /// so a fast copy does not redraw the terminal on every tick.
+    fn upload_moved(&self) -> bool {
+        let mut pending = self.paste_pending.borrow_mut();
+        let Some((upload, shown)) = pending.as_mut().and_then(|pending| pending.upload.as_mut())
+        else {
+            return false;
+        };
+        let sent = upload.bytes().map(|(sent, total)| {
+            u64::try_from(u128::from(sent) * 1000 / u128::from(total.max(1))).unwrap_or(u64::MAX)
+        });
+        if sent == *shown {
+            return false;
+        }
+        *shown = sent;
         true
     }
 
@@ -213,11 +278,14 @@ impl CoreTerminalView {
         }
     }
 
-    pub(super) fn poll_paste(&mut self, _: &mut Window, _: &mut App) {
+    /// Takes a finished paste; true when what the view draws changed: the
+    /// copy's chips moved or went away.
+    pub(super) fn poll_paste(&mut self, _: &mut Window, _: &mut App) -> bool {
+        let moved = self.upload_moved();
         let result = {
             let pending = self.paste_pending.borrow();
             let Some(pending) = pending.as_ref() else {
-                return;
+                return false;
             };
             if pending.cancel.load(Ordering::Acquire) || self.stale || self.ended() {
                 Some(Err(sheprd_client::Error::UploadCancelled.into()))
@@ -232,11 +300,12 @@ impl CoreTerminalView {
             }
         };
         let Some(result) = result else {
-            return;
+            return moved;
         };
         let Some(mut pending) = self.paste_pending.borrow_mut().take() else {
-            return;
+            return moved;
         };
+        let shown = moved || pending.upload.is_some();
         match result {
             Ok(mut prepared) => {
                 if prepared.text.is_empty()
@@ -244,7 +313,7 @@ impl CoreTerminalView {
                     && !self.link.queue_input(fallback)
                 {
                     self.paste_error = Some(crate::Error::ConnectionNotReady);
-                    return;
+                    return shown;
                 }
                 if !prepared.text.is_empty()
                     && !self
@@ -252,7 +321,7 @@ impl CoreTerminalView {
                         .queue_input(ClientPaneInputEvent::Paste(prepared.text.clone()))
                 {
                     self.paste_error = Some(crate::Error::ConnectionNotReady);
-                    return;
+                    return shown;
                 }
                 prepared.accepted();
                 for input in pending.held.drain(..) {
@@ -264,5 +333,17 @@ impl CoreTerminalView {
             }
             Err(error) => self.paste_error = Some(error),
         }
+        shown
+    }
+}
+
+/// The name of the host a terminal's files are copied to, for the copy's
+/// line; none where nothing is copied.
+fn host_name(target: &sheprd_client::ConnectTarget) -> Option<&str> {
+    match target {
+        sheprd_client::ConnectTarget::Ssh { target, .. } => Some(target),
+        #[cfg(feature = "cloud")]
+        sheprd_client::ConnectTarget::Cloud { machine, .. } => Some(machine),
+        _ => None,
     }
 }

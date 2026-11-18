@@ -12,6 +12,7 @@ pub(super) mod paste;
 mod pointer;
 mod quote;
 mod slide;
+mod uploads;
 
 pub(crate) use links::LinkClick;
 
@@ -177,6 +178,10 @@ pub(crate) struct CoreTerminalView {
 }
 
 impl CoreTerminalView {
+    pub(super) fn composing(&self) -> bool {
+        !self.marked.is_empty()
+    }
+
     /// The terminal it shows.
     pub(crate) fn terminal(&self) -> &TerminalId {
         &self.id
@@ -373,7 +378,9 @@ impl CoreTerminalView {
     /// The answers come with the screen, never made from a newer one, so
     /// a copy checks its rows against text at least as new as it read.
     pub(crate) fn poll(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        self.poll_paste(window, cx);
+        if self.poll_paste(window, cx) {
+            cx.notify();
+        }
         let (screen, answers) = self.link.mailbox.take_with_answers();
         let changed = screen.is_some();
         if let Some(mut screen) = screen {
@@ -617,6 +624,7 @@ impl Render for CoreTerminalView {
         highlights.extend(self.highlights());
         let find_bar = self.render_find(cx);
         let copy_badge = self.render_copy_mode(cx);
+        let uploads = self.render_uploads(cx);
         let link_rows = self.link_rows();
         let on_link = !link_rows.is_empty();
         let pane = self.pane;
@@ -721,6 +729,7 @@ impl Render for CoreTerminalView {
             })
             .when_some(find_bar, |body, bar| body.child(bar))
             .when_some(copy_badge, |body, badge| body.child(badge))
+            .when_some(uploads, |body, uploads| body.child(uploads))
             .when_some(status, |body, status| {
                 body.child(
                     div()

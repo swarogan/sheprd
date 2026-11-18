@@ -34,7 +34,7 @@ pub fn serve_command(target: &str, local: u16, name: &str, script: &str) -> Resu
     }
     let socket = remote_socket(name);
     let script = format!("socket={}\n{script}", quote(&socket));
-    let mut command = noninteractive(HostKeys::of(target));
+    let mut command = noninteractive(target, HostKeys::of(target));
     command.args([
         "-o",
         "ControlPath=none",

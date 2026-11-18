@@ -30,6 +30,7 @@ Closing or detaching the GUI must leave the daemons and their terminals running.
 | `crates/sheprd-backend` | The `Backend` and `Terminal` traits herdr-core implements and Herdr 1 does not yet: terminals listed, watched, attached, started, and ended, as `sheprd-protocol` cells and semantic input; no GPUI or transport |
 | `crates/sheprd-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `sheprd-backend` implementation; no GPUI |
 | `crates/sheprd-session` | What a session keeps that no terminal backend does (`docs/session-model.md`): the pane tree of a herdr-core tab and the reader of the app's saved tabs, shared by the app and the remote control daemon; no GPUI, runtime, or I/O |
+| `crates/sheprd-t3` | A client of T3 Code (`docs/t3-plan.md`): finding a local server, signing in with a pairing code, its WebSocket RPC with acknowledged streams, the thread list and threads it streams, and threads as `sheprd-chat-protocol` transcripts; the `sheprd-t3` command line; no GPUI or async runtime |
 | `crates/sheprd-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `sheprd-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
 | `crates/sheprd-tunnel` | The end-to-end tunnel inside a relay stream (`docs/relay-plan.md`, End-to-end encryption): the hybrid `Noise_IKpsk2` + ML-KEM-768 handshake for sessions and pairing, padded and rekeyed records, framing, and, with `tokio`, the tunnel over a stream; sans-I/O otherwise, and the iOS app's Swift copy is checked against its vectors; no GPUI |
 | `crates/sheprd-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting. Its `moonframe` feature, off by default, opens the app in a window Moonframe lays out (`just run-moonframe`, `docs/moonframe.md`): the shell and the header, activity bar, worktree rows, details pane and status bar are Luau in `moonframe/app`, over `app.sheprd` and its actions (`sidebar/hosted`); the terminals and pages stay one Rust view. It starts as the app does (`app::install_services`), with the app's menus and log; what looks for main windows goes through `window::main_window` |
@@ -41,10 +42,11 @@ Closing or detaching the GUI must leave the daemons and their terminals running.
 | `crates/sheprd-vcs` | Git on the checkouts the app shows: working-tree status, commit, push, and pull request creation, checkpoints kept as Git refs on each host, and the code search index; no GPUI (the app runs the workers from its views) |
 | `crates/sheprd-orchestrator` | The orchestrator's backend: issue and pull request records, the per-repository SQLite database, the GitHub, GitLab, and Beads readers, agent dispatch, and the worker; also the app's cache database and private-file setup; no GPUI (the app draws the sections and pages) |
 | `crates/sheprd-remote` | Machines beyond this computer's daemon: the cloud providers (one feature each), their config tables and saved devices, running scripts on any host, and Teleport's core; no GPUI (the app runs its jobs and draws its views) |
-| `crates/sheprd-remote-control` | Remote control from a phone. With the `server` feature, the `sheprd-remote-control` daemon: HTTPS with its own CA, dual-approval pairing, Web Push, and chats and terminal tabs through Herdr's API socket. Without it, what Sheprd uses: the daemon's control protocol, the `[remote]` config table, the user service install, and the pairing state; no GPUI, and no Tokio without `server` |
+| `crates/sheprd-remote-control` | Remote control from a phone. With the `server` feature, the `sheprd-remote-control` daemon: HTTPS with its own CA, dual-approval pairing, Web Push, chats and terminal tabs through Herdr's API socket, and desktops paired over Bluetooth let in over SSH through its relays (`ssh_access`), with the adding side's `desktop-pair` and `relay-connect` (`desktop`). Without it, what Sheprd uses: the daemon's control protocol, the `[remote]` config table, the user service install, and the pairing state; no GPUI, and no Tokio without `server` |
 | `crates/sheprd-apns` | The Apple Push Notification service from the provider's side: credentials, the provider token, the HTTP/2 sender, the relay client, and sealing, shared by the daemon and the push relay; no GPUI, and what a push says stays with its callers |
 | `crates/sheprd-push-relay` | The hosted relay that forwards sealed pushes to APNs for the iOS app (`docs/apns-relay-plan.md`): handles, credentials, rate limits, and a `Store` of revocations (memory by default, SQLite, or Postgres); no GPUI, and no token or payload may reach a store or its logs |
 | `crates/sheprd-relay` | The hosted relay that joins Sheprd peers without a direct path, replacing Tailscale (`docs/relay-plan.md`): QUIC with a WebSocket fallback, listeners proven by a P-256 key, dials allowed only for the dial keys a listener names while connected (pairing keys once), opaque end-to-end encrypted streams, no accounts or users to authorize, limits on connections, sessions, and bandwidth, Prometheus metrics, and a read-only dashboard behind a login; without its `server` feature, only the protocol (`wire`, `socket`, `route`) and `Endpoint` clients need; no GPUI, no state, and no address, route, or payload in its logs |
+| `crates/sheprd-relay-agent` | `sheprd-relay-agent`, run on an SSH machine so Sheprd reaches its SSH server through relays (`docs/relay-plan.md`, Sheprd and SSH machines): its route and tunnel keys, the `authorized` desktops, listening on each relay, and each admitted session spliced to `127.0.0.1:22` inside the end-to-end tunnel; `status --json` for enrolling; no GPUI |
 | `crates/sheprd-nearby` | `sheprd-nearby` on Linux and Windows: Sheprd's Bluetooth helper for nearby pairing and presence, BlueZ over `zbus` or WinRT's GATT server, speaking the macOS Swift helper's stdio protocol (`macos/sheprd-nearby`); no GPUI or Tokio |
 | `crates/sheprd-updater` | The in-app update service: release checks, signed manifests, staging, the install helpers, and the release identity (`APP_ID`, `APP_VERSION`); no GPUI |
 | `crates/sheprd-diagnostics` | The app's log file and crash reports: the bounded capture of the crates the app names, the writer thread and rotation, the reader the log window tails, the panic hook, and Windows minidumps; no GPUI |
@@ -52,6 +54,7 @@ Closing or detaching the GUI must leave the daemons and their terminals running.
 | `crates/sheprd-launcher` | Windows-only windowed launcher that starts `sheprd.exe` without a console window; std plus `MessageBoxW` for start failures |
 | `crates/sheprd-automation` | Automation scripts (`docs/automations.md`): the sandboxed Luau state, the step catalog, schedules, caps, and the plan a person approves; no GPUI or runtime |
 | `crates/sheprd-luau` | The sandboxed Luau state automations and mods share: safe libraries, memory and interrupt budgets, sealed globals, and the `Policy` each user removes beyond them; no GPUI |
+| `crates/sheprd-memory` | Agent memory (`sheprd memory`): one private SQLite file per repository on its host, keyed by the Git common directory every worktree shares; FTS5 search, recall for chat prompts, pins, and refusal of secrets and prompt markup; shared by the app's CLI and `sheprd-acp`; no GPUI or runtime |
 | `crates/sheprd-mods` | Mods (`docs/mods-plan.md`): the `mod.toml` manifest, a mod's sources and the hash approval pins, the element tree a view returns, the state mods read, effects, and the sandboxed runtime; no GPUI (the app runs mods on worker threads and draws their trees) |
 | `crates/sheprd-automate` | The automation daemon and its command line: schedules approved scripts per host, runs their steps through the `herdr` CLI, keeps state in SQLite, and answers `--json` reports for Sheprd |
 | `crates/embed-resource` | No-op stand-in for GPUI's `embed-resource` build dependency, patched in so GPUI embeds no Windows manifest beside `crates/sheprd-gpui/windows.manifest`; not a production crate |
@@ -251,17 +254,26 @@ what was deferred to CI.
   CLI tests, split like `checks` into parallel `default` and `all` legs. The
   `windows-native` job runs `live_gui` (the `test-gui` and `test-sidebar`
   equivalents) against a pinned `herdr.exe`, and the release-mode performance
-  budget, on both Windows runners, except the live-daemon test on
+  budget, on both Windows runners, on main and on pull requests that change
+  what the app is built from (`scripts/ci-changes.sh`), except the live-daemon test on
   ARM64, where the emulated daemon ignores Enter; the optimized Windows build
   and its installer run in `windows-package` when their inputs change, and in
   the release workflow, which only smoke-tests the CLI of the bytes it ships
   and requires CI to have passed on the commit. Keep the `cfg(unix)`/`cfg(windows)`
   split honest and say plainly what a platform cannot do instead of stubbing
   behavior that appears to work.
+- Pull requests run CI on `ubuntu-24.04` alone and lint and test only the
+  crates their changes reach (`scripts/ci-scope.py`). The merge queue, `main`,
+  and a pull request that changes a platform `cfg` line or file, a
+  dependency (any `Cargo.toml`, `Cargo.lock`) or the toolchain, or the CI
+  selection itself, or carries the `windows`, `macos`, or `full-ci` label,
+  run every platform over the whole workspace.
 - A `cfg` gate is only proven on the platform it names. For changes that touch
   one, rely on the corresponding platform CI jobs: a macOS run cannot see a
-  Linux-only gate, and neither can the Windows cross-check. `just lint-linux`
-  and `just lint-windows` are available for local investigation when needed.
+  Linux-only gate, and neither can the Windows cross-check. Code inside an
+  existing gate changes no `cfg` line, so label such a pull request
+  `windows` or `macos`. `just lint-linux` and `just lint-windows` are
+  available for local investigation when needed.
 - Documentation-only changes need command/path/link review and `git diff --check`; do not claim a code test run that did not happen.
 - Add deterministic tests for invariants: ordering, cancellation, fragmentation, revision fencing, error paths, geometry, and cleanup. Prefer explicit coordination and bounded waits over timing guesses.
 - Test pure session/CLI/geometry logic without a socket or window where possible. Exercise public behavior with mock peers and headless GPUI tests where integration matters.

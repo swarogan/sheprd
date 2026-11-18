@@ -4,6 +4,7 @@ use std::path::Path;
 
 #[cfg(unix)]
 mod checkout;
+mod memory_lines;
 
 #[test]
 fn notes_name_their_repository_by_its_directory() {

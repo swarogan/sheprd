@@ -1,0 +1,11 @@
+{
+ "data": {
+  "repository": null
+ },
+ "errors": [
+  {
+   "message": "Could not resolve to a Repository",
+   "type": "NOT_FOUND"
+  }
+ ]
+}

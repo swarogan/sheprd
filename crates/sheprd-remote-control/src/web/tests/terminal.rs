@@ -18,6 +18,7 @@ fn with_terminal(dir: &std::path::Path) -> Shared {
             worktree: None,
             session: None,
             chats: vec![crate::hub::ChatRow {
+                named: true,
                 pane: "c1".into(),
                 tab: "t1".into(),
                 endpoint: sheprd_chat_protocol::EndpointId::random(),

@@ -1,0 +1,209 @@
+{
+ "data": {
+  "repository": {
+   "nameWithOwner": "acme/app",
+   "pullRequest": {
+    "number": 42,
+    "title": "Read pull requests\u202e on the phone\u0007",
+    "url": "https://github.com/acme/app/pull/42",
+    "state": "OPEN",
+    "isDraft": false,
+    "reviewDecision": "CHANGES_REQUESTED",
+    "body": "The phone asks GitHub itself.\r\n\n- One query\n- One log\u0000\n\nCloses #12.",
+    "createdAt": "2026-11-14T09:00:00Z",
+    "additions": 619,
+    "deletions": 50,
+    "changedFiles": 5,
+    "baseRefName": "main",
+    "headRefName": "feature",
+    "author": {
+     "login": "ana"
+    },
+    "reviewRequests": {
+     "nodes": [
+      {
+       "requestedReviewer": {
+        "__typename": "Team",
+        "slug": "ios",
+        "organization": {
+         "login": "acme"
+        }
+       }
+      },
+      {
+       "requestedReviewer": {
+        "__typename": "User",
+        "login": "bo"
+       }
+      },
+      null
+     ]
+    },
+    "latestReviews": {
+     "nodes": [
+      {
+       "state": "APPROVED",
+       "author": {
+        "login": "hubot"
+       }
+      },
+      {
+       "state": "CHANGES_REQUESTED",
+       "author": {
+        "login": "mona"
+       }
+      },
+      {
+       "state": "COMMENTED",
+       "author": {
+        "login": "bo"
+       }
+      },
+      {
+       "state": "COMMENTED",
+       "author": {
+        "login": "ana"
+       }
+      },
+      {
+       "state": "PENDING",
+       "author": {
+        "login": "drafty"
+       }
+      }
+     ]
+    },
+    "timelineItems": {
+     "totalCount": 9,
+     "pageInfo": {
+      "hasPreviousPage": false
+     },
+     "nodes": [
+      {
+       "__typename": "PullRequestCommit",
+       "id": "C1",
+       "commit": {
+        "abbreviatedOid": "3f2a91c",
+        "messageHeadline": "feat: read it",
+        "committedDate": "2026-11-14T09:05:00Z",
+        "author": {
+         "user": {
+          "login": "ana"
+         },
+         "name": "Ana"
+        }
+       }
+      },
+      {
+       "__typename": "ReviewRequestedEvent",
+       "id": "RR1",
+       "actor": {
+        "login": "ana"
+       },
+       "createdAt": "2026-11-14T09:06:00Z",
+       "requestedReviewer": {
+        "__typename": "User",
+        "login": "hubot"
+       }
+      },
+      {
+       "__typename": "PullRequestReview",
+       "id": "R1",
+       "author": {
+        "login": "hubot"
+       },
+       "createdAt": "2026-11-14T11:00:00Z",
+       "submittedAt": "2026-11-14T11:01:00Z",
+       "state": "APPROVED",
+       "body": "Lovely.",
+       "comments": {
+        "totalCount": 0,
+        "nodes": []
+       }
+      },
+      {
+       "__typename": "PullRequestReview",
+       "id": "R2",
+       "author": {
+        "login": "mona"
+       },
+       "createdAt": "2026-11-14T12:00:00Z",
+       "submittedAt": "2026-11-14T12:00:00Z",
+       "state": "CHANGES_REQUESTED",
+       "body": "",
+       "comments": {
+        "totalCount": 2,
+        "nodes": [
+         {
+          "path": "Sources/Lease.swift",
+          "line": 88,
+          "originalLine": 80,
+          "body": "A 401 should drop the lease."
+         },
+         {
+          "path": "Sources/Old.swift",
+          "line": null,
+          "originalLine": 12,
+          "body": "Outdated."
+         }
+        ]
+       }
+      },
+      {
+       "__typename": "PullRequestReview",
+       "id": "R3",
+       "author": {
+        "login": "bo"
+       },
+       "createdAt": "2026-11-14T12:10:00Z",
+       "submittedAt": null,
+       "state": "COMMENTED",
+       "body": "",
+       "comments": {
+        "totalCount": 0,
+        "nodes": []
+       }
+      },
+      {
+       "__typename": "PullRequestReview",
+       "id": "R4",
+       "author": {
+        "login": "drafty"
+       },
+       "createdAt": "2026-11-14T12:20:00Z",
+       "submittedAt": null,
+       "state": "PENDING",
+       "body": "not yet",
+       "comments": {
+        "totalCount": 0,
+        "nodes": []
+       }
+      },
+      {
+       "__typename": "HeadRefForcePushedEvent",
+       "id": "F1",
+       "actor": {
+        "login": "ana"
+       },
+       "createdAt": "2026-11-14T13:00:00Z",
+       "afterCommit": {
+        "abbreviatedOid": "9e8d7c6"
+       }
+      },
+      {
+       "__typename": "IssueComment",
+       "id": "IC1",
+       "author": null,
+       "createdAt": "2026-11-14T13:20:00Z",
+       "body": "Good catch, fixed in 9e8d7c6."
+      },
+      {
+       "__typename": "LabeledEvent",
+       "id": "L1"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

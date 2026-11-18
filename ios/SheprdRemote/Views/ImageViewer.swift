@@ -1,10 +1,14 @@
+import SheprdRemoteCore
 import SwiftUI
 import UIKit
 
 /// A picture in the chat that opens full screen when tapped, growing out of
-/// where it sits and shrinking back when closed.
+/// where it sits and shrinking back when closed. Swiping left and right
+/// there goes through the chat's other pictures.
 struct ChatPicture: View {
+    let picture: GalleryPicture
     let image: UIImage
+    @Environment(\.chatPictures) private var pictures
     @State private var showing = false
     @Namespace private var zoom
 
@@ -18,45 +22,143 @@ struct ChatPicture: View {
         .accessibilityLabel("Picture")
         .accessibilityHint("Shows it full screen")
         .fullScreenCover(isPresented: $showing) {
-            ImageViewer(image: image)
+            let all = pictures.contains { $0.id == picture.id } ? pictures : [picture]
+            ImageViewer(pictures: all, selection: picture.id, first: image)
                 .navigationTransition(.zoom(sourceID: "picture", in: zoom))
         }
     }
 }
 
-/// One picture on black: pinch or double-tap to zoom, drag to look around,
-/// swipe down or tap ✕ to close.
+/// Pictures on black, one at a time: swipe left and right between them,
+/// pinch or double-tap to zoom, drag to look around, swipe down or tap ✕
+/// to close.
 struct ImageViewer: View {
     @Environment(\.dismiss) private var dismiss
-    let image: UIImage
+    let pictures: [GalleryPicture]
+    /// Offered for a picture with a tab: closes the viewer, and the caller
+    /// opens that tab.
+    var openTab: ((GalleryPicture) -> Void)?
+    @State private var selection: String
     @State private var chromeHidden = false
+    /// The pictures decoded so far, kept only around the one shown.
+    @State private var decoded: [String: UIImage]
+
+    /// `first` is the picture at `selection`, already decoded where it was
+    /// tapped, so it shows at once as the viewer grows out of it.
+    init(pictures: [GalleryPicture], selection: String, first: UIImage? = nil, openTab: ((GalleryPicture) -> Void)? = nil) {
+        self.pictures = pictures
+        self.openTab = openTab
+        _selection = State(initialValue: selection)
+        _decoded = State(initialValue: first.map { [selection: $0] } ?? [:])
+    }
 
     var body: some View {
-        ZoomableImage(image: image, tapped: { chromeHidden.toggle() }, closed: { dismiss() })
-            .ignoresSafeArea()
-            .background(.black)
-            .overlay(alignment: .top) {
-                if !chromeHidden {
-                    HStack {
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark").font(.body.bold()).frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.glass).buttonBorderShape(.circle)
-                        .accessibilityLabel("Close")
-                        Spacer()
-                        ShareLink(item: Image(uiImage: image), preview: SharePreview("Picture", image: Image(uiImage: image))) {
-                            Image(systemName: "square.and.arrow.up").font(.body.bold()).frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.glass).buttonBorderShape(.circle)
-                        .accessibilityLabel("Share")
+        TabView(selection: $selection) {
+            ForEach(pictures) { picture in
+                Group {
+                    if let image = decoded[picture.id] {
+                        ZoomableImage(image: image, tapped: { chromeHidden.toggle() }, closed: { dismiss() })
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding(.horizontal, 16)
-                    .transition(.opacity)
+                }
+                .tag(picture.id)
+                // Again once `forgetFarPictures` let it go and it comes
+                // back into view.
+                .task(id: decoded[picture.id] == nil) {
+                    guard decoded[picture.id] == nil, let image = await picture.image.decoded() else { return }
+                    decoded[picture.id] = image
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: chromeHidden)
-            .statusBarHidden(chromeHidden)
-            .environment(\.colorScheme, .dark)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .ignoresSafeArea()
+        .background(.black)
+        .onChange(of: selection) { forgetFarPictures() }
+        .overlay(alignment: .top) {
+            if !chromeHidden { chrome.transition(.opacity) }
+        }
+        .overlay(alignment: .bottom) {
+            if !chromeHidden, let openTab, let picture = pictures.first(where: { $0.id == selection }), picture.tab != nil {
+                tabButton(picture, open: openTab).transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: chromeHidden)
+        .statusBarHidden(chromeHidden)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var chrome: some View {
+        HStack(alignment: .top) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.body.bold()).frame(width: 36, height: 36)
+            }
+            .buttonStyle(.glass).buttonBorderShape(.circle)
+            .accessibilityLabel("Close")
+            Spacer(minLength: 12)
+            position
+            Spacer(minLength: 12)
+            if let image = decoded[selection] {
+                ShareLink(item: Image(uiImage: image), preview: SharePreview("Picture", image: Image(uiImage: image))) {
+                    Image(systemName: "square.and.arrow.up").font(.body.bold()).frame(width: 36, height: 36)
+                }
+                .buttonStyle(.glass).buttonBorderShape(.circle)
+                .accessibilityLabel("Share")
+            } else {
+                Color.clear.frame(width: 36, height: 36)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// One tap back to the tab the picture came from, with its agent.
+    private func tabButton(_ picture: GalleryPicture, open: @escaping (GalleryPicture) -> Void) -> some View {
+        Button {
+            open(picture)
+            dismiss()
+        } label: {
+            HStack(spacing: 10) {
+                AgentIcon(agent: picture.agent, size: 26)
+                Text(picture.caption ?? String(localized: "Open Tab")).font(.body.weight(.semibold)).lineLimit(1)
+                Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 12)
+        .accessibilityLabel("Open \(picture.caption ?? String(localized: "the tab"))")
+    }
+
+    /// Which picture this is, and the tab it came from, when there is more
+    /// than one to swipe through.
+    @ViewBuilder
+    private var position: some View {
+        let index = pictures.firstIndex { $0.id == selection }
+        // The button below names the tab when it is there.
+        let caption = index.flatMap { openTab == nil || pictures[$0].tab == nil ? pictures[$0].caption : nil }
+        if pictures.count > 1 || caption != nil {
+            VStack(spacing: 1) {
+                if let index, pictures.count > 1 {
+                    Text("\(index + 1) of \(pictures.count)").font(.subheadline.weight(.semibold)).monospacedDigit()
+                }
+                if let caption {
+                    Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .glassEffect(in: .capsule)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Keeps the pictures beside the one shown, so swiping on is instant,
+    /// and lets the rest go: a long chat may hold many large pictures.
+    private func forgetFarPictures() {
+        guard let index = pictures.firstIndex(where: { $0.id == selection }) else { return }
+        let near = Set(pictures[max(index - 1, 0)...min(index + 1, pictures.count - 1)].map(\.id))
+        decoded = decoded.filter { near.contains($0.key) }
     }
 }
 

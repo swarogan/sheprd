@@ -6,9 +6,12 @@ use std::{ffi::OsString, net::IpAddr, path::PathBuf};
 
 mod bonjour;
 mod control_socket;
+mod desktop;
 mod enroll;
 mod github;
 mod idle;
+mod relay_enroll;
+mod relay_options;
 mod shutdown;
 
 fn args(list: &[&str]) -> Vec<OsString> {

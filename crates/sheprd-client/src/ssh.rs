@@ -342,7 +342,9 @@ pub struct Destination {
 pub fn resolve_destination(target: &str) -> Result<Destination> {
     validate_target(target)?;
     let mut command = crate::environment::command("ssh");
-    command.args(["-G", "--", target]);
+    command
+        .args(crate::relay_host::options(target))
+        .args(["-G", "--", target]);
     let (status, output) = run(&mut command, RESOLVE_TIMEOUT, || false)?;
     if !status.success() {
         tracing::warn!(category = "resolve", %status, "ssh -G failed");
@@ -481,17 +483,26 @@ pub(crate) fn command(target: &str, remote_command: &str) -> Command {
 /// [`command`] checking host keys as `keys` says rather than as the user's
 /// saved choice for `target` does.
 fn command_with(target: &str, remote_command: &str, keys: HostKeys) -> Command {
-    let mut command = noninteractive(keys);
+    let mut command = noninteractive(target, keys);
     command.args(["-o", "ClearAllForwardings=yes", "--", target]);
     command.arg(remote_command);
     command
 }
 
 /// `ssh` with the bridge's connection policy and nothing to connect yet.
-fn noninteractive(keys: HostKeys) -> Command {
+fn noninteractive(target: &str, keys: HostKeys) -> Command {
     let mut command = crate::environment::command("ssh");
-    command.args(keys.options()).args(POLICY);
+    command.args(target_options(target, keys)).args(POLICY);
     command
+}
+
+/// Options placed before [`POLICY`], which they override: a relay machine's
+/// proxy (`crate::relay_host`) first, so its own known hosts win, then the
+/// user's host key choice.
+pub(crate) fn target_options(target: &str, keys: HostKeys) -> Vec<String> {
+    let mut options = crate::relay_host::options(target);
+    options.extend(keys.options().iter().map(|&option| option.to_owned()));
+    options
 }
 
 /// The bridge's connection policy. OpenSSH keeps the first value it reads for
@@ -553,7 +564,7 @@ pub fn forward_command(
         Some(std::net::IpAddr::V4(address)) => address.to_string(),
         Some(std::net::IpAddr::V6(address)) => format!("[{address}]"),
     };
-    let mut command = noninteractive(HostKeys::of(target));
+    let mut command = noninteractive(target, HostKeys::of(target));
     command.args([
         "-N",
         "-o",

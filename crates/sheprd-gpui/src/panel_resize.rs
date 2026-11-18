@@ -51,8 +51,12 @@ pub(crate) enum PanelDrag {
     ReviewFiles,
     /// The panel of mod sections on the window's right.
     ModPanel,
+    /// The rail beside an agent chat's conversation.
+    ChatRail,
 }
 
+/// The rail beside an agent chat's conversation.
+pub(crate) const CHAT_RAIL: PanelWidth = PanelWidth::new(240., 180.);
 /// The notes panel beside a review or an annotated page.
 pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
 /// The panel of mod sections on the window's right.
@@ -212,6 +216,7 @@ impl crate::SheprdWindow {
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((&mut self.review_files_width, Side::Left)),
             PanelDrag::ModPanel => Some((&mut self.mod_panel_width, Side::Right)),
+            PanelDrag::ChatRail => Some((&mut self.chat_rail_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }
@@ -224,6 +229,7 @@ impl crate::SheprdWindow {
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((self.review_files_width, Side::Left)),
             PanelDrag::ModPanel => Some((self.mod_panel_width, Side::Right)),
+            PanelDrag::ChatRail => Some((self.chat_rail_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }

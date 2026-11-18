@@ -113,6 +113,7 @@ fn home() -> Home {
         endpoint: EndpointId::random(),
         agent: None,
         title: "Starting".into(),
+        named: true,
         status: AgentStatus::Unknown,
     });
     let summary = Summary {
@@ -121,6 +122,8 @@ fn home() -> Home {
         question: Some(permission(3)),
         questions: 1,
         last_text: Some("Added Equalize Splits.".into()),
+        first_prompt: None,
+        row_summary: None,
         turn_started_ms: Some(1_761_670_000_000),
         last_turn_ended_ms: None,
         agent: "Claude".into(),
@@ -144,6 +147,8 @@ fn home() -> Home {
         }],
     };
     Home::project(Sources {
+        checkouts: &Default::default(),
+        recognized: &Default::default(),
         computer: "MacBook Pro",
         fingerprint: &"AB".repeat(32),
         layout: &layout,

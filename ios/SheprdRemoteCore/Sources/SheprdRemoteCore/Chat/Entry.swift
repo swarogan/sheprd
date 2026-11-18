@@ -288,16 +288,65 @@ public struct Permission: Codable, Hashable, Sendable, Identifiable {
     public var callId: String?
     public var id: PermissionId
     public var options: [PermissionOption]
+    /// The question in full, when the agent asked one with choices; it is
+    /// answered with `ChatCommand.answerQuestion`. Older programs omit it.
+    public var question: AskedQuestion?
     public var title: String
 
     enum CodingKeys: String, CodingKey {
-        case id, options, title
+        case id, options, question, title
         case callId = "call_id"
     }
 
     /// What auto-accepting picks: allowing once, else always.
     public var allowOption: PermissionOption? {
         options.first { $0.kind == .allowOnce } ?? options.first { $0.kind == .allowAlways }
+    }
+}
+
+/// `sheprd_chat_protocol::Question`: the question, its options with what
+/// the agent said about each, and whether several may be chosen.
+public struct AskedQuestion: Codable, Hashable, Sendable {
+    public var header: String?
+    public var multiple: Bool
+    public var options: [Option]
+    public var text: String
+
+    public struct Option: Codable, Hashable, Sendable, Identifiable {
+        public var description: String?
+        public var label: String
+        public var id: String { label }
+
+        public init(label: String, description: String? = nil) {
+            self.label = label
+            self.description = description
+        }
+    }
+
+    enum CodingKeys: String, CodingKey { case header, multiple, options, text }
+
+    public init(text: String, header: String? = nil, multiple: Bool = false, options: [Option]) {
+        self.text = text
+        self.header = header
+        self.multiple = multiple
+        self.options = options
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        header = try c.decodeIfPresent(String.self, forKey: .header)
+        multiple = try c.decodeIfPresent(Bool.self, forKey: .multiple) ?? false
+        options = try c.decodeIfPresent([Option].self, forKey: .options) ?? []
+        text = try c.decode(String.self, forKey: .text)
+    }
+
+    /// What to send: the chosen labels in the order offered, then the
+    /// person's own words. With one choice only, own words replace it.
+    public func answers(chosen: Set<String>, own: String) -> [String] {
+        let own = own.trimmingCharacters(in: .whitespacesAndNewlines)
+        let labels = options.map(\.label).filter(chosen.contains)
+        if !multiple { return own.isEmpty ? Array(labels.prefix(1)) : [own] }
+        return own.isEmpty ? labels : labels + [own]
     }
 }
 

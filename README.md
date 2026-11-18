@@ -150,6 +150,10 @@ is required. It joins an existing core first, otherwise starts your own
 `herdr-core` or the bundled companion. Source builds need a usable herdr-core
 binary for this path.
 
+Once Sheprd finds that Herdr 1 is not installed, it keeps using herdr-core
+without retrying Herdr 1 in the background. If you install Herdr 1 later,
+use Reconnect to check for it.
+
 If you already use [Herdr 1](https://herdr.dev/), Sheprd connects to its sessions
 and may start your installed `herdr server` when the target session is absent.
 It does not upgrade or migrate your personal daemon or move existing Herdr 1

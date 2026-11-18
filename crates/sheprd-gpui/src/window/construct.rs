@@ -111,6 +111,7 @@ impl SheprdWindow {
                 this.publish_server_keymap(cx);
             } else {
                 this.shift_taps.cancel();
+                this.recent_panes.finish();
                 this.disarm_prefix();
                 this.cancel_terminal_mouse(cx);
                 // A drag cut short is dropped; a selection kept for an
@@ -161,6 +162,7 @@ impl SheprdWindow {
             browser,
             catalog,
             cell_width: 9.,
+            chat_rail_width: crate::panel_resize::CHAT_RAIL,
             chats: Default::default(),
             checkpoints: Default::default(),
             chrome_region: None,
@@ -267,6 +269,7 @@ impl SheprdWindow {
             prefix_armed: false,
             presentation: Default::default(),
             pressed_terminal_link: None,
+            recent_panes: Default::default(),
             regions: Vec::new(),
             remote_browser: Vec::new(),
             remote_updates: Default::default(),

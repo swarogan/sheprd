@@ -23,3 +23,9 @@
 /relays.json
   Content-Type: application/json; charset=utf-8
   Cache-Control: public, max-age=300
+
+# The relay deploy page sends a DigitalOcean token to api.digitalocean.com
+# only, and reads the relay's files from GitHub; nothing else may load or run.
+/relay/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://api.digitalocean.com https://raw.githubusercontent.com https://*.sslip.io; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer

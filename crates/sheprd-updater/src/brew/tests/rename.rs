@@ -104,10 +104,11 @@ fn receipt_blocks_a_self_move_even_when_homebrew_is_untrusted() -> anyhow::Resul
     fs::set_permissions(&prefix, fs::Permissions::from_mode(0o777))?;
     let uid = fs::metadata(root.path())?.uid();
     assert!(locate(&bundle, uid, root.path().into(), [prefix.clone()]).is_none());
-    assert!(recorded_in(&bundle, [prefix]));
-    assert!(!recorded_in(
-        &root.path().join("Other.app"),
-        [root.path().join("none")]
-    ));
+    // The receipt also names the cask to uninstall.
+    assert_eq!(recording_cask_in(&bundle, [prefix]), Some(TOKEN));
+    assert_eq!(
+        recording_cask_in(&root.path().join("Other.app"), [root.path().join("none")]),
+        None
+    );
     Ok(())
 }

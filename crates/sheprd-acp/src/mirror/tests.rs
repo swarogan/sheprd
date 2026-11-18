@@ -5,6 +5,7 @@ use crate::session::Attach;
 use sheprd_chat_protocol::{Command, CommandId, Entry, EntryId, EntryKind, PermissionId, Status};
 
 mod activities;
+mod notes;
 
 fn transcript(lines: &[&str]) -> Transcript {
     Transcript {
@@ -45,6 +46,7 @@ fn every_client_command_is_refused_without_changing_the_transcript() {
     );
     for command in [
         Command::Prompt {
+            origin: None,
             text: "Do work".into(),
             attachments: vec![],
         },

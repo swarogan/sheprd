@@ -37,12 +37,17 @@ pub enum Phase {
         code: String,
         /// `PairingState::Claimed::app`: another computer's app claimed it.
         app: Option<String>,
+        /// `PairingState::Claimed::ssh`: another computer's Sheprd asks to
+        /// open terminals here over SSH.
+        ssh: bool,
         /// The answer given, once sent: `Some(true)` waits for the daemon
         /// to report the device approved.
         answer: Option<Answer>,
     },
     Approved {
         device_name: String,
+        /// Another computer, let in over SSH rather than to the chats.
+        ssh: bool,
     },
     Denied,
     /// The claimed pairing ran out before an answer, or was voided.
@@ -80,6 +85,8 @@ pub struct Pairing {
     /// The hosts ticked when the user allowed the phone, for it to be
     /// paired with too.
     hosts: Vec<control::hosts::HostId>,
+    /// The dialog's "Share GitHub sign-in with this phone" switch.
+    share_github: bool,
 }
 
 impl Pairing {
@@ -96,11 +103,23 @@ impl Pairing {
             last_poll: None,
             preferred_address: None,
             hosts: Vec::new(),
+            share_github: true,
         }
     }
 
     pub fn phase(&self) -> &Phase {
         &self.phase
+    }
+
+    /// Whether an approval lets the phone borrow this computer's GitHub
+    /// sign-in; on unless the user turns it off.
+    pub fn share_github(&self) -> bool {
+        self.share_github
+    }
+
+    /// The dialog's switch, read when the approval is sent.
+    pub fn set_share_github(&mut self, share: bool) {
+        self.share_github = share;
     }
 
     /// Select an address before the first offer arrives, for a CLI-opened dialog.
@@ -164,6 +183,7 @@ impl Pairing {
                 } else {
                     Vec::new()
                 },
+                share_github: !*allow || self.share_github,
             },
             Phase::Showing { offer, .. } | Phase::Claimed { offer, .. } if poll_due => {
                 Request::Pairing {
@@ -290,19 +310,25 @@ impl Pairing {
                     device_name,
                     code,
                     app,
+                    ssh,
                 },
             ) => Phase::Claimed {
                 offer,
                 device_name,
                 code,
                 app,
+                ssh,
                 answer: None,
             },
-            (Phase::Claimed { device_name, .. }, PairingState::Approved { .. }) => {
-                Phase::Approved { device_name }
-            }
+            (
+                Phase::Claimed {
+                    device_name, ssh, ..
+                },
+                PairingState::Approved { .. },
+            ) => Phase::Approved { device_name, ssh },
             (Phase::Showing { .. }, PairingState::Approved { .. }) => Phase::Approved {
                 device_name: "The device".into(),
+                ssh: false,
             },
             (_, PairingState::Denied) => Phase::Denied,
             (phase, PairingState::Expired) => {

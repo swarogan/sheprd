@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy a Sheprd relay · DigitalOcean</title>
+<meta name="description" content="Deploy your own Sheprd relay on a DigitalOcean droplet in one click, so your phone reaches your computer from any network.">
+<meta property="og:title" content="Deploy a Sheprd relay on DigitalOcean">
+<meta property="og:description" content="Your own relay, QUIC and WebSockets, on a small droplet: one click, no DNS to set up.">
+<meta property="og:image" content="https://sheprd.org/assets/sheprd-social-preview.png?v=2">
+<meta property="og:site_name" content="Sheprd">
+<meta property="og:url" content="https://sheprd.org/relay/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://sheprd.org/relay/">
+<link rel="icon" href="/assets/paw.svg">
+<link rel="stylesheet" href="/assets/base.css">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/relay/deploy.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="brand" href="/" aria-label="Sheprd home">
+      <img src="/assets/paw.svg" alt="" width="34" height="34">
+      <span>Sheprd</span>
+    </a>
+    <nav aria-label="Site">
+      <ul>
+        <li class="nav-docs"><a href="/docs/">Docs</a></li>
+        <li><a class="nav-install" href="/#get">Get Sheprd</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="tf rd wrap">
+  <section class="tf-hero" aria-labelledby="rd-h">
+    <p class="kicker"><span class="st st-experimental">Experimental</span> DigitalOcean · QUIC and WebSockets</p>
+    <h1 id="rd-h">Deploy your own relay.</h1>
+    <p class="dek">A relay joins your phone to your computer when they have no direct path. This page creates a small DigitalOcean droplet in each region you choose, running the signed relay image with a Let's Encrypt certificate and no DNS to set up.</p>
+    <p class="tf-phone">It sees only end-to-end encrypted bytes and keeps nothing on disk. Read <a href="/docs/relays/">Relays</a> for how it works.</p>
+  </section>
+
+  <form id="rd-form" class="rd-form" novalidate>
+    <fieldset>
+      <legend><span class="tf-n" aria-hidden="true">1</span> A DigitalOcean token</legend>
+      <p>In DigitalOcean, open <a href="https://cloud.digitalocean.com/account/api/tokens" rel="noopener" target="_blank">API &gt; Tokens</a> and generate a token that expires soon, with <strong>Custom Scopes</strong>: <code>droplet</code> create and read, <code>ssh_key</code> read, and <code>tag</code> create. Or use <strong>Full Access</strong>.</p>
+      <label for="rd-token">Token</label>
+      <input id="rd-token" type="password" autocomplete="off" spellcheck="false" placeholder="dop_v1_…">
+      <p class="rd-hint">It stays in this page: sent only to api.digitalocean.com, never stored, and forgotten when you close the tab. Delete it in DigitalOcean once your relays answer.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="tf-n" aria-hidden="true">2</span> Regions</legend>
+      <p>One droplet per region. Pick the ones near you and your computers; one is enough.</p>
+      <div class="rd-grid">
+        <label><input type="checkbox" name="region" value="nyc3" checked> New York (nyc3)</label>
+        <label><input type="checkbox" name="region" value="nyc1"> New York (nyc1)</label>
+        <label><input type="checkbox" name="region" value="sfo3"> San Francisco (sfo3)</label>
+        <label><input type="checkbox" name="region" value="atl1"> Atlanta (atl1)</label>
+        <label><input type="checkbox" name="region" value="tor1"> Toronto (tor1)</label>
+        <label><input type="checkbox" name="region" value="lon1"> London (lon1)</label>
+        <label><input type="checkbox" name="region" value="ams3"> Amsterdam (ams3)</label>
+        <label><input type="checkbox" name="region" value="fra1"> Frankfurt (fra1)</label>
+        <label><input type="checkbox" name="region" value="blr1"> Bangalore (blr1)</label>
+        <label><input type="checkbox" name="region" value="sgp1"> Singapore (sgp1)</label>
+        <label><input type="checkbox" name="region" value="syd1"> Sydney (syd1)</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><span class="tf-n" aria-hidden="true">3</span> Options</legend>
+      <label for="rd-size">Droplet size</label>
+      <select id="rd-size">
+        <option value="s-1vcpu-1gb" selected>1 vCPU, 1 GB (s-1vcpu-1gb): enough for a household</option>
+        <option value="s-1vcpu-2gb">1 vCPU, 2 GB (s-1vcpu-2gb)</option>
+        <option value="s-2vcpu-2gb">2 vCPU, 2 GB (s-2vcpu-2gb)</option>
+      </select>
+      <p class="rd-hint">DigitalOcean bills each droplet monthly; see its <a href="https://www.digitalocean.com/pricing/droplets" rel="noopener" target="_blank">droplet pricing</a>.</p>
+      <label for="rd-suffix">Your own domain (optional)</label>
+      <input id="rd-suffix" type="text" autocomplete="off" spellcheck="false" placeholder="relay.example.org">
+      <p class="rd-hint">Left empty, each relay is served at <code>IP-WITH-DASHES.sslip.io</code>. With <code>relay.example.org</code>, the relay in nyc3 is <code>nyc3.relay.example.org</code>, and you point that name at its droplet.</p>
+      <p class="rd-label">SSH keys (optional)</p>
+      <div id="rd-keys" class="rd-grid"></div>
+      <p id="rd-keys-none" class="rd-hint">Paste a token to choose SSH keys. Without one, reach the droplets from DigitalOcean's web console.</p>
+    </fieldset>
+
+    <p class="cta">
+      <button id="rd-deploy" class="btn" type="submit">Deploy to DigitalOcean</button>
+      <button id="rd-show" class="btn btn-ghost" type="button">Show the user data instead</button>
+    </p>
+    <p id="rd-status" class="rd-status" role="status" aria-live="polite"></p>
+    <ul id="rd-results" class="rd-results" aria-label="Relays"></ul>
+  </form>
+
+  <section id="rd-manual" class="rd-manual" hidden aria-labelledby="rd-manual-h">
+    <h2 id="rd-manual-h">Without a token</h2>
+    <p>In DigitalOcean, choose <strong>Create &gt; Droplets</strong>, the region, <strong>Ubuntu 24.04</strong>, and a size. Under <strong>Advanced options</strong>, check <strong>Add initialization scripts</strong>, paste this, and create it. The relay answers a few minutes later at <code>https://IP-WITH-DASHES.sslip.io</code>, or at the domain you named.</p>
+    <textarea id="rd-userdata" readonly rows="12" spellcheck="false" aria-label="User data"></textarea>
+    <p><button id="rd-copy-userdata" class="btn btn-ghost" type="button">Copy the user data</button></p>
+  </section>
+
+  <p class="note tf-note">Then add each relay's address in Sheprd under <strong>Settings &gt; Remote control &gt; Relays</strong>. The page builds the droplets' user data from <a href="https://github.com/sheprd-labs/sheprd/tree/main/deploy/relay">deploy/relay</a> on <code>main</code>, as <code>create-droplet.sh</code> does; each droplet runs only an image whose signature it verified.</p>
+</main>
+</body>
+</html>

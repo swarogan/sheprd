@@ -35,6 +35,7 @@ fn every_page_title_is_a_message_under_en_xa() {
         let pages = [
             Page::About,
             Page::AddDevice,
+            Page::AddNearby,
             Page::AddWsl,
             Page::AgentSkill,
             Page::Application,

@@ -479,6 +479,7 @@ mod poller;
 mod renames;
 mod saved_beside_spaces;
 mod screen_history;
+mod workspace_changes;
 
 #[test]
 fn an_unreachable_core_stays_with_the_core_source() {

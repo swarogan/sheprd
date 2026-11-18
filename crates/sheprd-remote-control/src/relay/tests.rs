@@ -24,11 +24,13 @@ use tokio::{
     net::TcpListener,
 };
 
-mod addresses;
+mod labels;
+mod nearest;
+mod shared;
 
 /// A relay serving QUIC and HTTP on loopback ports: its HTTP address, and
 /// its QUIC address and pin.
-async fn relay() -> (SocketAddr, SocketAddr, sheprd_relay::pin::Pin) {
+pub(crate) async fn relay() -> (SocketAddr, SocketAddr, sheprd_relay::pin::Pin) {
     let (endpoint, info) =
         sheprd_relay::bind_quic("127.0.0.1:0".parse().unwrap(), None, None).unwrap();
     let quic = endpoint.local_addr().unwrap();
@@ -59,7 +61,7 @@ async fn relay() -> (SocketAddr, SocketAddr, sheprd_relay::pin::Pin) {
 /// What a relay session serves on `shared`, behind the certificate the
 /// daemon presents for `127.0.0.1`; and a client config that trusts only
 /// this computer's authority, as the phone does.
-fn served(dir: &Path, shared: &crate::web::Shared) -> (Served, rustls::ClientConfig) {
+pub(crate) fn served(dir: &Path, shared: &crate::web::Shared) -> (Served, rustls::ClientConfig) {
     let authority = Authority::load_or_create(dir).unwrap();
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
     let resolver = Arc::new(
@@ -89,13 +91,15 @@ fn served(dir: &Path, shared: &crate::web::Shared) -> (Served, rustls::ClientCon
     (served, client)
 }
 
-async fn listening(relays: &Relays) {
+pub(crate) async fn listening(relays: &Relays) {
     for _ in 0..100 {
         if relays
             .status()
             .values()
-            .any(|state| *state == Status::Listening)
+            .any(|status| matches!(status.state, Status::Listening { .. }))
         {
+            // A listening relay's round trip is known at once.
+            assert!(!relays.info().unwrap().rtt_ms.is_empty());
             return;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -109,7 +113,7 @@ async fn a_paired_phone_reaches_the_api_through_a_relay_end_to_end() {
     let dir = tempfile::tempdir().unwrap();
     let mut shared = state(dir.path());
     let endpoint = Endpoint::parse(&format!("http://{http}")).unwrap();
-    let relays = Arc::new(Relays::load(dir.path(), vec![endpoint]).unwrap());
+    let relays = Arc::new(Relays::load(dir.path(), vec![endpoint.into()]).unwrap());
     Arc::get_mut(&mut shared).unwrap().relay = Some(Arc::clone(&relays));
     let (_device, token) = signed_in(&shared, 9);
 
@@ -189,7 +193,7 @@ async fn a_dial_key_no_device_sent_is_refused_at_the_relay() {
     let dir = tempfile::tempdir().unwrap();
     let shared = state(dir.path());
     let endpoint = Endpoint::parse(&format!("http://{http}")).unwrap();
-    let relays = Arc::new(Relays::load(dir.path(), vec![endpoint]).unwrap());
+    let relays = Arc::new(Relays::load(dir.path(), vec![endpoint.into()]).unwrap());
     let (_stop, stopped) = watch::channel(false);
     relays.start(served(dir.path(), &shared).0, stopped);
     listening(&relays).await;
@@ -207,8 +211,11 @@ fn keys_are_kept_across_restarts() {
     let dir = tempfile::tempdir().unwrap();
     let first = Relays::load(dir.path(), Vec::new()).unwrap();
     let again = Relays::load(dir.path(), Vec::new()).unwrap();
-    assert_eq!(first.info().route, again.info().route);
-    assert_eq!(first.info().identity, again.info().identity);
+    assert_eq!(first.keys.route(), again.keys.route());
+    assert_eq!(
+        first.keys.tunnel.identity().to_bytes(),
+        again.keys.tunnel.identity().to_bytes()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -217,7 +224,7 @@ async fn a_nearby_phone_off_the_network_claims_through_a_pairing_dial() {
     let dir = tempfile::tempdir().unwrap();
     let mut shared = state(dir.path());
     let endpoint = Endpoint::parse(&format!("http://{http}")).unwrap();
-    let relays = Arc::new(Relays::load(dir.path(), vec![endpoint]).unwrap());
+    let relays = Arc::new(Relays::load(dir.path(), vec![endpoint.into()]).unwrap());
     Arc::get_mut(&mut shared).unwrap().relay = Some(Arc::clone(&relays));
     let (_stop, stopped) = watch::channel(false);
     let (served, client) = served(dir.path(), &shared);
@@ -227,7 +234,7 @@ async fn a_nearby_phone_off_the_network_claims_through_a_pairing_dial() {
     // The token sealed to the phone over Bluetooth is the pairing secret.
     let secret = [0x5e; 32];
     relays.offer_pairing(secret);
-    let info = relays.info();
+    let info = relays.info().unwrap();
     let identity = Identity::from_bytes(&URL_SAFE_NO_PAD.decode(&info.identity).unwrap()).unwrap();
     let route = RouteId::parse(&info.route).unwrap();
     let dial = sheprd_relay::route::pairing_dial_key(&secret);
@@ -283,17 +290,19 @@ async fn a_nearby_phone_off_the_network_claims_through_a_pairing_dial() {
 #[test]
 fn a_nearby_offer_names_the_relays_and_hands_its_token_to_them_once() {
     let dir = tempfile::tempdir().unwrap();
-    let relays = Relays::load(dir.path(), Vec::new()).unwrap();
+    let endpoint = Endpoint::parse("relay.example.org").unwrap();
+    let relays = Relays::load(dir.path(), vec![endpoint.into()]).unwrap();
+    let info = relays.info().unwrap();
     let mut auth = crate::auth::Auth::load(dir.path(), crate::auth::Limits::default()).unwrap();
     assert!(auth.take_relay_pairing().is_none());
     auth.set_relay_offer(relays.info());
     let offer = serde_json::to_value(crate::auth::nearby::Offer {
         token: "t".into(),
         origins: &[],
-        relay: Some(&relays.info()),
+        relay: Some(&info),
     })
     .unwrap();
-    assert_eq!(offer["relay"]["route"], relays.info().route);
+    assert_eq!(offer["relay"]["route"], info.route);
     let without = serde_json::to_value(crate::auth::nearby::Offer {
         token: "t".into(),
         origins: &[],

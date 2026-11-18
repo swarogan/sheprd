@@ -180,6 +180,14 @@ phone still signs in with its device key and a bearer token. The relay's
 QUIC pin is read from its `/v1/info` over HTTPS. `sheprd remote status`
 shows each relay's state.
 
+Sheprd on another computer shares its relays with this one by running
+`sheprd-remote-control relays --offer` over SSH (`control::relays`): each
+computer's list replaces what it shared before, is kept in
+`STATE_DIR/relay/shared.json`, and is listened on at once beside this
+computer's own `[remote] relays`, which it never changes. When the daemon
+does not answer, the command writes the file itself; the daemon builds each
+change on the file and reads it again every minute, so no offer is lost.
+
 Bluetooth pairing works from another network: the sealed nearby offer
 also carries `relay` (the same fields as `GET /api/relay`), revealing it
 opens a one-dial pairing key on each relay derived from the offer's
@@ -223,6 +231,34 @@ on `[remote]` in that machine's Sheprd settings when there are any, and
 asks the running daemon to add the phone (`Enroll`). Then it prints the
 machine's fingerprint and addresses. `sheprd-remote-control revoke --device ID`
 undoes it.
+
+A phone also gets its relay keys to a computer it cannot reach through
+one it can (`control::host_relay`, `auth::host_relays`). It signs fresh
+keys with the device key it holds for the far computer and posts them to
+`POST /api/v2/hosts/relay` on the near one, posting the same request again
+to read where it stands. Sheprd takes each request (`HostRelays`) and runs
+`sheprd-remote-control relay-enroll` over SSH, first on the machine the
+phone's pairing names, then on every other one, without installing it
+anywhere. The machine whose fingerprint the request names checks the
+signature against the phone's own key, keeps the keys, and answers with its
+relays, signed with its CA key over the request and the answer
+(`RelayEnroll`). Sheprd passes over an answer whose certificate does not
+hash to the request's fingerprint or whose signature does not check out,
+and reports the first one that does (`HostRelayed`); this daemon and the
+phone check it again. Because
+the phone signs, the near computer cannot attach keys to a device it does
+not hold, and this works for a computer the phone paired directly too.
+
+Another computer's Sheprd can pair the way a phone does, over Bluetooth,
+when the two share no network (`docs/relay-plan.md`, Adding a nearby
+Sheprd from another network). `sheprd-remote-control desktop-pair` runs
+the phone's side of the code exchange, with Sheprd carrying its frames on
+stdio, then claims through this computer's relays with an `ssh-ed25519`
+key. On Allow, this daemon adds that key to `~/.ssh/authorized_keys`,
+restricted to loopback and marked with the device's ID (`ssh_access`), and
+splices that device's relay sessions to the local SSH server instead of
+serving it the API. Revoking the device removes the line. `relay-connect`
+is the `ProxyCommand` the adding side's `ssh` runs.
 
 The pairing QR prefers a Tailscale address when one is available, then a LAN
 address. The desktop dialog highlights the Tailscale connection and reveals
@@ -276,7 +312,10 @@ This authorizes every paired phone to read PR information for the workspaces
 that computer lists. A paired SSH/cloud machine uses **its own** `gh` sign-in;
 enrollment does not copy the desktop's GitHub credential or enable this option.
 The daemon reads `gh auth token --hostname github.com` through the existing
-bounded credential reader. It never saves the token or sends it to a phone.
+bounded credential reader. These reads never save the token or send it to a
+phone. Lending a sign-in to the iPhone app (`GET /api/v2/github/token`) is a
+separate, per-device choice, the **Share GitHub sign-in** switch, and does
+not depend on this option (`docs/ios-github-plan.md`).
 Remove the option and restart the service to disable standalone reads; `gh auth
 logout` revokes use of the CLI sign-in after cached answers expire.
 

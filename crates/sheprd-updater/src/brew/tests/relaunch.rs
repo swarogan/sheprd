@@ -1,4 +1,4 @@
-use super::super::{EXECUTABLE, Error, runnable, schedule_relaunch};
+use super::super::{EXECUTABLE, Error, UPGRADED, runnable, schedule_relaunch};
 use std::{
     ffi::OsString,
     fs,
@@ -71,7 +71,14 @@ impl Tools {
     }
 
     fn schedule(&self, pid: u32, limit: Duration) -> anyhow::Result<()> {
-        schedule_relaunch(pid, &self.bundle, BUNDLE_ID, self.search_path(), limit)?;
+        schedule_relaunch(
+            pid,
+            &self.bundle,
+            BUNDLE_ID,
+            self.search_path(),
+            limit,
+            &UPGRADED,
+        )?;
         Ok(())
     }
 

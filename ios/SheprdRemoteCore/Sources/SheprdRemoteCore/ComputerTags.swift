@@ -59,6 +59,21 @@ public enum ComputerTags {
         return all(in: computers).first { same($0, filter) }
     }
 
+    /// The computer to filter by: `device`, while it is still paired and has
+    /// the active `tag`. Choosing a tag it lacks drops it.
+    public static func active(device: String?, tag: String?, among computers: [Computer]) -> String? {
+        guard let device else { return nil }
+        return computers.first { $0.device == device && $0.matches(tag: tag) }?.device
+    }
+
+    /// The devices whose agents and workspaces show under the filter: the
+    /// active computer, else every computer with the active tag.
+    public static func shown(tag: String?, device: String?, among computers: [Computer]) -> Set<String> {
+        let tag = active(tag, among: computers)
+        if let device = active(device: device, tag: tag, among: computers) { return [device] }
+        return Set(computers.filter { $0.matches(tag: tag) }.map(\.device))
+    }
+
     static func contains(_ tags: [String], _ tag: String) -> Bool {
         tags.contains { same($0, tag) }
     }

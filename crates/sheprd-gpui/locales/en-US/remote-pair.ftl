@@ -8,6 +8,7 @@ remote-pair-off = Remote control is off.
 remote-pair-off-detail = Turn it on in Settings > Remote control to pair a phone.
 remote-pair-open-settings = Open Settings
 remote-pair-approved = { $device } can now control your chats.
+remote-pair-approved-ssh = { $device } can now open terminals here.
 remote-pair-approved-detail = Revoke it any time in Settings > Remote control.
 remote-pair-done = Done
 remote-pair-denied = Not paired.
@@ -42,6 +43,11 @@ remote-pair-wants = { $device } wants remote control of your chats.
 # $app is the address the phone's app was installed from.
 remote-pair-app = It asks from the Sheprd app at { $app }. Allow it only if you are adding this computer to that app.
 remote-pair-same-code = Allow it only if the phone shows the same code.
+# Another computer's Sheprd, nearby over Bluetooth, adding this computer.
+# Its name is drawn bold.
+remote-pair-wants-ssh = { $device } wants to open terminals on this computer.
+remote-pair-ssh = Allowing adds its key to ~/.ssh/authorized_keys, usable only through this computer's relays. Revoke it in Settings > Remote control to remove the key.
+remote-pair-same-code-computer = Allow it only if the other computer shows the same code.
 remote-pair-deny = Deny
 remote-pair-allow = Allow
 remote-pair-allowing = Allowing…

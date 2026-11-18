@@ -1,4 +1,6 @@
 use super::*;
+
+mod lineage;
 use crate::protocol::{
     FrameData, SurfaceGraphicsPlacement, SurfaceGraphicsSource, SurfaceGraphicsTarget,
 };

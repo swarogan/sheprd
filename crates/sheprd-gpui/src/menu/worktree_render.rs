@@ -196,7 +196,9 @@ impl SheprdWindow {
             ),
         };
         let message = self.menu.error.as_ref().or(message);
-        let status = if let Some(pending) = &source.pending {
+        let status = if let Some(notice) = &source.reuse_notice {
+            notice.clone()
+        } else if let Some(pending) = &source.pending {
             // Dismissing only closes the panel; the daemon keeps queued work,
             // as the branch tab's own waiting note says.
             if pending.opens() {
@@ -311,8 +313,7 @@ impl SheprdWindow {
                 Some(format!("#{}", item.number)),
                 item.title.clone(),
                 item.draft.then(|| fl!("worktree-source-draft")),
-                // A fork's head branch has no ref on `origin`, so the row says
-                // why it cannot be picked rather than failing once it is.
+                // Fork heads are fetched through the repository's PR ref.
                 Some(if item.fork_owner.is_some() {
                     fl!("worktree-source-from-fork")
                 } else {

@@ -51,6 +51,7 @@ mod preferences;
 mod px0;
 mod quiet_hours;
 mod remote;
+mod remote_relays;
 mod repository_icons;
 mod sidebar_scope;
 mod sidebar_search;

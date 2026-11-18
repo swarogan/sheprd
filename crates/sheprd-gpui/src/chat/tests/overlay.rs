@@ -152,6 +152,7 @@ fn typing_goes_to_the_chat_not_the_terminal(cx: &mut TestAppContext) {
     assert_eq!(
         command,
         Command::Prompt {
+            origin: Some(TYPED_HERE),
             text: "first\nsecond".into(),
             attachments: Vec::new(),
         }

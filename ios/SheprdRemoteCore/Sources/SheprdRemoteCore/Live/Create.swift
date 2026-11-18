@@ -32,6 +32,11 @@ public struct AgentChoice: Codable, Hashable, Sendable, Identifiable {
     /// What requests name it by, such as `claude`.
     public var id: String
     public var name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
 }
 
 /// `POST /api/v2/workspaces`: a workspace in `cwd`, on a new worktree

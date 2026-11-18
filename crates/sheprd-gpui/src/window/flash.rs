@@ -8,10 +8,10 @@
 
 use super::SheprdWindow;
 use crate::{
-    config::Theme,
+    config::{ClipboardToastPosition, Theme},
     motion::{self, ENTER, LEAVE},
 };
-use gpui::{Context, SharedString};
+use gpui::{Context, SharedString, div, prelude::*, px, rgb};
 use std::time::{Duration, Instant};
 
 /// How long a flash stays up, matching herdr's own clipboard feedback.
@@ -22,7 +22,7 @@ const FLASH_DURATION: Duration = Duration::from_secs(2);
 const HINT_DURATION: Duration = Duration::from_secs(4);
 
 /// How far the flash over the terminal slides in from the edge it sits by.
-pub(super) const SLIDE: f32 = 6.;
+const SLIDE: f32 = 6.;
 
 /// Whether the flash reports something done or something declined, or
 /// suggests another way to do what was tried.
@@ -127,6 +127,61 @@ impl SheprdWindow {
         }
         let (flash, since) = self.flash_motion.leaving.as_ref()?;
         motion::progress(*since, now, LEAVE).map(|k| (flash, 1. - k))
+    }
+
+    /// The flash over the terminal cells, as it fades and slides in or out.
+    /// Direct feedback for the user's own gesture, not a daemon notice: it
+    /// sits over the cells it copied and needs no dismissing.
+    pub(super) fn render_flash(&self) -> Option<impl IntoElement> {
+        use ClipboardToastPosition::*;
+        let (flash, shown) = self.flash_shown()?;
+        let position = self.config.clipboard_toast.position;
+        // It comes in from the edge it sits by and goes back to it.
+        let edge = px(12. - (1. - shown) * SLIDE);
+        Some(
+            div()
+                .absolute()
+                .opacity(shown)
+                .map(|row| match position {
+                    TopLeft | TopCenter | TopRight => row.top(edge),
+                    BottomLeft | BottomCenter | BottomRight => row.bottom(edge),
+                })
+                .map(|row| match position {
+                    TopLeft | BottomLeft => row.justify_start(),
+                    TopCenter | BottomCenter => row.justify_center(),
+                    TopRight | BottomRight => row.justify_end(),
+                })
+                // The flash spans the cells, so centering centers on
+                // them and a corner is the corner of the grid.
+                .left_0()
+                .right_0()
+                .px(px(12.))
+                .flex()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .debug_selector(|| "flash".into())
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .px(px(12.))
+                        .py(px(6.))
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .border_1()
+                        .border_color(rgb(flash.accent(&self.theme)))
+                        .bg(rgb(self.theme.surface))
+                        .text_color(rgb(self.theme.foreground))
+                        .child(
+                            div()
+                                .size(px(6.))
+                                .flex_none()
+                                .rounded_full()
+                                .bg(rgb(flash.accent(&self.theme))),
+                        )
+                        .child(div().truncate().child(flash.text.clone())),
+                ),
+        )
     }
 
     /// Whether the flash is still fading in or out.

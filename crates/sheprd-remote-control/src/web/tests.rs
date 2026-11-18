@@ -25,6 +25,7 @@ mod handoff;
 mod hosts;
 mod indicators;
 mod layout;
+mod lend;
 mod nearby;
 mod new_terminal;
 mod origins;
@@ -43,8 +44,10 @@ mod tags;
 #[cfg(unix)]
 mod term_history;
 mod terminal;
+mod typed;
 mod update;
 mod uploads;
+mod workspace;
 
 pub(crate) const ORIGIN: &str = "https://192.168.1.20:7443";
 
@@ -63,6 +66,15 @@ pub(crate) fn state(dir: &std::path::Path) -> Shared {
 
 /// A server state on a private directory showing what `hub` holds.
 pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
+    state_lending(dir, hub, crate::native::github::Lending::default())
+}
+
+/// [`state_with`], lending GitHub sign-ins as `lending` does.
+pub(crate) fn state_lending(
+    dir: &std::path::Path,
+    hub: Arc<Hub>,
+    lending: crate::native::github::Lending,
+) -> Shared {
     let names = Names::new([IpAddr::V4(Ipv4Addr::new(192, 168, 1, 20))], Some("studio"));
     let authority = Authority::load_or_create(dir).unwrap();
     let seen = Origins::load(dir, authority.fingerprint());
@@ -79,6 +91,7 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         github: Default::default(),
         authority: Some(authority),
         hub,
+        lending,
         live_activities: crate::app::config::ActivityDetail::default(),
         load: tokio::sync::watch::channel(None).1,
         look: Look::load(dir),

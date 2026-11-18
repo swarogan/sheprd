@@ -28,6 +28,8 @@ def condition_matches(job, context, jobs=JOBS):
     def evaluate(node):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             return node.value
+        if isinstance(node, ast.Name) and node.id in ("true", "false"):
+            return node.id == "true"
         if isinstance(node, ast.Attribute):
             return context[ast.unparse(node)]
         if isinstance(node, ast.BoolOp):
@@ -36,8 +38,12 @@ def condition_matches(job, context, jobs=JOBS):
                 return all(values)
             if isinstance(node.op, ast.Or):
                 return any(values)
-        if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
-            return evaluate(node.left) == evaluate(node.comparators[0])
+        if isinstance(node, ast.Compare) and len(node.ops) == 1:
+            left, right = evaluate(node.left), evaluate(node.comparators[0])
+            if isinstance(node.ops[0], ast.Eq):
+                return left == right
+            if isinstance(node.ops[0], ast.NotEq):
+                return left != right
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                 and node.func.id == "always" and not node.args and not node.keywords):
             return True
@@ -56,9 +62,13 @@ class CiPolicy(unittest.TestCase):
             "github.triggering_actor": "larry0x",
             "github.event.pull_request.user.login": "larry0x",
             "github.event.pull_request.head.repo.full_name": "larry0x/herdr-gpui",
+            "github.event.pull_request.draft": False,
             "needs.commits.outputs.code": "true",
-            "needs.commits.outputs.windows_package": "true",
+            "needs.commits.outputs.full": "true",
+            "needs.commits.outputs.macos_release": "true",
             "needs.commits.outputs.website": "true",
+            "needs.commits.outputs.windows_native": "true",
+            "needs.commits.outputs.windows_package": "true",
             **overrides,
         }
 
@@ -98,8 +108,28 @@ class CiPolicy(unittest.TestCase):
                     self.assertEqual(condition_matches(job, context),
                                      allowed and job not in PR_ONLY_JOBS)
 
+    def test_fast_pull_request_skips_only_other_platforms(self):
+        # Without every platform, a pull request still runs the Linux checks.
+        for full in ("false", ""):
+            context = self.context(**{"needs.commits.outputs.full": full})
+            for job in PR_JOBS:
+                self.assertEqual(condition_matches(job, context),
+                                 job not in ("windows", "windows-native", "build-macos"), (job, full))
+
+    def test_merge_queue_runs_every_platform_but_no_main_release_build(self):
+        # The queue's ref and actor are GitHub's; it checks what reaches main.
+        for actor in ("larry0x", "penso", "github-merge-queue[bot]"):
+            context = self.context(**{
+                "github.event_name": "merge_group",
+                "github.ref": "refs/heads/gh-readonly-queue/main/pr-456-0123456789abcdef",
+                "github.actor": actor, "github.triggering_actor": actor,
+            })
+            for job in JOBS:
+                with self.subTest(actor=actor, job=job):
+                    self.assertEqual(condition_matches(job, context), job != "build")
+
     def test_other_repositories_cannot_run_jobs(self):
-        for event in ("pull_request", "push", "workflow_dispatch"):
+        for event in ("pull_request", "merge_group", "push", "workflow_dispatch"):
             context = self.context(**{
                 "github.repository": "larry0x/herdr-gpui", "github.event_name": event,
                 "github.ref": "refs/heads/main", "github.actor": "penso",
@@ -137,8 +167,15 @@ class CiPolicy(unittest.TestCase):
             context = self.context(**{"needs.commits.outputs.code": code})
             for job in PR_JOBS:
                 self.assertEqual(condition_matches(job, context),
-                                 job not in ("checks", "windows", "windows-native", "build-macos"),
-                                 (job, code))
+                                 job not in ("checks", "windows"), (job, code))
+        # The GUI tests and the macOS release builds follow their own inputs.
+        for output, selected in (("windows_native", "windows-native"),
+                                 ("macos_release", "build-macos")):
+            for value in ("false", ""):
+                context = self.context(**{f"needs.commits.outputs.{output}": value})
+                for job in PR_JOBS:
+                    self.assertEqual(condition_matches(job, context), job != selected,
+                                     (job, output, value))
         for website in ("false", ""):
             context = self.context(**{"needs.commits.outputs.website": website})
             for job in PR_JOBS:
@@ -150,16 +187,24 @@ class CiPolicy(unittest.TestCase):
         script = "\n".join(line[10:] for line in script.splitlines() if line.startswith("          "))
 
         def gate(code, checks, windows, native, commits, package_inputs="false", package="skipped",
-                 event="push", macos=None, site_inputs="false", site="skipped"):
+                 event="push", macos=None, site_inputs="false", site="skipped", full="true",
+                 native_inputs=None, macos_inputs=None, zizmor="success"):
+            if native_inputs is None:
+                native_inputs = code if code in ("true", "false") else "false"
+            if macos_inputs is None:
+                macos_inputs = native_inputs
             if macos is None:
-                macos = "success" if code == "true" and event == "pull_request" else "skipped"
+                before_merge = event in ("pull_request", "merge_group")
+                selected = code == macos_inputs == full == "true" and before_merge
+                macos = "success" if selected else "skipped"
             return subprocess.run(
                 ["bash", "-e", "-c", script], capture_output=True,
                 env={**os.environ, "CODE": code, "RESULT": checks, "WINDOWS": windows,
-                     "NATIVE": native, "COMMITS": commits,
+                     "NATIVE": native, "NATIVE_INPUTS": native_inputs, "COMMITS": commits,
+                     "FULL": full,
                      "PACKAGE_INPUTS": package_inputs, "PACKAGE": package,
-                     "EVENT": event, "MACOS_RELEASE": macos,
-                     "SITE_INPUTS": site_inputs, "SITE": site},
+                     "EVENT": event, "MACOS_RELEASE": macos, "MACOS_INPUTS": macos_inputs,
+                     "SITE_INPUTS": site_inputs, "SITE": site, "ZIZMOR": zizmor},
             ).returncode == 0
 
         for code, checks, windows, commits in itertools.product(
@@ -168,12 +213,26 @@ class CiPolicy(unittest.TestCase):
             expected = commits == "success" and (
                 (code == "true" and checks == windows == "success")
                 or (code == "false" and checks == windows == "skipped"))
-            # The native Windows job follows the same rule as the Windows check.
+            # With every input changed, the native Windows job follows the
+            # same rule as the Windows check.
             self.assertEqual(gate(code, checks, windows, windows, commits), expected,
                              (code, checks, windows, commits))
         for native in ("failure", "cancelled", "skipped"):
             self.assertFalse(gate("true", "success", "success", native, "success"), native)
         self.assertFalse(gate("false", "skipped", "skipped", "success", "success"))
+        # The workflow audit runs beside the other jobs, so only the gate holds it.
+        for zizmor in ("failure", "cancelled", "skipped"):
+            self.assertFalse(gate("true", "success", "success", "success", "success",
+                                  zizmor=zizmor), zizmor)
+        # The GUI tests run when their inputs change, and must then succeed;
+        # otherwise they must have been skipped, and missing detection fails.
+        for inputs, native in itertools.product(
+                ("true", "false", ""), ("success", "failure", "cancelled", "skipped")):
+            expected = ((inputs == "true" and native == "success")
+                        or (inputs == "false" and native == "skipped"))
+            self.assertEqual(gate("true", "success", "success", native, "success",
+                                  native_inputs=inputs, macos_inputs="false"),
+                             expected, (inputs, native))
         # The Windows package job runs only when its inputs change, and must
         # then succeed; missing detection fails like the platform jobs'.
         for inputs, package in itertools.product(
@@ -182,15 +241,35 @@ class CiPolicy(unittest.TestCase):
                         or (inputs == "false" and package == "skipped"))
             self.assertEqual(gate("true", "success", "success", "success", "success", inputs, package),
                              expected, (inputs, package))
-        # The macOS release builds run, and must pass, on pull requests with
-        # code changes only; anywhere else they must have been skipped.
-        for code, event, macos in itertools.product(
-                ("true", "false"), ("pull_request", "push", "workflow_dispatch"),
+        # A pull request may run Linux alone: the other platforms must then
+        # have been skipped. Main and the merge queue must run every one, and
+        # selection that failed to say fails the gate.
+        for event, full, windows in itertools.product(
+                ("pull_request", "merge_group", "push", "workflow_dispatch"), ("true", "false", ""),
+                ("success", "failure", "skipped")):
+            expected = (full == "true" and windows == "success") or (
+                event == "pull_request" and full == "false" and windows == "skipped")
+            self.assertEqual(gate("true", "success", windows, windows, "success", event=event, full=full),
+                             expected, (event, full, windows))
+        for event, full in itertools.product(("merge_group", "push"), ("false", "")):
+            self.assertFalse(gate("false", "skipped", "skipped", "skipped", "success",
+                                  event=event, full=full), (event, full))
+        # The macOS release builds run, and must pass, before merge with every
+        # platform when their inputs change only; anywhere else they must
+        # have been skipped.
+        for code, inputs, event, macos in itertools.product(
+                ("true", "false"), ("true", "false"),
+                ("pull_request", "merge_group", "push", "workflow_dispatch"),
                 ("success", "failure", "cancelled", "skipped")):
+            if code == "false" and inputs == "true":
+                continue  # Its inputs are code, so detection never reports this.
             platform = "success" if code == "true" else "skipped"
-            expected = macos == ("success" if code == "true" and event == "pull_request" else "skipped")
-            self.assertEqual(gate(code, platform, platform, platform, "success", event=event, macos=macos),
-                             expected, (code, event, macos))
+            before_merge = event in ("pull_request", "merge_group")
+            selected = code == inputs == "true" and before_merge
+            expected = macos == ("success" if selected else "skipped")
+            self.assertEqual(gate(code, platform, platform, platform, "success", event=event,
+                                  macos=macos, native_inputs=code, macos_inputs=inputs),
+                             expected, (code, inputs, event, macos))
         # The website job runs when the site or docs change, and must then
         # succeed; missing detection fails like the platform jobs'.
         for inputs, site in itertools.product(
@@ -204,7 +283,7 @@ class CiPolicy(unittest.TestCase):
     def test_ci_has_no_privileged_trigger_or_credentials(self):
         triggers = WORKFLOW.split("\npermissions:", 1)[0]
         self.assertEqual(re.findall(r"^  (\w+):", triggers, re.M),
-                         ["push", "pull_request", "workflow_dispatch"])
+                         ["push", "pull_request", "merge_group", "workflow_dispatch"])
         self.assertIn("\npermissions: {}\n", WORKFLOW)
         for name, job in JOBS.items():
             with self.subTest(job=name):

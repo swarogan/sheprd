@@ -1,7 +1,7 @@
 //! Native rich blocks. No HTML is executed and code-copy buttons only copy.
 use crate::chat::code_block::scroll_sideways;
 use crate::chat::{
-    rich::{Block, Inline, Kind, Style},
+    rich::{Block, Inline, Kind, Size, Style},
     visual::{Shown, VisualId, Visuals},
 };
 use crate::i18n::fl;
@@ -248,11 +248,18 @@ impl SheprdWindow {
                     for word in text.split_inclusive(char::is_whitespace) {
                         let index = words;
                         words += 1;
-                        let mut item = div().flex_none().max_w_full().when(style.code, |item| {
-                            item.text_font(&self.config.terminal)
-                                .bg(rgb(self.theme.active))
-                                .rounded(px(2.))
-                        });
+                        let mut item = div()
+                            .flex_none()
+                            .max_w_full()
+                            .when(style.code, |item| {
+                                item.text_font(&self.config.terminal)
+                                    .bg(rgb(self.theme.active))
+                                    .rounded(px(2.))
+                            })
+                            .when_some(style.size, |item, size| {
+                                item.text_size(px(context.size * size.scale()))
+                                    .line_height(relative(size.line_height()))
+                            });
                         let selected = fragment
                             .as_ref()
                             .map(|fragment| fragment.range(offset..offset + word.len()));
@@ -516,7 +523,11 @@ impl SheprdWindow {
 
     fn rich_style(&self, style: &Style, accents: Option<Accents>) -> HighlightStyle {
         HighlightStyle {
-            font_weight: style.bold.then_some(FontWeight::SEMIBOLD),
+            font_weight: if style.size.is_some_and(Size::heavy) {
+                Some(FontWeight::BOLD)
+            } else {
+                style.bold.then_some(FontWeight::SEMIBOLD)
+            },
             font_style: style.italic.then_some(FontStyle::Italic),
             color: if style.code {
                 Some(code_ink(&self.theme))
@@ -557,10 +568,13 @@ struct Prose<'a> {
 }
 
 fn prose_spans(content: &[Inline]) -> Option<Prose<'_>> {
-    if content
-        .iter()
-        .any(|part| matches!(part, Inline::Math { .. }))
-    {
+    // One shaped run has one text size, so sized spans lay out by word too.
+    if content.iter().any(|part| {
+        matches!(
+            part,
+            Inline::Math { .. } | Inline::Text(_, Style { size: Some(_), .. })
+        )
+    }) {
         return None;
     }
     let mut text = String::new();

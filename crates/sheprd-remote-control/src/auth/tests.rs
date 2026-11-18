@@ -3,6 +3,7 @@ use p256::ecdsa::{Signature, SigningKey, signature::Signer};
 
 mod devices;
 mod handoff;
+mod host_relays;
 mod host_retries;
 mod inputs;
 mod limits;
@@ -13,6 +14,7 @@ mod nearby_vectors;
 mod pairing;
 mod presence;
 mod session;
+mod share_github;
 
 const ORIGIN: &str = "https://192.168.1.20:7443";
 const FINGERPRINT: &str = "AB:CD:EF:01";
@@ -52,6 +54,7 @@ fn new_device(seed: u8, name: &str) -> NewDevice {
         name: name.to_owned(),
         public_key: PublicKey::parse(&public_key(&signing_key(seed))).unwrap(),
         relay: None,
+        ssh: None,
     }
 }
 

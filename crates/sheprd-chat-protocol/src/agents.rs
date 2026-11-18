@@ -78,6 +78,21 @@ impl fmt::Display for Agent {
     }
 }
 
+/// On the wire an agent is its name, as on `herdr-acp`'s command line.
+impl serde::Serialize for Agent {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.name())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Agent {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = <std::borrow::Cow<'de, str>>::deserialize(deserializer)?;
+        name.parse()
+            .map_err(|_| serde::de::Error::unknown_variant(&name, &[]))
+    }
+}
+
 impl Agent {
     /// Every name, comma-separated, for messages.
     pub fn names() -> String {

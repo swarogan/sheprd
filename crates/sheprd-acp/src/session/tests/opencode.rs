@@ -29,11 +29,14 @@ fn negotiates_child_stream_and_routes_notifications_while_parent_is_idle() {
                     .is_running()
             );
         }
-        h.input(Input::Agent(Inbound::Notification {
-            method: project::opencode::METHOD.into(),
-            params: json!({"rootSessionId":"s1", "childSessionId":"child",
+        h.input(Input::Agent(
+            HarnessId::default(),
+            Inbound::Notification {
+                method: project::opencode::METHOD.into(),
+                params: json!({"rootSessionId":"s1", "childSessionId":"child",
                 "parentSessionId":"s1", "depth":1, "type":"status", "status":status}),
-        }));
+            },
+        ));
     }
     assert_eq!(
         h.session
@@ -44,11 +47,14 @@ fn negotiates_child_stream_and_routes_notifications_while_parent_is_idle() {
         ActivityState::Finished
     );
     let turn = prompt(&mut h, 1, "Continue the child");
-    h.input(Input::Agent(Inbound::Notification {
-        method: project::opencode::METHOD.into(),
-        params: json!({"rootSessionId":"s1", "childSessionId":"child",
+    h.input(Input::Agent(
+        HarnessId::default(),
+        Inbound::Notification {
+            method: project::opencode::METHOD.into(),
+            params: json!({"rootSessionId":"s1", "childSessionId":"child",
             "parentSessionId":"s1", "depth":1, "type":"status", "status":"running"}),
-    }));
+        },
+    ));
     h.respond(turn, json!({"stopReason":"cancelled"}));
     assert!(
         h.transcript()
@@ -58,6 +64,7 @@ fn negotiates_child_stream_and_routes_notifications_while_parent_is_idle() {
     );
     h.input(Input::AgentExited {
         code: Some(0),
+        harness: HarnessId::default(),
         stderr: Vec::new(),
     });
     assert_eq!(

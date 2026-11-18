@@ -23,8 +23,11 @@ on:
       - 'scripts/relay-image.sh'
       - 'deploy/relay/**'
       - 'scripts/test_relay_deploy.py'
+      - 'website/site/relay/**'
       - '.github/workflows/relay-image.yml'
   pull_request:
+    # ready_for_review starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'crates/sheprd-relay/**'
       - 'Cargo.lock'
@@ -33,6 +36,7 @@ on:
       - 'scripts/relay-image.sh'
       - 'deploy/relay/**'
       - 'scripts/test_relay_deploy.py'
+      - 'website/site/relay/**'
       - '.github/workflows/relay-image.yml'
   workflow_dispatch:
 
@@ -47,6 +51,7 @@ jobs:
   # and the job cannot write packages.
   check:
     if: >-
+      github.event.pull_request.draft != true &&
       (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       github.event_name == 'pull_request' &&

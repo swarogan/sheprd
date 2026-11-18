@@ -46,7 +46,10 @@ graphics scene for the app's painter.
   image and of all placements is read; by cell, row, column, or z is not,
   nor are animation and Unicode placeholders.
 - `sync_pending()` and `end_sync()` let the caller time out a synchronized
-  update (DECSET 2026) with its own clock.
+  update (DECSET 2026) with its own clock; `syncs_ended()` changes when one
+  ends, so a feed that ends an update and begins the next restarts it. A
+  graphics command inside an update applies the output before it, so the
+  takes hand out the screen from before it until the update ends.
 
 Everything is bounded: sizes (`Size` from herdr-backend, with `MAX_SIDE`
 and `MAX_CELLS`), history

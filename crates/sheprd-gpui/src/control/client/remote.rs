@@ -95,15 +95,41 @@ fn status_text(enabled: bool, status: Option<&Status>, error: Option<&str>) -> S
             None => format!("Address: {address}"),
         },
     ));
-    lines.extend(status.relays.iter().map(|(relay, state)| {
-        use sheprd_remote_control::control::RelayState;
-        match state {
-            RelayState::Connecting => format!("Relay: {relay} — connecting"),
-            RelayState::Listening => format!("Relay: {relay} — listening"),
-            RelayState::Failed { error } => format!("Relay: {relay} — failed: {error}"),
-        }
-    }));
+    lines.extend(
+        status
+            .relays
+            .iter()
+            .map(|(relay, status)| relay_line(relay, status)),
+    );
     lines.join("\n")
+}
+
+/// One relay: what it is called and where, how it stands, then its
+/// description and tags on lines of their own.
+fn relay_line(relay: &str, status: &sheprd_remote_control::control::RelayStatus) -> String {
+    use sheprd_remote_control::control::RelayState;
+    let label = &status.label;
+    let state = match &status.state {
+        RelayState::Connecting => "connecting".to_owned(),
+        RelayState::Listening { rtt_ms: None } => "listening".to_owned(),
+        RelayState::Listening {
+            rtt_ms: Some(rtt_ms),
+        } => format!("listening, {rtt_ms} ms"),
+        RelayState::Failed { error } => format!("failed: {error}"),
+    };
+    let mut line = match &label.name {
+        Some(name) => format!("Relay: {name} ({relay}) — {state}"),
+        None => format!("Relay: {relay} — {state}"),
+    };
+    if let Some(description) = &label.description {
+        line.push_str("\n  ");
+        line.push_str(description);
+    }
+    if !label.tags.is_empty() {
+        line.push_str("\n  Tags: ");
+        line.push_str(&label.tags.join(", "));
+    }
+    line
 }
 
 /// One device as a line of text: its ID for `remote revoke`, its name, and

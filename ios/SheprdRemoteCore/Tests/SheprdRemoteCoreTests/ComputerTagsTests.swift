@@ -69,6 +69,22 @@ import Testing
         #expect(tagged.matches(tag: nil))
     }
 
+    @Test func aComputerFilterNarrowsTheTag() throws {
+        let computers = [try computer("a", tags: ["work"]), try computer("b", tags: ["work"]), try computer("c", tags: ["home"])]
+        #expect(ComputerTags.shown(tag: nil, device: nil, among: computers) == ["a", "b", "c"])
+        #expect(ComputerTags.shown(tag: "Work", device: nil, among: computers) == ["a", "b"])
+        #expect(ComputerTags.shown(tag: "work", device: "b", among: computers) == ["b"])
+        #expect(ComputerTags.shown(tag: nil, device: "c", among: computers) == ["c"])
+    }
+
+    @Test func aComputerWithoutTheTagOrNoLongerPairedIsDropped() throws {
+        let computers = [try computer("a", tags: ["work"]), try computer("c", tags: ["home"])]
+        #expect(ComputerTags.active(device: "c", tag: "work", among: computers) == nil)
+        #expect(ComputerTags.active(device: "gone", tag: nil, among: computers) == nil)
+        #expect(ComputerTags.shown(tag: "work", device: "c", among: computers) == ["a"])
+        #expect(ComputerTags.shown(tag: nil, device: "gone", among: computers) == ["a", "c"])
+    }
+
     @Test func aRecordSavedBeforeTagsHasNone() throws {
         let saved = try JSONEncoder().encode(try computer("a", tags: ["work"]))
         var record = try #require(JSONSerialization.jsonObject(with: saved) as? [String: Any])

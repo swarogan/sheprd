@@ -53,6 +53,7 @@ mod jira_write;
 mod keys;
 mod line_endings;
 mod location;
+mod memory_location;
 mod naming;
 #[cfg(unix)]
 mod opening_script;

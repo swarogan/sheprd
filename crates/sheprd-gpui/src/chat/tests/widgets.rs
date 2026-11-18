@@ -51,7 +51,9 @@ fn choosing_a_value_does_not_send_until_the_action_is_clicked(cx: &mut TestAppCo
     });
     click(cx, "widget-w1:p1-1-0-1");
     let Some(ClientMessage::Command {
-        command: Command::Prompt { text, attachments },
+        command: Command::Prompt {
+            text, attachments, ..
+        },
         ..
     }) = read(&mut stream)
     else {

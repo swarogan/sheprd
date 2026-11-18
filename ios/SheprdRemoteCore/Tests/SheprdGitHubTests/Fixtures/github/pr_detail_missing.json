@@ -1,0 +1,14 @@
+{
+ "data": {
+  "repository": {
+   "nameWithOwner": "acme/app",
+   "pullRequest": null
+  }
+ },
+ "errors": [
+  {
+   "type": "NOT_FOUND",
+   "message": "Could not resolve to a PullRequest with the number of 999."
+  }
+ ]
+}

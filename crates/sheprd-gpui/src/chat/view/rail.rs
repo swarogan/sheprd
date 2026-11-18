@@ -14,13 +14,15 @@ use super::{
 use crate::i18n::fl;
 use crate::{
     SheprdWindow, chat::rail_folds::RailSection, config::corners, motion, notifications::safe_text,
+    panel_resize::PanelDrag,
 };
 use gpui::{prelude::*, *};
 use sheprd_chat_protocol::PlanStatus;
 
 /// Narrowest pane that shows the rail beside the entries.
 const MIN_PANE: f32 = 640.;
-const WIDTH: f32 = 240.;
+/// The share of the pane the rail may take, however wide it was dragged.
+const MAX_SHARE: f32 = 0.5;
 /// Plan steps, changed files, and ended work listed; the rest are counted.
 const ROWS: usize = 24;
 /// The height of a plan step or a changed file, for growing a fold.
@@ -281,36 +283,42 @@ impl SheprdWindow {
         let plan = self.render_chat_rail_plan(chat, busy, cx);
         let files = self.render_chat_rail_changed(chat, busy, cx);
         let moving = chat.rail_folds.moving(motion::now());
-        Some(
-            div()
-                .id("chat-rail")
-                .debug_selector(|| "chat-rail".into())
-                .flex_none()
-                .w(px(WIDTH))
-                .h_full()
-                .flex()
-                .flex_col()
-                .gap(px(8.))
-                .p(px(12.))
-                .overflow_y_scroll()
-                .border_l_1()
-                .border_color(rgb(theme.active))
-                .bg(rgb(theme.surface))
-                .children(work)
-                .children(plan)
-                .children(files)
-                .when(moving, |rail| {
-                    // Draws the next frame while a fold still moves.
-                    rail.child(
-                        canvas(
-                            |_, window, _| window.request_animation_frame(),
-                            |_, _, _, _| {},
-                        )
-                        .absolute()
-                        .size_0(),
+        let rail = div()
+            .id("chat-rail")
+            .debug_selector(|| "chat-rail".into())
+            .size_full()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .p(px(12.))
+            .overflow_y_scroll()
+            .border_l_1()
+            .border_color(rgb(theme.active))
+            .bg(rgb(theme.surface))
+            .children(work)
+            .children(plan)
+            .children(files)
+            .when(moving, |rail| {
+                // Draws the next frame while a fold still moves.
+                rail.child(
+                    canvas(
+                        |_, window, _| window.request_animation_frame(),
+                        |_, _, _, _| {},
                     )
-                }),
-        )
+                    .absolute()
+                    .size_0(),
+                )
+            });
+        // The grip sits on a frame around the rail, so it stays on the
+        // rail's edge while the rail scrolls.
+        let frame = div().id("chat-rail-frame").flex_none().h_full().child(rail);
+        Some(self.resizable_panel(
+            frame,
+            "chat-rail-resize",
+            PanelDrag::ChatRail,
+            Some(MAX_SHARE),
+            cx,
+        ))
     }
 
     fn chat_rail_more(&self, count: usize) -> Option<Div> {

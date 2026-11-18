@@ -162,10 +162,25 @@ and builds without embedded pages return exit 8. See [px0](../crates/sheprd-gpui
 
 ### Worktrees and agents
 
+Memory is kept per Git repository on the host the repository is on, in
+`repositories/<id>/memory.sqlite3` under Sheprd's state directory, keyed by
+the Git common directory every worktree of it shares. Each repository keeps
+at most 2000 entries; pinned ones stay, and the least recently used of the
+rest go first. Agents learn when to use it from the managed skill. In
+`sheprd-acp` chats, the note sent ahead of the first prompt also explains it
+and shows `memory index`, and each prompt after brings up to 3 entries that
+share at least two of its keywords and were not shown yet in that chat.
+
 | Command | What it does |
 | --- | --- |
 | `notes [list]` | Every worktree note |
 | `notes get\|clear`, `notes set TEXT` | The note on your checkout (its repository and branch) |
+| `memory [list] [--all] [--limit N]` | What agents learned about the current directory's repository: pinned entries first, then the most recently used, of the repository and the current branch (`--all`: every branch's). Exits 4 when there are none (no app needed) |
+| `memory search WORDS [--all] [--limit N]` | Entries holding every word as a prefix, else any of them, best first; each found counts as used. Exits 4 when nothing matches (no app needed) |
+| `memory index [--chars N]` | What an agent should see before it starts, within N characters (default 3000): pinned entries, the branch's own, then the most recently used, with how many more there are (no app needed) |
+| `memory get ID` | One entry with its details (no app needed) |
+| `memory add [--branch] [--kind KIND] [--name NAME] [--pin] [--details TEXT] TEXT` | Keep TEXT (at most 500 bytes; details up to 16 KiB) for the next agent in any worktree, tab, or chat of the repository, or with `--branch` for the current branch only. KIND is `fact` (default), `gotcha`, `command`, `decision`, `preference`, or `handoff`. With `--name`, a later add of that name updates the entry; the same text again only marks it used. Secrets, tokens, invisible characters, and prompt markup are refused (no app needed) |
+| `memory pin\|unpin ID`, `memory forget ID` | Pin an entry (first in every listing, never dropped; at most 50), unpin it, or remove it; exits 5 when there is none (no app needed) |
 | `worktree [status]`, `worktree mute\|unmute` | Whether your worktree's notifications are muted; silence them or let them through again |
 | `worktree list` | List app-kept Git workspaces on the caller's host, with host, workspace, path, branch and linked-checkout status; unopened Git checkouts are in the Existing picker |
 | `worktree create [BRANCH]`, `worktree open`, `worktree delete` | Open the caller's Herdr 2 new-worktree, existing-checkout, or deletion dialog; the user confirms in the app. Host identity follows the caller, including SSH, cloud and WSL devices |
@@ -182,7 +197,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/sheprd-gpui
 | `chat convert [--pane ID]` | Move the terminal agent in your pane (or ID, else the focused one) into a `sheprd-acp` chat in the same pane, keeping its conversation. From a Herdr 2 pane, your pane is your terminal (`HC_TERMINAL_ID`), whose id in `chat` is `core:` and the terminal's (see [Moving a terminal agent into a chat](rich-chat.md#moving-a-terminal-agent-into-a-chat)). Returns once the move has started; `chat` shows the chat when it attaches. Exits 6 while the agent works, 5 when the pane has no terminal agent, and 8 for an agent or pane that cannot move |
 | `chat shortcuts` | Your text shortcuts, the prompts every chat's composer offers (type `/`, or use the shortcuts button beside +), in order: each label and its text. `--json` adds each one's `id` and `title`, the list's `updated_ms`, and `complete`, false when the list holds more text than one answer carries. The list is the same on this computer, every connected SSH host with `sheprd-remote-control`, and the phones paired with them; Settings > Text Shortcuts edits it. Exits 4 when there are none |
 | `chat show\|hide\|toggle [--pane ID]` | Show the native chat view over your pane (or ID, else the focused one), or its terminal |
-| `chat new AGENT [--pane ID]` | Open a tab running a `sheprd-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `sheprd-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). With no Herdr pane to go by, as when called from a Herdr 2 pane, a Herdr 2 tab in the active group splits its pane in use with the chat instead (see [Chats in Herdr 2 panes](rich-chat.md#chats-in-herdr-2-panes)); its pane id in `chat` is `core:` and the terminal's. Exits 8 when `sheprd-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`sheprd-acp agents` lists those that are) |
+| `chat new AGENT [--pane ID]` | Open a tab running a `sheprd-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). While its agent is idle, a chat on this machine can switch to another installed agent from its composer, which hands the new agent the conversation. On an SSH host the tab runs that host's `sheprd-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). With no Herdr pane to go by, as when called from a Herdr 2 pane, a Herdr 2 tab in the active group splits its pane in use with the chat instead (see [Chats in Herdr 2 panes](rich-chat.md#chats-in-herdr-2-panes)); its pane id in `chat` is `core:` and the terminal's. Exits 8 when `sheprd-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`sheprd-acp agents` lists those that are) |
 
 ### Hosts
 
@@ -213,6 +228,7 @@ not take it either.
 | `ports stop\|pause PORT` | Ask in the app to stop (SIGTERM, then SIGKILL a few seconds later) or pause (SIGSTOP) the processes listening on `PORT` of this computer. Nothing is signalled until the user confirms there; exits 5 when nothing of yours listens on it, 6 while a dialog is open |
 | `ports resume PORT` | Resume (SIGCONT) the paused processes listening on `PORT` of this computer; exits 5 when none is paused |
 | `usage`, `system` | Plan usage and load of the selected host: CPU, memory, disk, uptime, and its GPU and video memory when it has one and `show_gpu_load` or `show_sidebar_gpu_load` is on |
+| `usage pick` | The agent the tab strip's Agent button would start a chat with now: the one last started or picked, unless its plan is spent or close to its limit and another installed agent's is not, with the reason when it would start another. Lists each installed agent's room (`ample`, `unknown`, `tight`, `spent`) with its use, reset, and when it runs out at its pace, as the status bar last read them; reads nothing itself. Exits 4 when no agent can start (see [Choosing the agent](rich-chat.md#choosing-the-agent)) |
 | `security` | Private vulnerability reports in triage (titles and metadata only, never their descriptions) and open Dependabot alerts of the github.com repositories the window's workspaces hold, most severe first, as the Security section last read them. Exits 4 when there are none |
 | `security open REPOSITORY ALERT\|GHSA` | Show alert `ALERT` (its number) or private report `GHSA` (its GHSA ID) of `REPOSITORY` (`owner/name`) in the Security section, beside its list: the fix, the advisory, and the dependency for an alert; the report, its advisory draft, and its conversation for a report. Only items the section lists open; nothing on GitHub changes |
 | `automation approve FILE [--host ID]` | Open the approval of the automation script `FILE` in the app: its plan, caps, and content hash, for the user to approve or cancel. The command approves nothing. `FILE` is the script's path on the host as `sheprd-automate status` lists it, resolved here when it exists; `--host` names the host by ID or label (default: your workspace's host). Exits 5 when the host does not list the script, 6 while a dialog is open or the host was not read yet |
@@ -352,7 +368,7 @@ run `sheprd config set tab_labels.agent_title true`.
 
 | Command | What it does |
 | --- | --- |
-| `remote [status]` | Whether remote control is on and its daemon runs: its port, version, the addresses it serves with network labels and daemon-host interface names, its certificate authority fingerprint, paired and connected devices, and each relay it listens on with whether it is listening (`[remote] relays`). JSON includes optional `status.address_details` keyed by origin, and `status.relays` keyed by relay with a `state` of `connecting`, `listening`, or `failed` (with its `error`); older daemons omit them |
+| `remote [status]` | Whether remote control is on and its daemon runs: its port, version, the addresses it serves with network labels and daemon-host interface names, its certificate authority fingerprint, paired and connected devices, and each relay it listens on with its name, description, and tags, whether it is listening, and its round trip (`[remote] relays`, and relays Sheprd on another computer shared with it). JSON includes optional `status.address_details` keyed by origin, and `status.relays` keyed by relay with a `state` of `connecting`, `listening` (with its round trip `rtt_ms` once measured), or `failed` (with its `error`), and the `name`, `description`, and `tags` its `[remote] relays` entry gives it, if any; older daemons omit them |
 | `remote devices` | The paired devices with their IDs, when each was last seen, whether it gets notifications, and the other machines it was paired with from here or is being paired with. JSON includes each device's optional `via` (the computer that vouched for it) and `hosts`, each with a `state` of `offered`, `allowed`, `asking`, `pending`, `paired`, or `failed`. Exits 4 when there are none |
 | `remote pair [--address HTTPS_ORIGIN]` | Open the pairing dialog, preferring Tailscale by default. Choose an address in the dialog, or pass an exact origin from `remote status` (for example `https://100.101.102.103:7443`). The QR and its token show only there, and the user approves the phone there. An unavailable address is reported in the dialog |
 | `remote restart` | Restart the daemon from the binary beside the app, as after a rebuild or update; phones reconnect on their own. Exits 6 while the service is already changing |
@@ -371,8 +387,11 @@ Standalone phone PR/check/log reads are opt-in per computer. After signing in
 with `gh auth login` on that host, set `[remote] github_cli = true` and restart
 its remote-control service. The foreground daemon accepts
 `sheprd-remote-control serve --state-dir DIR --github-cli`. This permits paired
-phones to read the listed workspaces using that host's GitHub CLI credential;
-pairing never copies the desktop's credential. See the
+phones to read the listed workspaces using that host's GitHub CLI credential.
+Separately, the iPhone app may borrow a GitHub sign-in to read GitHub itself,
+only while the phone's **Share GitHub sign-in** switch is on (each device in
+`devices --json` has `share_github`); the switch is set in the pairing dialog
+and in Settings, never from this command. See the
 [scope, cache and access policy](../crates/sheprd-remote-control/README.md#workspace-pull-requests-and-titles).
 
 ```sh
@@ -472,8 +491,9 @@ only from another Sheprd whose user approved it in that app's dialog;
 `cloud create` installs Herdr only on the machines the user confirmed, as
 creating them in Settings does.
 
-Adding an SSH or local network device has no command: the Add Device dialog
-runs it. Its setup workspace runs `sheprd __device-setup-attach SOCKET`,
+Adding an SSH or local network device, or a nearby Sheprd over Bluetooth,
+has no command: the Add Device dialog runs it, and the other computer opens
+`remote pair`. Its setup workspace runs `sheprd __device-setup-attach SOCKET`,
 an internal helper that shows the setup the app runs (see the Native Shell
 README's "Local Network access"); it is not a command to call yourself, and
 the socket it names is single use.
@@ -578,6 +598,11 @@ download first is left out.
 
 Files dropped on a remote chat are copied to the host first, into private
 temporary files under its `${TMPDIR:-/tmp}`, and the copies are attached.
+While they copy, each file's chip in the composer fills as its bytes go
+out, the footer shows the bytes sent of the total, and a chip's × cancels
+the whole drop, removing what already reached the host. Files dropped on a
+Herdr 2 terminal on another host show the same chips along the pane's foot
+until their paths are pasted; × or Escape cancels the copy there.
 
 Herdr 2 chats also use saved cloud connectors and, on Windows, the selected
 WSL distribution. ACP installed for phone pairing by this release is reused

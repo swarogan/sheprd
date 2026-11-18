@@ -49,7 +49,7 @@ pub(super) fn paired(dir: &Path, allowed: &[HostId]) -> (Auth, DeviceId) {
         )
         .unwrap();
     let device = match auth
-        .answer_with_hosts(&offer.id, true, &claim.code, allowed, T0)
+        .answer_with_hosts(&offer.id, true, &claim.code, allowed, true, T0)
         .unwrap()
     {
         PairingState::Approved { device } => device,

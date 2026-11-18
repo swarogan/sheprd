@@ -58,6 +58,7 @@ async fn an_open_list_hears_when_a_phone_saw_a_finished_agent() {
             session: None,
             worktree: None,
             chats: vec![crate::hub::ChatRow {
+                named: true,
                 pane: "p1".into(),
                 tab: "t1".into(),
                 endpoint: sheprd_chat_protocol::EndpointId::random(),

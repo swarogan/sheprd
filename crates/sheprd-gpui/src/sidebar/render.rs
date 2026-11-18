@@ -27,6 +27,7 @@ use gpui::{prelude::*, *};
 mod agent_rows;
 mod device_tree;
 mod edges;
+mod fold_hosts;
 mod header;
 mod menu_overlay;
 mod nested_agents;
@@ -750,20 +751,31 @@ impl SheprdWindow {
                     })
                     .min_h_0()
                     .overflow_hidden()
-                    // With search on, the heading is its field.
+                    // With search on, the heading is its field. Beside it,
+                    // the button that collapses every host.
                     .child(
-                        searchable
-                            .then_some(super::search::Heading::Spaces)
-                            .or(tree_search.then_some(super::search::Heading::DeviceTree))
-                            .and_then(|heading| self.search_heading(heading, look, window, cx))
-                            .unwrap_or_else(|| {
-                                let (key, label) = if devices {
-                                    ("devices", fl!("sidebar-header-devices"))
-                                } else {
-                                    ("spaces", fl!("sidebar-header-spaces"))
-                                };
-                                header(key, &label, font, theme, look)
-                            }),
+                        div()
+                            .row()
+                            .items_center()
+                            .child(
+                                searchable
+                                    .then_some(super::search::Heading::Spaces)
+                                    .or(tree_search.then_some(super::search::Heading::DeviceTree))
+                                    .and_then(|heading| {
+                                        self.search_heading(heading, look, window, cx)
+                                    })
+                                    .unwrap_or_else(|| {
+                                        let (key, label) = if devices {
+                                            ("devices", fl!("sidebar-header-devices"))
+                                        } else {
+                                            ("spaces", fl!("sidebar-header-spaces"))
+                                        };
+                                        header(key, &label, font, theme, look)
+                                    })
+                                    .flex_1()
+                                    .min_w_0(),
+                            )
+                            .children(self.fold_hosts_button(look, cx)),
                     )
                     .children(headed.then(|| self.tag_switch(cx)).flatten())
                     // The wrapper clips the pinned header as the next host's

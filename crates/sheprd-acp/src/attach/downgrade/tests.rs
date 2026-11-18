@@ -87,3 +87,21 @@ fn an_older_client_without_a_snapshot_is_dropped_rather_than_guessed_at() {
     let epoch = Cursor::new_epoch();
     assert_eq!(downgrade.message(change(activity(), 1, epoch)), None);
 }
+
+#[test]
+fn a_client_before_harnesses_gets_the_count_in_their_place() {
+    let harnesses = Change::Harnesses { harnesses: None };
+    let epoch = Cursor::new_epoch();
+    let mut revision_one = Downgrade::new(1);
+    assert!(revision_one.message(snapshot(1, epoch)).is_some());
+    // Revision 1 reads activities but not the choice of agents.
+    let activity = change(activity(), 1, epoch);
+    assert_eq!(revision_one.message(activity.clone()), Some(activity));
+    assert_eq!(
+        revision_one.message(change(harnesses.clone(), 2, epoch)),
+        Some(change(Change::Clients { count: 1 }, 2, epoch))
+    );
+    let mut current = Downgrade::new(REVISION);
+    let message = change(harnesses, 1, epoch);
+    assert_eq!(current.message(message.clone()), Some(message));
+}

@@ -81,7 +81,7 @@ pub(super) async fn run(state: Arc<State>) {
                         offer(&state, &mut throttles, &mut holds, &mut outbox, notification);
                     }
                 }
-                Ok((_, Event::Connection)) => {}
+                Ok((_, Event::Connection | Event::Summary)) => {}
                 Err(RecvError::Lagged(_)) => transcripts.clear(),
                 Err(RecvError::Closed) => return,
             },

@@ -7,11 +7,13 @@
 mod api;
 mod attach;
 mod chat;
+pub(crate) mod chat_title;
 mod convert;
 mod core;
 mod daemon;
 mod layout;
 mod recency;
+pub(crate) mod row_summary;
 mod sessions;
 mod wake;
 
@@ -22,7 +24,8 @@ pub(crate) use convert::Error as ConvertError;
 pub(crate) use core::{Keeper, arrangeable};
 #[cfg(test)]
 pub(crate) use layout::TerminalAgent;
-pub(crate) use layout::{Chat as ChatRow, Layout, Terminal, TerminalPane, Workspace};
+pub(crate) use layout::{Chat as ChatRow, Job, Layout, Terminal, TerminalPane, Workspace};
+pub(crate) use row_summary::RowSummary;
 
 use serde_json::{Value, json};
 use sheprd_chat_protocol::{Agent, Command, EndpointId, Rejection};
@@ -267,6 +270,15 @@ impl Hub {
 
     pub(crate) fn layout(&self) -> Arc<Layout> {
         self.layout.borrow().clone()
+    }
+
+    /// Where checkout work for a workspace runs: its named Herdr session
+    /// when present, else this hub's primary endpoint.
+    pub(crate) fn workspace_target(&self, session: Option<&str>) -> ConnectTarget {
+        session
+            .and_then(|name| self.sessions.get(name))
+            .map(|session| session.api.target())
+            .unwrap_or_else(|| self.api.target())
     }
 
     pub(crate) fn watch_layout(&self) -> watch::Receiver<Arc<Layout>> {
@@ -783,6 +795,12 @@ fn direct_command_line(program: &Path, agent: Agent) -> String {
     }
 }
 
+/// Whether workspace `id` lives inside a WSL distribution, whose folders
+/// this computer's own processes cannot read.
+pub(crate) fn in_wsl(id: &str) -> bool {
+    sessions::in_wsl(id)
+}
+
 /// A terminal row, for other modules' tests.
 #[cfg(test)]
 pub(crate) fn layout_terminal(tab: &str, label: &str) -> Terminal {
@@ -795,6 +813,7 @@ pub(crate) fn layout_terminal(tab: &str, label: &str) -> Terminal {
             label: None,
             cwd: None,
             focused: true,
+            job: None,
         }],
         zoomed: false,
         agent: None,

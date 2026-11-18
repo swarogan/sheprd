@@ -97,6 +97,7 @@ fn address_keys_do_not_act_on_a_claimed_pairing(cx: &mut TestAppContext) {
                 device_name: "Phone".into(),
                 code: "123456".into(),
                 app: None,
+                ssh: false,
             })),
             now,
         );

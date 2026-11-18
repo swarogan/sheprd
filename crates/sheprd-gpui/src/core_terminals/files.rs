@@ -54,34 +54,37 @@ impl Drop for Prepared {
     }
 }
 
+/// Pastes what `request` names for `target`, telling `progress` the bytes
+/// sent so far and the total while files are copied to another host.
 pub(super) fn prepare(
     target: &ConnectTarget,
     request: Request,
     cancelled: &AtomicBool,
+    progress: &mut impl FnMut(u64, u64),
 ) -> Result<Prepared> {
     if cancelled.load(Ordering::Acquire) {
         return Err(sheprd_client::Error::UploadCancelled.into());
     }
     match request {
-        Request::Paths(paths) => paths_for(target, paths, cancelled),
+        Request::Paths(paths) => paths_for(target, paths, cancelled, progress),
         Request::Clipboard { image_only } => {
             let Some(item) = crate::window::clipboard::read(image_only)? else {
                 return Ok(Prepared::text(String::new()));
             };
             if let Some(paths) = crate::window::external_paths(&item) {
-                return paths_for(target, paths, cancelled);
+                return paths_for(target, paths, cancelled, progress);
             }
             if let Some(text) = item.text() {
                 if target.is_remote()
                     && let Some(Source::File { path, .. }) = image_source::from_paste(&text)
                 {
-                    return paths_for(target, vec![path], cancelled);
+                    return paths_for(target, vec![path], cancelled, progress);
                 }
                 return Ok(Prepared::text(text));
             }
             for entry in item.entries {
                 if let gpui::ClipboardEntry::Image(image) = entry {
-                    return image_for(target, Source::Clipboard(image), cancelled);
+                    return image_for(target, Source::Clipboard(image), cancelled, progress);
                 }
             }
             Ok(Prepared::text(String::new()))
@@ -93,10 +96,11 @@ fn paths_for(
     target: &ConnectTarget,
     paths: Vec<PathBuf>,
     cancelled: &AtomicBool,
+    progress: &mut impl FnMut(u64, u64),
 ) -> Result<Prepared> {
     let quoted = quote_paths(&paths)?;
     if let Some(source) = image_source::temporary_drag_image(&paths) {
-        return image_for(target, source, cancelled);
+        return image_for(target, source, cancelled, progress);
     }
     if !target.is_remote() {
         return Ok(Prepared::text(quoted));
@@ -105,17 +109,18 @@ fn paths_for(
         && let [path] = paths.as_slice()
         && let Some(source) = image_source::from_path(path)
     {
-        return image_for(target, source, cancelled);
+        return image_for(target, source, cancelled, progress);
     }
-    copied_paths(target, &paths, cancelled)
+    copied_paths(target, &paths, cancelled, progress)
 }
 
 fn copied_paths(
     target: &ConnectTarget,
     paths: &[PathBuf],
     cancelled: &AtomicBool,
+    progress: &mut impl FnMut(u64, u64),
 ) -> Result<Prepared> {
-    let remote = upload(target, paths, cancelled)?;
+    let remote = upload(target, paths, cancelled, progress)?;
     let mut prepared = Prepared {
         text: String::new(),
         cleanup: (!matches!(target, ConnectTarget::Wsl { .. }))
@@ -125,7 +130,12 @@ fn copied_paths(
     Ok(prepared)
 }
 
-fn image_for(target: &ConnectTarget, source: Source, cancelled: &AtomicBool) -> Result<Prepared> {
+fn image_for(
+    target: &ConnectTarget,
+    source: Source,
+    cancelled: &AtomicBool,
+    progress: &mut impl FnMut(u64, u64),
+) -> Result<Prepared> {
     let image = source.prepare()?;
     let mut file = tempfile::Builder::new()
         .prefix("sheprd-clipboard-")
@@ -168,23 +178,23 @@ fn image_for(target: &ConnectTarget, source: Source, cancelled: &AtomicBool) -> 
         };
         return Ok(prepared);
     }
-    copied_paths(target, &[file.path().to_owned()], cancelled)
+    copied_paths(target, &[file.path().to_owned()], cancelled, progress)
 }
 
-/// Copy to the exact saved host, or map into the exact WSL distribution.
-/// Blocking; callers must retain the returned paths for cancellation cleanup.
+/// Copy to the exact saved host, or map into the exact WSL distribution,
+/// telling `progress` the bytes sent so far and the batch's total as they
+/// go out; a WSL distribution maps paths and sends nothing. Blocking;
+/// callers must retain the returned paths for cancellation cleanup.
 pub(crate) fn upload(
     target: &ConnectTarget,
     paths: &[PathBuf],
     cancelled: &AtomicBool,
+    progress: impl FnMut(u64, u64),
 ) -> Result<Vec<String>> {
     quote_paths(paths)?;
     match target {
         ConnectTarget::Ssh { target, .. } => Ok(sheprd_client::upload_files(
-            target,
-            paths,
-            cancelled,
-            |_, _| {},
+            target, paths, cancelled, progress,
         )?),
         ConnectTarget::Wsl { distro, .. } => {
             Ok(sheprd_client::wsl_paths(distro, paths, cancelled)?)
@@ -196,12 +206,9 @@ pub(crate) fn upload(
             id,
             ..
         } => sheprd_remote::cloud::with_command(*provider, account, id, cancelled, |command| {
-            sheprd_client::upload_files_with(
-                paths,
-                cancelled,
-                |_, _| {},
-                |script| Ok(command_for(&command, script)),
-            )
+            sheprd_client::upload_files_with(paths, cancelled, progress, |script| {
+                Ok(command_for(&command, script))
+            })
         })
         .map_err(sheprd_client::Error::UploadIo)?
         .map_err(Into::into),

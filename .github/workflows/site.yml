@@ -15,6 +15,7 @@ on:
       - docs/cli.md
       - docs/mods.md
       - .github/workflows/site.yml
+  workflow_dispatch:
 
 permissions: {}
 

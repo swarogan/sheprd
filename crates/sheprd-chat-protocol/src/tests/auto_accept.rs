@@ -34,6 +34,7 @@ fn the_allow_option_prefers_once_and_may_be_missing() {
             option("once", PermissionKind::AllowOnce),
             option("no", PermissionKind::RejectOnce),
         ],
+        question: None,
         title: "Edit".into(),
     };
     assert_eq!(

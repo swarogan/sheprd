@@ -463,6 +463,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::Chat(command) => chat::chat(command, &context),
         ControlCommand::Px0 => tabs::px0(&context),
         ControlCommand::Notes(command) => work::notes(command, &context),
+        ControlCommand::Memory(command) => work::memory(command, &context),
         ControlCommand::Worktree(command) => work::worktree(command, &context),
         ControlCommand::Feedback { wait } => browser::feedback(wait, &context),
         ControlCommand::Checkpoint(command) => work::checkpoint(command, &context),
@@ -479,6 +480,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
             local::processes(pane.as_deref(), terminal.as_deref())
         }
         ControlCommand::Usage => hosts::usage(&context),
+        ControlCommand::UsagePick => hosts::usage_pick(&context),
         ControlCommand::System => hosts::system(&context),
         ControlCommand::Security(command) => hosts::security(command, &context),
         ControlCommand::Automation(command) => hosts::automation(command, &context),

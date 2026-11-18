@@ -155,6 +155,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
             device_idle_days: 90,
             enabled: true,
             github_cli: false,
+            github_hosts: Vec::new(),
             keep_running: false,
             live_activities: ActivityDetail::Generic,
             notifications: Privacy::Excerpt,

@@ -12,13 +12,11 @@ use super::{
 use crate::{SheprdWindow, config::Theme, fonts::StyledFont, i18n::fl, menu::Page};
 use gpui::{prelude::*, *};
 use sheprd_remote_control::control::Request;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 mod addresses;
 mod hosts;
+mod share_github;
 
 /// What keeps this computer advertised for nearby pairing.
 type NearbyAdvert = nearby::Advert;
@@ -120,13 +118,14 @@ impl SheprdWindow {
     }
 
     /// Sends what the pairing asks for, one request at a time, until the
-    /// dialog closes.
+    /// dialog closes. The pairing is timed on the executor's clock, the one
+    /// its timer sleeps on, so tests that advance it reach the next poll.
     fn drive_pairing(client: Client, cx: &mut Context<Self>) -> Task<()> {
         cx.spawn(async move |this, cx| {
             loop {
                 let next = this.update(cx, |view, cx| {
                     let dialog = view.menu.remote_pairing.as_mut()?;
-                    let now = Instant::now();
+                    let now = cx.background_executor().now();
                     let ticket = dialog.pairing.next(now);
                     if ticket.is_none() && dialog.pairing.countdown(now).is_some() {
                         cx.notify();
@@ -150,7 +149,9 @@ impl SheprdWindow {
                         &result,
                         Ok(sheprd_remote_control::control::Response::Offer(_))
                     );
-                    dialog.pairing.receive(&ticket, result, Instant::now());
+                    dialog
+                        .pairing
+                        .receive(&ticket, result, cx.background_executor().now());
                     if new_offer {
                         dialog.reveal_selected_address();
                     }
@@ -307,11 +308,16 @@ impl SheprdWindow {
                 device_name,
                 code,
                 app,
+                ssh,
                 answer,
                 ..
-            } => self.pairing_claim(device_name, code, app.as_deref(), *answer, cx),
-            Phase::Approved { device_name } => self.pairing_message(
-                &fl!("remote-pair-approved", device = name(device_name)),
+            } => self.pairing_claim(device_name, code, app.as_deref(), *ssh, *answer, cx),
+            Phase::Approved { device_name, ssh } => self.pairing_message(
+                &if *ssh {
+                    fl!("remote-pair-approved-ssh", device = name(device_name))
+                } else {
+                    fl!("remote-pair-approved", device = name(device_name))
+                },
                 &fl!("remote-pair-approved-detail"),
                 Some(("remote-pair-done", fl!("remote-pair-done"), Action::Close)),
                 cx,
@@ -393,7 +399,8 @@ impl SheprdWindow {
             Phase::Showing { offer, qr, .. } => Some((offer, qr.clone())),
             _ => None,
         });
-        let countdown = pairing.and_then(|pairing| pairing.countdown(Instant::now()));
+        let countdown =
+            pairing.and_then(|pairing| pairing.countdown(cx.background_executor().now()));
         let square = match &showing {
             Some((_, qr)) => qr_square(qr.clone()).into_any_element(),
             None => div()
@@ -509,6 +516,7 @@ impl SheprdWindow {
         device_name: &str,
         code: &str,
         app: Option<&str>,
+        ssh: bool,
         answer: Option<Answer>,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -516,7 +524,11 @@ impl SheprdWindow {
         let waiting = answer.is_some();
         // The device's name, bold, inside the sentence that asks.
         let device = name(device_name);
-        let asks = fl!("remote-pair-wants", device = device.clone());
+        let asks = if ssh {
+            fl!("remote-pair-wants-ssh", device = device.clone())
+        } else {
+            fl!("remote-pair-wants", device = device.clone())
+        };
         let bold = asks.find(&device).map(|start| start..start + device.len());
         div()
             .debug_selector(|| "remote-pair-claim".into())
@@ -547,11 +559,21 @@ impl SheprdWindow {
                         )),
                 )
             })
-            .child(
-                div()
-                    .text_color(rgb(theme.subtext()))
-                    .child(fl!("remote-pair-same-code")),
-            )
+            // Allowing another computer writes `authorized_keys`, so the
+            // user is told what Allow does before giving it.
+            .when(ssh, |claim| {
+                claim.child(
+                    div()
+                        .debug_selector(|| "remote-pair-ssh".into())
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("remote-pair-ssh")),
+                )
+            })
+            .child(div().text_color(rgb(theme.subtext())).child(if ssh {
+                fl!("remote-pair-same-code-computer")
+            } else {
+                fl!("remote-pair-same-code")
+            }))
             .child(
                 div()
                     .debug_selector(|| "remote-pair-code".into())
@@ -561,7 +583,14 @@ impl SheprdWindow {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(spaced(code)),
             )
-            .children(self.pairing_hosts(!waiting, cx))
+            // A computer opens terminals; the other hosts and the GitHub
+            // sign-in are a phone's.
+            .children((!ssh).then(|| self.pairing_hosts(!waiting, cx)).flatten())
+            .children(
+                (!ssh)
+                    .then(|| self.pairing_share_github(!waiting, cx))
+                    .flatten(),
+            )
             .child(
                 div()
                     .flex()

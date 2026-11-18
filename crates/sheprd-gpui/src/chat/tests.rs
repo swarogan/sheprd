@@ -16,6 +16,8 @@ use std::{
 };
 
 mod activity;
+mod agent_advice;
+mod agent_picker;
 mod agent_row_rescroll;
 mod attachments;
 mod chats;
@@ -28,6 +30,7 @@ mod convert;
 mod core_convert;
 mod core_panes;
 mod discovery;
+mod effects;
 mod embeds;
 mod en_xa;
 mod feature;
@@ -45,6 +48,7 @@ mod notices;
 mod observed_status;
 mod observer_program;
 mod opencode;
+mod origin;
 mod overlay;
 mod pasted;
 mod phases;
@@ -52,6 +56,7 @@ mod pinned;
 mod prepared;
 mod questions;
 mod rail;
+mod rail_resize;
 mod recall;
 mod relocale;
 mod restore;
@@ -69,6 +74,7 @@ mod tool_glance;
 mod tool_indent;
 mod tool_previews;
 mod typography;
+mod uploads;
 mod user_messages;
 mod viewer;
 mod visual;
@@ -76,10 +82,17 @@ mod widget_toggle;
 mod widgets;
 mod width;
 mod working;
+mod worktree_landing;
 mod zoom;
 
 /// How long a test waits on a worker or a socket before failing.
 const WAIT: Duration = Duration::from_secs(5);
+
+/// Where a prompt typed in a chat on this machine says it comes from.
+const TYPED_HERE: sheprd_chat_protocol::Origin = sheprd_chat_protocol::Origin::new(
+    sheprd_chat_protocol::Device::Desktop,
+    sheprd_chat_protocol::Via::Local,
+);
 
 fn epoch(n: u128) -> uuid::Uuid {
     uuid::Uuid::from_u128(n)

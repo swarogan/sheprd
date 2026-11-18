@@ -143,3 +143,43 @@ fn a_failed_rename_is_tried_again() {
     assert_eq!(fake.label(), "Claude: fix it");
     reporter.close();
 }
+
+#[test]
+fn switching_agents_renames_the_pane_and_the_tab_named_after_the_old_one() {
+    let (fake, reporter) = fake("Claude");
+    reporter.handle().rename("Codex".to_owned());
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Codex");
+    let announced = fake.until("pane.report_metadata");
+    assert_eq!(
+        announced.last().unwrap()["params"]["display_agent"],
+        "Codex"
+    );
+    reporter.handle().prompt("fix it".to_owned());
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Codex: fix it");
+}
+
+#[test]
+fn switching_agents_leaves_a_label_the_user_gave() {
+    let (fake, reporter) = fake("mine");
+    reporter.handle().rename("Codex".to_owned());
+    let seen = fake.until("pane.report_metadata");
+    assert!(seen.iter().all(|request| request["method"] != "tab.rename"));
+    assert_eq!(seen.last().unwrap()["params"]["display_agent"], "Codex");
+    assert_eq!(fake.label(), "mine");
+}
+
+#[test]
+fn a_rename_that_failed_on_a_switch_is_tried_again() {
+    let (fake, reporter) = failing("Claude", 1);
+    reporter.handle().rename("Codex".to_owned());
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Claude", "the first rename failed");
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Codex");
+    // A later prompt still names the tab after the agent it runs.
+    reporter.handle().prompt("fix it".to_owned());
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Codex: fix it");
+}

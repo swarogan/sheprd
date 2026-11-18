@@ -3,6 +3,7 @@ use crate::tests::{connected, terminal};
 use serde_json::json;
 
 mod races;
+mod switch;
 
 const ID: &str = "0123456789abcdef0123456789abcdef";
 

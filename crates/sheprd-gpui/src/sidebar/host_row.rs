@@ -252,11 +252,7 @@ impl SheprdWindow {
                             .id(SharedString::from(format!(
                                 "{prefix}collapse-host-{endpoint_id}"
                             )))
-                            .when(pinned, |arrow| {
-                                arrow.debug_selector(|| {
-                                    format!("{prefix}collapse-host-{endpoint_id}")
-                                })
-                            })
+                            .debug_selector(|| format!("{prefix}collapse-host-{endpoint_id}"))
                             .w(px(arrow_width))
                             .flex_none()
                             .map(|arrow| {
@@ -271,9 +267,14 @@ impl SheprdWindow {
                             } else {
                                 "\u{25be}"
                             }))
-                            .on_click(cx.listener(move |this, _, _, cx| {
+                            // Alt-click folds every host, as in a Finder outline.
+                            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                                 cx.stop_propagation();
-                                this.toggle_device(&collapse_id, cx);
+                                if event.modifiers().alt {
+                                    this.toggle_all_devices(cx);
+                                } else {
+                                    this.toggle_device(&collapse_id, cx);
+                                }
                             })),
                     )
                     .when_some(origin, |row, origin| {
@@ -395,6 +396,47 @@ impl SheprdWindow {
     pub(super) fn toggle_device(&mut self, endpoint_id: &str, cx: &mut Context<Self>) {
         if let Some(endpoint) = self.endpoints.iter_mut().find(|e| e.id == endpoint_id) {
             endpoint.collapsed = !endpoint.collapsed;
+        }
+        cx.notify();
+    }
+
+    /// The host headers the spaces list shows, by endpoint index: under the
+    /// device and tag filters and, in the Devices layout, its search, as
+    /// render lists them. What collapsing them all acts on.
+    fn headed_hosts(&self, cx: &App) -> Vec<usize> {
+        let devices = !self.config.layout.mode.lists_workspaces();
+        let query = if devices && self.config.show_sidebar_search {
+            self.device_tree_query(cx)
+        } else {
+            String::new()
+        };
+        self.listed_headers(devices, &query)
+            .into_iter()
+            .map(|(index, _)| index)
+            .collect()
+    }
+
+    /// Whether every headed host is collapsed, or `None` when fewer than two
+    /// are headed and collapsing them all would mean nothing.
+    pub(crate) fn hosts_folded(&self, cx: &App) -> Option<bool> {
+        let hosts = self.headed_hosts(cx);
+        (hosts.len() > 1).then(|| {
+            hosts
+                .iter()
+                .all(|&index| self.endpoints.get(index).is_some_and(|e| e.collapsed))
+        })
+    }
+
+    /// Collapses every headed host, or expands them all when they all
+    /// already are, as the phone's Workspaces tab does.
+    pub(crate) fn toggle_all_devices(&mut self, cx: &mut Context<Self>) {
+        let Some(folded) = self.hosts_folded(cx) else {
+            return;
+        };
+        for index in self.headed_hosts(cx) {
+            if let Some(endpoint) = self.endpoints.get_mut(index) {
+                endpoint.collapsed = !folded;
+            }
         }
         cx.notify();
     }

@@ -6,6 +6,7 @@ mod gpu;
 mod local_ports;
 mod quota;
 mod security;
+mod usage_pick;
 use crate::control::protocol::{
     app::HostInfo,
     hosts::{
